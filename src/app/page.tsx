@@ -14,6 +14,8 @@ import {
   BookOpen,
   BarChart3,
   RefreshCw,
+  CalendarDays,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,6 +39,34 @@ const tools = [
       "Retake course handling",
       "CGPA trend graph",
       "Save records (with account)",
+    ],
+  },
+  {
+    title: "Section Selector",
+    description:
+      "Smart course scheduling tool with PDF import, conflict detection, faculty preferences, and automatic schedule generation for UIU students.",
+    href: "/tools/section-selector",
+    icon: CalendarDays,
+    gradient: "from-blue-500 to-indigo-500",
+    features: [
+      "PDF course data import",
+      "Schedule conflict detection",
+      "Faculty preference matching",
+      "Export to PDF/Excel/Calendar",
+    ],
+  },
+  {
+    title: "Fee Calculator",
+    description:
+      "Comprehensive fee calculator with per-trimester cost, total program estimate, retake fees, waiver comparison, and installment breakdown.",
+    href: "/tools/fee-calculator",
+    icon: DollarSign,
+    gradient: "from-green-500 to-emerald-500",
+    features: [
+      "Per trimester/semester fee",
+      "Total program cost estimate",
+      "Retake fee with 50% waiver",
+      "Waiver comparison tool",
     ],
   },
 ];

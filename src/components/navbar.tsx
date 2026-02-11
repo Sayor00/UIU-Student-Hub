@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
@@ -14,6 +15,8 @@ import {
   User,
   Calculator,
   LayoutDashboard,
+  CalendarDays,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +30,8 @@ import {
 const navLinks = [
   { href: "/", label: "Home", icon: LayoutDashboard },
   { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator },
+  { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays },
+  { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign },
 ];
 
 export default function Navbar() {
@@ -89,9 +94,15 @@ export default function Navbar() {
         <nav className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group shrink-0">
-          <div className="relative">
-            <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary/60 to-orange-400/60 opacity-70 blur group-hover:opacity-100 transition-all duration-300" />
-            <GraduationCap className="relative h-7 w-7 sm:h-8 sm:w-8 text-primary transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110" />
+          <div className="relative h-8 w-8 sm:h-9 sm:w-9 shrink-0">
+            <Image
+              src="/uiu-logo.svg"
+              alt="UIU Logo"
+              width={36}
+              height={36}
+              className="h-full w-full transition-transform duration-300 group-hover:scale-110"
+              priority
+            />
           </div>
           <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent transition-opacity duration-200 group-hover:opacity-80">
             <span className="hidden xs:inline">UIU Student Hub</span>

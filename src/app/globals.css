@@ -140,3 +140,12 @@
 :focus-visible {
   transition: box-shadow 0.2s ease;
 }
+
+/* Hide scrollbar utility */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
