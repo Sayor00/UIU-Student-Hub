@@ -252,12 +252,8 @@ export default function Navbar() {
                     <User className="mr-2 h-4 w-4" />
                     My Profile
                   </Link>
-                </DropdownMenuItem>                <DropdownMenuItem asChild className="cursor-pointer">
-                  <Link href="/profile" className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
-                    My Profile
-                  </Link>
-                </DropdownMenuItem>                {(session.user as any).role === "admin" && (
+                </DropdownMenuItem>
+                {(session.user as any).role === "admin" && (
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/admin" className="flex items-center">
                       <ShieldAlert className="mr-2 h-4 w-4" />
