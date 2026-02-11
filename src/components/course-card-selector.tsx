@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
 
 interface Course {
   program: string;
@@ -492,115 +493,149 @@ const CourseCard = ({
           {/* Course Search */}
           <div className="space-y-2 sm:col-span-2 lg:col-span-1">
             <label className="text-xs sm:text-sm font-medium">Search course</label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder="DSA, DM, CSE 2218..."
-                value={cardData.selectedCourse ? `${cardData.selectedCourse.split(' - ')[0]} (${cardData.selectedCourse.split(' - ')[1]})` : searchTerm}
-                onChange={(e) => {
-                  if (!cardData.selectedCourse && !isAlreadySelected) {
-                    setSearchTerm(e.target.value);
-                  }
-                }}
-                onFocus={() => {
-                  if (!cardData.selectedCourse && !isAlreadySelected) {
-                    setIsCourseFocused(true);
-                  }
-                }}
-                onBlur={() => {
-                  // Delay hiding to allow clicking on dropdown items
-                  setTimeout(() => setIsCourseFocused(false), 150);
-                }}
-                className={`w-full text-xs sm:text-sm ${cardData.selectedCourse ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}`}
-                readOnly={!!cardData.selectedCourse || isAlreadySelected}
-                disabled={isAlreadySelected}
-              />
-              {!cardData.selectedCourse && (isCourseFocused || searchTerm) && filteredCourses.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 max-h-60 overflow-y-auto">
-                  {filteredCourses.slice(0, 10).map((course, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
-                      onClick={() => {
-                        handleCourseSelect(`${course.courseCode} - ${course.title}`);
-                        setIsCourseFocused(false);
-                      }}
-                    >
-                      <div className="font-medium text-sm">{course.courseCode}</div>
-                      <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{course.title}</div>
+            <Popover open={!cardData.selectedCourse && (isCourseFocused || !!searchTerm) && (filteredCourses.length > 0 || !!searchTerm)}>
+              <div className="relative">
+                <PopoverAnchor asChild>
+                  <Input
+                    type="text"
+                    placeholder="DSA, DM, CSE 2218..."
+                    value={cardData.selectedCourse ? `${cardData.selectedCourse.split(' - ')[0]} (${cardData.selectedCourse.split(' - ')[1]})` : searchTerm}
+                    onChange={(e) => {
+                      if (!cardData.selectedCourse && !isAlreadySelected) {
+                        setSearchTerm(e.target.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!cardData.selectedCourse && !isAlreadySelected) {
+                        setIsCourseFocused(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setIsCourseFocused(false), 150);
+                    }}
+                    className={`w-full text-xs sm:text-sm ${cardData.selectedCourse ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}`}
+                    readOnly={!!cardData.selectedCourse || isAlreadySelected}
+                    disabled={isAlreadySelected}
+                  />
+                </PopoverAnchor>
+                {cardData.selectedCourse && !isAlreadySelected && (
+                  <button
+                    onClick={() => {
+                      if (cardData.finalSection) {
+                        onRemoveSection(cardData.finalSection);
+                      }
+                      onUpdate(cardData.id, { selectedCourse: "", selectedFaculty: "", selectedDay: "", selectedTime: "", finalSection: undefined });
+                      setSearchTerm("");
+                      setFacultySearchTerm("");
+                      setIsCourseFocused(false);
+                      setIsFacultyFocused(false);
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-emerald-600 hover:text-emerald-700 text-sm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <PopoverContent
+                className="p-0 max-h-60 overflow-y-auto"
+                align="start"
+                sideOffset={4}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                style={{ width: 'var(--radix-popover-trigger-width)' }}
+              >
+                {filteredCourses.length > 0 ? (
+                  <>
+                    {filteredCourses.slice(0, 10).map((course, index) => (
+                      <div
+                        key={index}
+                        className="flex flex-col p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          handleCourseSelect(`${course.courseCode} - ${course.title}`);
+                          setIsCourseFocused(false);
+                        }}
+                      >
+                        <div className="font-medium text-sm">{course.courseCode}</div>
+                        <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{course.title}</div>
+                      </div>
+                    ))}
+                    {filteredCourses.length > 10 && (
+                      <div className="p-2 text-xs text-muted-foreground text-center bg-muted">
+                        Showing first 10 results. Keep typing to narrow down...
+                      </div>
+                    )}
+                  </>
+                ) : searchTerm ? (
+                  <div className="p-3">
+                    <div className="text-sm text-muted-foreground">No courses found matching &ldquo;{searchTerm}&rdquo;</div>
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Try searching with course code, full name, or abbreviations like &ldquo;DSA&rdquo;, &ldquo;DM&rdquo;, etc.
                     </div>
-                  ))}
-                  {filteredCourses.length > 10 && (
-                    <div className="p-2 text-xs text-muted-foreground text-center bg-muted">
-                      Showing first 10 results. Keep typing to narrow down...
-                    </div>
-                  )}
-                </div>
-              )}
-              {!cardData.selectedCourse && (isCourseFocused || searchTerm) && filteredCourses.length === 0 && searchTerm && (
-                <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 p-3">
-                  <div className="text-sm text-muted-foreground">No courses found matching &ldquo;{searchTerm}&rdquo;</div>
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Try searching with course code, full name, or abbreviations like &ldquo;DSA&rdquo;, &ldquo;DM&rdquo;, etc.
                   </div>
-                </div>
-              )}
-              {cardData.selectedCourse && !isAlreadySelected && (
-                <button
-                  onClick={() => {
-                    // If there's a final section when clearing course, remove it
-                    if (cardData.finalSection) {
-                      onRemoveSection(cardData.finalSection);
-                    }
-                    
-                    onUpdate(cardData.id, { selectedCourse: "", selectedFaculty: "", selectedDay: "", selectedTime: "", finalSection: undefined });
-                    setSearchTerm("");
-                    setFacultySearchTerm("");
-                    setIsCourseFocused(false);
-                    setIsFacultyFocused(false);
-                  }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-emerald-600 hover:text-emerald-700 text-sm"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+                ) : null}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Faculty Selection */}
           <div className="space-y-2">
             <label className="text-xs sm:text-sm font-medium">Select faculty</label>
-            <div className="relative">
-              <Input
-                type="text"
-                placeholder={!cardData.selectedCourse ? "Select course first" : "Search faculty..."}
-                value={cardData.selectedFaculty ? cardData.selectedFaculty.split('(')[0].trim() : facultySearchTerm}
-                onChange={(e) => {
-                  if (!cardData.selectedFaculty && cardData.selectedCourse && !isAlreadySelected) {
-                    setFacultySearchTerm(e.target.value);
-                  }
-                }}
-                onFocus={() => {
-                  if (!cardData.selectedFaculty && cardData.selectedCourse && !isAlreadySelected) {
-                    setIsFacultyFocused(true);
-                  }
-                }}
-                onBlur={() => {
-                  // Delay hiding to allow clicking on dropdown items
-                  setTimeout(() => setIsFacultyFocused(false), 150);
-                }}
-                className={`w-full text-xs sm:text-sm ${
-                  !cardData.selectedCourse ? 'opacity-50' : ''
-                } ${cardData.selectedFaculty ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}`}
-                disabled={!cardData.selectedCourse || isAlreadySelected}
-                readOnly={!!cardData.selectedFaculty || isAlreadySelected}
-              />
-              {!cardData.selectedFaculty && cardData.selectedCourse && (isFacultyFocused || facultySearchTerm) && filteredFaculties.length > 0 && (
-                <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 max-h-60 overflow-y-auto">
-                  {filteredFaculties.map((faculty, index) => (
+            <Popover open={!cardData.selectedFaculty && !!cardData.selectedCourse && (isFacultyFocused || !!facultySearchTerm) && (filteredFaculties.length > 0 || !!facultySearchTerm)}>
+              <div className="relative">
+                <PopoverAnchor asChild>
+                  <Input
+                    type="text"
+                    placeholder={!cardData.selectedCourse ? "Select course first" : "Search faculty..."}
+                    value={cardData.selectedFaculty ? cardData.selectedFaculty.split('(')[0].trim() : facultySearchTerm}
+                    onChange={(e) => {
+                      if (!cardData.selectedFaculty && cardData.selectedCourse && !isAlreadySelected) {
+                        setFacultySearchTerm(e.target.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (!cardData.selectedFaculty && cardData.selectedCourse && !isAlreadySelected) {
+                        setIsFacultyFocused(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setIsFacultyFocused(false), 150);
+                    }}
+                    className={`w-full text-xs sm:text-sm ${
+                      !cardData.selectedCourse ? 'opacity-50' : ''
+                    } ${cardData.selectedFaculty ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : ''}`}
+                    disabled={!cardData.selectedCourse || isAlreadySelected}
+                    readOnly={!!cardData.selectedFaculty || isAlreadySelected}
+                  />
+                </PopoverAnchor>
+                {cardData.selectedFaculty && !isAlreadySelected && (
+                  <button
+                    onClick={() => {
+                      if (cardData.finalSection) {
+                        onRemoveSection(cardData.finalSection);
+                      }
+                      onUpdate(cardData.id, { selectedFaculty: "", selectedDay: "", selectedTime: "", finalSection: undefined });
+                      setFacultySearchTerm("");
+                      setIsFacultyFocused(false);
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-emerald-600 hover:text-emerald-700 text-sm"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              <PopoverContent
+                className="p-0 max-h-60 overflow-y-auto"
+                align="start"
+                sideOffset={4}
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                style={{ width: 'var(--radix-popover-trigger-width)' }}
+              >
+                {filteredFaculties.length > 0 ? (
+                  filteredFaculties.map((faculty, index) => (
                     <div
                       key={index}
                       className="p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         handleFacultySelect(faculty);
                         setIsFacultyFocused(false);
@@ -608,32 +643,14 @@ const CourseCard = ({
                     >
                       <div className="font-medium text-sm">{faculty}</div>
                     </div>
-                  ))}
-                </div>
-              )}
-              {!cardData.selectedFaculty && cardData.selectedCourse && (isFacultyFocused || facultySearchTerm) && filteredFaculties.length === 0 && facultySearchTerm && (
-                <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 p-3">
-                  <div className="text-sm text-muted-foreground">No faculty found matching &ldquo;{facultySearchTerm}&rdquo;</div>
-                </div>
-              )}
-              {cardData.selectedFaculty && !isAlreadySelected && (
-                <button
-                  onClick={() => {
-                    // If there's a final section when clearing faculty, remove it  
-                    if (cardData.finalSection) {
-                      onRemoveSection(cardData.finalSection);
-                    }
-                    
-                    onUpdate(cardData.id, { selectedFaculty: "", selectedDay: "", selectedTime: "", finalSection: undefined });
-                    setFacultySearchTerm("");
-                    setIsFacultyFocused(false);
-                  }}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-emerald-600 hover:text-emerald-700 text-sm"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
+                  ))
+                ) : facultySearchTerm ? (
+                  <div className="p-3">
+                    <div className="text-sm text-muted-foreground">No faculty found matching &ldquo;{facultySearchTerm}&rdquo;</div>
+                  </div>
+                ) : null}
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Day Selection */}

@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
         <p><strong>Department:</strong> ${department}</p>
         <p><strong>Requested by:</strong> ${session.user.name} (${session.user.email})</p>
         <p style="margin-top: 16px;">
-          <a href="${process.env.NEXTAUTH_URL}/admin/faculty-requests" 
+          <a href="${new URL(request.url).origin}/admin/faculty-requests" 
              style="background: #f97316; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold;">
             Review Request
           </a>

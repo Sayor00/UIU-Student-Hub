@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
 
 interface Course {
   program: string;
@@ -896,63 +897,68 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               )}
               
               {/* Search Input */}
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder="DSA, DM, CSE 2218..."
-                  value={courseSearchTerm}
-                  onChange={(e) => setCourseSearchTerm(e.target.value)}
-                  onFocus={() => setIsCourseSearchFocused(true)}
-                  onBlur={() => {
-                    // Delay hiding to allow clicking on dropdown items
-                    setTimeout(() => setIsCourseSearchFocused(false), 150);
-                  }}
-                  className="w-full"
-                />
-                
-                {/* Course Dropdown */}
-                {(isCourseSearchFocused || courseSearchTerm) && getFilteredCourses().length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 max-h-60 overflow-y-auto">
-                    {getFilteredCourses()
-                      .filter(course => !courseSelection.selectedCourses.includes(`${course.courseCode} - ${course.title}`))
-                      .slice(0, 10)
-                      .map((course, index) => (
-                        <div
-                          key={index}
-                          className="flex flex-col p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
-                          onClick={() => {
-                            const courseKey = `${course.courseCode} - ${course.title}`;
-                            setCourseSelection(prev => ({
-                              ...prev,
-                              selectedCourses: [...prev.selectedCourses, courseKey],
-                              prioritizedFaculties: [] // Reset faculties when courses change
-                            }));
-                            setCourseSearchTerm("");
-                            setIsCourseSearchFocused(false);
-                          }}
-                        >
-                          <div className="font-medium text-sm">{course.courseCode}</div>
-                          <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{course.title}</div>
+              <Popover open={(isCourseSearchFocused || !!courseSearchTerm) && (getFilteredCourses().length > 0 || !!courseSearchTerm)}>
+                <PopoverAnchor asChild>
+                  <Input
+                    type="text"
+                    placeholder="DSA, DM, CSE 2218..."
+                    value={courseSearchTerm}
+                    onChange={(e) => setCourseSearchTerm(e.target.value)}
+                    onFocus={() => setIsCourseSearchFocused(true)}
+                    onBlur={() => {
+                      setTimeout(() => setIsCourseSearchFocused(false), 150);
+                    }}
+                    className="w-full"
+                  />
+                </PopoverAnchor>
+                <PopoverContent
+                  className="p-0 max-h-60 overflow-y-auto"
+                  align="start"
+                  sideOffset={4}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                  style={{ width: 'var(--radix-popover-trigger-width)' }}
+                >
+                  {getFilteredCourses().length > 0 ? (
+                    <>
+                      {getFilteredCourses()
+                        .filter(course => !courseSelection.selectedCourses.includes(`${course.courseCode} - ${course.title}`))
+                        .slice(0, 10)
+                        .map((course, index) => (
+                          <div
+                            key={index}
+                            className="flex flex-col p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              const courseKey = `${course.courseCode} - ${course.title}`;
+                              setCourseSelection(prev => ({
+                                ...prev,
+                                selectedCourses: [...prev.selectedCourses, courseKey],
+                                prioritizedFaculties: []
+                              }));
+                              setCourseSearchTerm("");
+                              setIsCourseSearchFocused(false);
+                            }}
+                          >
+                            <div className="font-medium text-sm">{course.courseCode}</div>
+                            <div className="text-xs text-muted-foreground mt-1 leading-relaxed">{course.title}</div>
+                          </div>
+                        ))}
+                      {getFilteredCourses().filter(course => !courseSelection.selectedCourses.includes(`${course.courseCode} - ${course.title}`)).length > 10 && (
+                        <div className="p-2 text-xs text-muted-foreground text-center bg-muted">
+                          Showing first 10 results. Keep typing to narrow down...
                         </div>
-                      ))}
-                    {getFilteredCourses().filter(course => !courseSelection.selectedCourses.includes(`${course.courseCode} - ${course.title}`)).length > 10 && (
-                      <div className="p-2 text-xs text-muted-foreground text-center bg-muted">
-                        Showing first 10 results. Keep typing to narrow down...
+                      )}
+                    </>
+                  ) : courseSearchTerm ? (
+                    <div className="p-3">
+                      <div className="text-sm text-muted-foreground">No courses found matching &ldquo;{courseSearchTerm}&rdquo;</div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Try searching with course code, full name, or abbreviations like &ldquo;DSA&rdquo;, &ldquo;DM&rdquo;, etc.
                       </div>
-                    )}
-                  </div>
-                )}
-                
-                {/* No results message */}
-                {(isCourseSearchFocused || courseSearchTerm) && getFilteredCourses().length === 0 && courseSearchTerm && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 p-3">
-                    <div className="text-sm text-muted-foreground">No courses found matching &ldquo;{courseSearchTerm}&rdquo;</div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      Try searching with course code, full name, or abbreviations like &ldquo;DSA&rdquo;, &ldquo;DM&rdquo;, etc.
                     </div>
-                  </div>
-                )}
-              </div>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
 
@@ -982,38 +988,44 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               )}
               
               {/* Faculty Search Input */}
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder={courseSelection.selectedCourses.length === 0 ? "Select courses first" : "Search faculty..."}
-                  value={facultySearchTerm}
-                  onChange={(e) => {
-                    if (courseSelection.selectedCourses.length > 0) {
-                      setFacultySearchTerm(e.target.value);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (courseSelection.selectedCourses.length > 0) {
-                      setIsFacultySearchFocused(true);
-                    }
-                  }}
-                  onBlur={() => {
-                    // Delay hiding to allow clicking on dropdown items
-                    setTimeout(() => setIsFacultySearchFocused(false), 150);
-                  }}
-                  className={`w-full ${courseSelection.selectedCourses.length === 0 ? 'opacity-50' : ''}`}
-                  disabled={courseSelection.selectedCourses.length === 0}
-                />
-                
-                {/* Faculty Dropdown */}
-                {courseSelection.selectedCourses.length > 0 && (isFacultySearchFocused || facultySearchTerm) && getFilteredFaculties().length > 0 && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 max-h-60 overflow-y-auto">
-                    {getFilteredFaculties()
+              <Popover open={courseSelection.selectedCourses.length > 0 && (isFacultySearchFocused || !!facultySearchTerm) && (getFilteredFaculties().length > 0 || !!facultySearchTerm)}>
+                <PopoverAnchor asChild>
+                  <Input
+                    type="text"
+                    placeholder={courseSelection.selectedCourses.length === 0 ? "Select courses first" : "Search faculty..."}
+                    value={facultySearchTerm}
+                    onChange={(e) => {
+                      if (courseSelection.selectedCourses.length > 0) {
+                        setFacultySearchTerm(e.target.value);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (courseSelection.selectedCourses.length > 0) {
+                        setIsFacultySearchFocused(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setIsFacultySearchFocused(false), 150);
+                    }}
+                    className={`w-full ${courseSelection.selectedCourses.length === 0 ? 'opacity-50' : ''}`}
+                    disabled={courseSelection.selectedCourses.length === 0}
+                  />
+                </PopoverAnchor>
+                <PopoverContent
+                  className="p-0 max-h-60 overflow-y-auto"
+                  align="start"
+                  sideOffset={4}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                  style={{ width: 'var(--radix-popover-trigger-width)' }}
+                >
+                  {getFilteredFaculties().length > 0 ? (
+                    getFilteredFaculties()
                       .filter(faculty => !courseSelection.prioritizedFaculties.includes(faculty))
                       .map((faculty, index) => (
                         <div
                           key={index}
                           className="p-3 hover:bg-accent hover:text-accent-foreground cursor-pointer border-b last:border-b-0 transition-colors"
+                          onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setCourseSelection(prev => ({
                               ...prev,
@@ -1025,17 +1037,14 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                         >
                           <div className="font-medium text-sm">{faculty}</div>
                         </div>
-                      ))}
-                  </div>
-                )}
-                
-                {/* No faculty results message */}
-                {courseSelection.selectedCourses.length > 0 && (isFacultySearchFocused || facultySearchTerm) && getFilteredFaculties().length === 0 && facultySearchTerm && (
-                  <div className="absolute top-full left-0 right-0 z-50 bg-popover border rounded-md shadow-md mt-1 p-3">
-                    <div className="text-sm text-muted-foreground">No faculty found matching &ldquo;{facultySearchTerm}&rdquo;</div>
-                  </div>
-                )}
-              </div>
+                      ))
+                  ) : facultySearchTerm ? (
+                    <div className="p-3">
+                      <div className="text-sm text-muted-foreground">No faculty found matching &ldquo;{facultySearchTerm}&rdquo;</div>
+                    </div>
+                  ) : null}
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </CardContent>
