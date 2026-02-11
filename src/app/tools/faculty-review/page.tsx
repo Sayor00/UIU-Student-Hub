@@ -313,7 +313,11 @@ export default function FacultyReviewPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("Faculty added successfully!");
+        if (data.isPending) {
+          toast.success("Faculty request submitted! An admin will review it shortly.");
+        } else {
+          toast.success("Faculty added successfully!");
+        }
         setAddFacultyOpen(false);
         setNewFaculty({
           name: "",
@@ -381,9 +385,9 @@ export default function FacultyReviewPage() {
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Add New Faculty</DialogTitle>
+                <DialogTitle>Request New Faculty</DialogTitle>
                 <DialogDescription>
-                  Add a faculty member not listed yet. Initials must be unique.
+                  Submit a request to add a faculty member not listed yet. An admin will review your request.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -588,10 +592,10 @@ export default function FacultyReviewPage() {
                   {addFacultyLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                      Adding...
+                      Submitting...
                     </>
                   ) : (
-                    "Add Faculty"
+                    "Submit Request"
                   )}
                 </Button>
               </DialogFooter>

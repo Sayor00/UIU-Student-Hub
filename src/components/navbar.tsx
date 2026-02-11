@@ -20,6 +20,9 @@ import {
   Wrench,
   ChevronDown,
   ArrowRight,
+  ShieldAlert,
+  Github,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -129,6 +132,17 @@ export default function Navbar() {
             </Button>
           </Link>
 
+          <a
+            href="https://www.uiu.ac.bd"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="ghost" className="gap-2 group/nav">
+              <ExternalLink className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
+              UIU Website
+            </Button>
+          </a>
+
           {/* Tools Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -175,6 +189,18 @@ export default function Navbar() {
 
         {/* Right side */}
         <div className="flex items-center gap-2">
+          {/* GitHub Repo */}
+          <a
+            href="https://github.com/Sayor00/UIU-Student-Hub"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="ghost" size="icon" className="relative group/gh">
+              <Github className="h-5 w-5 transition-transform duration-200 group-hover/gh:scale-110" />
+              <span className="sr-only">GitHub Repository</span>
+            </Button>
+          </a>
+
           {/* Theme Toggle */}
           {mounted && (
             <Button
@@ -221,6 +247,24 @@ export default function Navbar() {
                   </div>
                 </div>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile" className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    My Profile
+                  </Link>
+                </DropdownMenuItem>                <DropdownMenuItem asChild className="cursor-pointer">
+                  <Link href="/profile" className="flex items-center">
+                    <User className="mr-2 h-4 w-4" />
+                    My Profile
+                  </Link>
+                </DropdownMenuItem>                {(session.user as any).role === "admin" && (
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/admin" className="flex items-center">
+                      <ShieldAlert className="mr-2 h-4 w-4" />
+                      Admin Panel
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   onClick={() => signOut()}
                   className="text-destructive focus:text-destructive cursor-pointer"
@@ -305,6 +349,19 @@ export default function Navbar() {
                 Home
               </div>
             </Link>
+
+            {/* UIU Website */}
+            <a
+              href="https://www.uiu.ac.bd"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMobileOpen(false)}
+            >
+              <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted/50 hover:translate-x-1 transition-all duration-200">
+                <ExternalLink className="h-4 w-4" />
+                UIU Website
+              </div>
+            </a>
 
             {/* Tools Section */}
             <div className="pt-1">

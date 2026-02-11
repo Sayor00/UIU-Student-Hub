@@ -204,13 +204,13 @@ export default function HomePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center px-4 sm:px-0">
-              <Link href="/tools/cgpa-calculator">
+              <Link href="/tools">
                 <Button
                   size="lg"
                   className="gap-2 shadow-lg shadow-primary/25 text-sm sm:text-base px-6 sm:px-8 w-full sm:w-auto"
                 >
-                  <Calculator className="h-4 w-4 sm:h-5 sm:w-5" />
-                  Open CGPA Calculator
+                  <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
+                  View All Tools
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -229,65 +229,6 @@ export default function HomePage() {
             </div>
           </motion.div>
         </div>
-      </section>
-
-      {/* Tools Section */}
-      <section className="container mx-auto px-4 py-10 sm:py-16">
-        <motion.div
-          variants={container}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true }}
-        >
-          <motion.div variants={item} className="text-center mb-8 sm:mb-12">
-            <h2 className="text-2xl sm:text-3xl font-bold mb-2 sm:mb-3">Available Tools</h2>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-xl mx-auto">
-              Free tools to help you manage your academic life at UIU.
-            </p>
-          </motion.div>
-
-          <div className="grid gap-4 sm:gap-6 max-w-2xl mx-auto">
-            {tools.map((tool) => (
-              <motion.div key={tool.title} variants={item}>
-                <Link href={tool.href}>
-                  <Card className="group relative overflow-hidden border-2 hover:border-primary/40 transition-all duration-300 hover:shadow-xl hover:shadow-primary/5 cursor-pointer">
-                    <div
-                      className={`absolute inset-0 bg-gradient-to-br ${tool.gradient} opacity-0 group-hover:opacity-5 transition-opacity duration-300`}
-                    />
-                    <CardHeader className="p-4 sm:p-6">
-                      <div className="flex items-start justify-between">
-                        <div
-                          className={`flex h-11 w-11 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-gradient-to-br ${tool.gradient} text-white shadow-lg`}
-                        >
-                          <tool.icon className="h-5 w-5 sm:h-7 sm:w-7" />
-                        </div>
-                        <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                      </div>
-                      <CardTitle className="text-lg sm:text-xl mt-3 sm:mt-4">
-                        {tool.title}
-                      </CardTitle>
-                      <CardDescription className="text-sm sm:text-base">
-                        {tool.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4 sm:px-6 sm:pb-6 pt-0">
-                      <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                        {tool.features.map((feature) => (
-                          <span
-                            key={feature}
-                            className="inline-flex items-center rounded-full bg-muted px-2.5 sm:px-3 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium"
-                          >
-                            {feature}
-                          </span>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-        </motion.div>
       </section>
 
       {/* Features Section */}

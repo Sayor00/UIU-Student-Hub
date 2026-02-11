@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import { GraduationCap, Mail, Lock, User, Hash, Loader2 } from "lucide-react";
+import { GraduationCap, Mail, Lock, User, Hash, Loader2, Info } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ export default function RegisterPage() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
+  const [allowedDomains, setAllowedDomains] = React.useState<string[]>([]);
   const [form, setForm] = React.useState({
     name: "",
     email: "",
@@ -30,6 +31,16 @@ export default function RegisterPage() {
     confirmPassword: "",
     studentId: "",
   });
+
+  // Fetch allowed email domains
+  React.useEffect(() => {
+    fetch("/api/auth/domains")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.domains) setAllowedDomains(data.domains);
+      })
+      .catch(() => {});
+  }, []);
 
   // Redirect if already logged in
   React.useEffect(() => {
@@ -54,7 +65,13 @@ export default function RegisterPage() {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    // Student ID: numeric only
+    if (name === "studentId") {
+      setForm({ ...form, studentId: value.replace(/\D/g, "") });
+    } else {
+      setForm({ ...form, [name]: value });
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,6 +85,15 @@ export default function RegisterPage() {
     if (form.password.length < 6) {
       toast.error("Password must be at least 6 characters");
       return;
+    }
+
+    // Client-side email domain check
+    if (allowedDomains.length > 0) {
+      const emailDomain = form.email.split("@")[1]?.toLowerCase();
+      if (!emailDomain || !allowedDomains.includes(emailDomain)) {
+        toast.error("Please use your UIU email address");
+        return;
+      }
     }
 
     setLoading(true);
@@ -91,8 +117,9 @@ export default function RegisterPage() {
         return;
       }
 
-      toast.success("Account created! Please log in.");
-      router.push("/auth/login");
+      // Redirect to verification page
+      toast.success("Check your email for a verification code!");
+      router.push(`/auth/verify?email=${encodeURIComponent(data.email || form.email)}`);
     } catch (error) {
       toast.error("Something went wrong");
     } finally {
@@ -143,13 +170,19 @@ export default function RegisterPage() {
                     id="email"
                     name="email"
                     type="email"
-                    placeholder="your@email.com"
+                    placeholder="yourname@bscse.uiu.ac.bd"
                     value={form.email}
                     onChange={handleChange}
                     className="pl-9"
                     required
                   />
                 </div>
+                {allowedDomains.length > 0 && (
+                  <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                    <Info className="h-3 w-3 mt-0.5 shrink-0" />
+                    <span>Use your UIU email ({allowedDomains.slice(0, 3).map(d => `@${d}`).join(", ")}, ...)</span>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="studentId">
@@ -161,10 +194,12 @@ export default function RegisterPage() {
                   <Input
                     id="studentId"
                     name="studentId"
-                    placeholder="e.g. 011 221 XXX"
+                    placeholder="e.g. 011221XXX"
                     value={form.studentId}
                     onChange={handleChange}
                     className="pl-9"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                   />
                 </div>
               </div>

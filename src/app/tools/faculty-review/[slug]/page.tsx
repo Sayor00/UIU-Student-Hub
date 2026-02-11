@@ -77,6 +77,16 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ─────────────────── Types ─────────────────── */
 interface Faculty {
@@ -304,6 +314,8 @@ export default function FacultyDetailPage() {
   const [addReviewLoading, setAddReviewLoading] = React.useState(false);
   const [editingReview, setEditingReview] = React.useState<Review | null>(null);
   const [reviewDetailOpen, setReviewDetailOpen] = React.useState<Review | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+  const [deleteReviewId, setDeleteReviewId] = React.useState<string | null>(null);
 
   // Review form
   const [reviewForm, setReviewForm] = React.useState({
@@ -459,10 +471,15 @@ export default function FacultyDetailPage() {
   };
 
   /* ─── Delete Review ─── */
-  const handleDeleteReview = async (reviewId: string) => {
-    if (!confirm("Are you sure you want to delete your review?")) return;
+  const handleDeleteReview = (reviewId: string) => {
+    setDeleteReviewId(reviewId);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDeleteReview = async () => {
+    if (!deleteReviewId) return;
     try {
-      const res = await fetch(`/api/reviews?reviewId=${reviewId}`, { method: "DELETE" });
+      const res = await fetch(`/api/reviews?reviewId=${deleteReviewId}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Review deleted");
         fetchReviews();
@@ -474,6 +491,8 @@ export default function FacultyDetailPage() {
       }
     } catch {
       toast.error("Network error");
+    } finally {
+      setDeleteReviewId(null);
     }
   };
 
@@ -1034,6 +1053,27 @@ export default function FacultyDetailPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete Review Confirm */}
+      <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Review</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete your review? This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={confirmDeleteReview}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 

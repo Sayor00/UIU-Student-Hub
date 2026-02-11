@@ -37,6 +37,19 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
+        // If unverified, send a new code and redirect to verify page
+        if (result.error === "EMAIL_NOT_VERIFIED") {
+          toast.info("Please verify your email first. Sending a new code...");
+          try {
+            await fetch("/api/auth/resend-verification", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ email }),
+            });
+          } catch {}
+          router.push(`/auth/verify?email=${encodeURIComponent(email)}&from=login`);
+          return;
+        }
         toast.error(result.error);
       } else {
         toast.success("Welcome back!");

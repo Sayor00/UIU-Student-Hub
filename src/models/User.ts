@@ -5,6 +5,10 @@ export interface IUser extends Document {
   email: string;
   password: string;
   studentId?: string;
+  role: "user" | "admin";
+  emailVerified: boolean;
+  verificationCode?: string;
+  verificationExpires?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +35,21 @@ const UserSchema = new Schema<IUser>(
     studentId: {
       type: String,
       trim: true,
+    },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
+    emailVerified: {
+      type: Boolean,
+      default: false,
+    },
+    verificationCode: {
+      type: String,
+    },
+    verificationExpires: {
+      type: Date,
     },
   },
   {
