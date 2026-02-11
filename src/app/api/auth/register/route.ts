@@ -1,10 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
 import bcrypt from "bcryptjs";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
+import { authOptions } from "@/lib/auth";
 
 export async function POST(req: NextRequest) {
   try {
+    // Check if user is already authenticated
+    const session = await getServerSession(authOptions);
+    if (session) {
+      return NextResponse.json(
+        { error: "You are already logged in" },
+        { status: 403 }
+      );
+    }
+
     const { name, email, password, studentId } = await req.json();
 
     if (!name || !email || !password) {

@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { motion } from "framer-motion";
 import { GraduationCap, Mail, Lock, User, Hash, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/card";
 
 export default function RegisterPage() {
+  const { data: session, status } = useSession();
   const router = useRouter();
   const [loading, setLoading] = React.useState(false);
   const [form, setForm] = React.useState({
@@ -28,6 +30,28 @@ export default function RegisterPage() {
     confirmPassword: "",
     studentId: "",
   });
+
+  // Redirect if already logged in
+  React.useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/");
+      toast.error("You are already logged in");
+    }
+  }, [status, router]);
+
+  // Show loading while checking session
+  if (status === "loading") {
+    return (
+      <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Don't render if authenticated
+  if (status === "authenticated") {
+    return null;
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });

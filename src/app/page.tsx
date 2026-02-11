@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useSession } from "next-auth/react";
 import {
   Calculator,
   GraduationCap,
@@ -78,6 +79,7 @@ const item = {
 };
 
 export default function HomePage() {
+  const { data: session, status } = useSession();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -182,16 +184,18 @@ export default function HomePage() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/auth/register">
-                <Button
-                  variant="outline"
-                  size="lg"
-                  className="gap-2 text-base px-8"
-                >
-                  <GraduationCap className="h-5 w-5" />
-                  Create Free Account
-                </Button>
-              </Link>
+              {!session && (
+                <Link href="/auth/register">
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    className="gap-2 text-base px-8"
+                  >
+                    <GraduationCap className="h-5 w-5" />
+                    Create Free Account
+                  </Button>
+                </Link>
+              )}
             </div>
           </motion.div>
         </div>
