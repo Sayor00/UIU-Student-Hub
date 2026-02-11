@@ -35,87 +35,76 @@ export default function Navbar() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
+  const headerRef = React.useRef<HTMLElement>(null);
 
+  // Mounted state — runs once
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Close mobile menu when clicking outside the header (not on scroll)
+  React.useEffect(() => {
+    if (!mobileOpen) return;
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const header = headerRef.current;
+      if (header && !header.contains(e.target as Node)) {
+        setMobileOpen(false);
+      }
+    };
+
+    // Small delay so the open-click doesn't immediately close
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 10);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [mobileOpen]);
+
+  // Close mobile menu on route change
+  React.useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   const themeBtnRef = React.useRef<HTMLButtonElement>(null);
 
   const handleThemeToggle = React.useCallback(() => {
-    const btn = themeBtnRef.current;
-    if (!btn) {
-      setTheme(resolvedTheme === "dark" ? "light" : "dark");
-      return;
-    }
-
-    const rect = btn.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-    const maxDist = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y)
-    );
-
-    const nextTheme = resolvedTheme === "dark" ? "light" : "dark";
-    const isDarkening = nextTheme === "dark";
-
     const doc = document as any;
-    if (!doc.startViewTransition) {
-      setTheme(nextTheme);
-      return;
+    if (doc.startViewTransition) {
+      // Use view transition for smooth icon morph
+      doc.startViewTransition(() => {
+        setTheme(resolvedTheme === "dark" ? "light" : "dark");
+      });
+    } else {
+      setTheme(resolvedTheme === "dark" ? "light" : "dark");
     }
-
-    const transition = doc.startViewTransition(() => {
-      setTheme(nextTheme);
-    });
-
-    transition.ready.then(() => {
-      const clipFrom = `circle(0px at ${x}px ${y}px)`;
-      const clipTo = `circle(${maxDist}px at ${x}px ${y}px)`;
-
-      if (isDarkening) {
-        // Light→Dark: light (old) view on top, shrinks into button
-        document.documentElement.animate(
-          { clipPath: [clipTo, clipFrom], zIndex: [9999, 9999] },
-          { duration: 650, easing: "ease-in-out", pseudoElement: "::view-transition-old(root)", fill: "forwards" }
-        );
-        document.documentElement.animate(
-          { zIndex: [1, 1] },
-          { duration: 650, pseudoElement: "::view-transition-new(root)", fill: "forwards" }
-        );
-      } else {
-        // Dark→Light: light (new) view on top, expands from button
-        document.documentElement.animate(
-          { clipPath: [clipFrom, clipTo], zIndex: [9999, 9999] },
-          { duration: 650, easing: "ease-in-out", pseudoElement: "::view-transition-new(root)", fill: "forwards" }
-        );
-        document.documentElement.animate(
-          { zIndex: [1, 1] },
-          { duration: 650, pseudoElement: "::view-transition-old(root)", fill: "forwards" }
-        );
-      }
-    });
   }, [resolvedTheme, setTheme]);
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/40 backdrop-blur-xl supports-[backdrop-filter]:bg-background/30">
-      <nav className="container mx-auto flex h-16 items-center justify-between px-4">
+    <>
+      <header ref={headerRef} className="sticky top-0 z-50 w-full border-b border-border/50 bg-background/40 backdrop-blur-xl supports-[backdrop-filter]:bg-background/30">
+        <nav className="container mx-auto flex h-16 items-center justify-between px-4">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
+        <Link href="/" className="flex items-center gap-2 group shrink-0">
           <div className="relative">
             <div className="absolute -inset-1 rounded-lg bg-gradient-to-r from-primary/60 to-orange-400/60 opacity-70 blur group-hover:opacity-100 transition-all duration-300" />
-            <GraduationCap className="relative h-8 w-8 text-primary transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110" />
+            <GraduationCap className="relative h-7 w-7 sm:h-8 sm:w-8 text-primary transition-transform duration-300 group-hover:rotate-[-8deg] group-hover:scale-110" />
           </div>
-          <span className="font-bold text-xl bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent transition-opacity duration-200 group-hover:opacity-80">
-            UIU Student Hub
+          <span className="font-bold text-lg sm:text-xl bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent transition-opacity duration-200 group-hover:opacity-80">
+            <span className="hidden xs:inline">UIU Student Hub</span>
+            <span className="xs:hidden">UIU Hub</span>
           </span>
         </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
           {navLinks.map((link) => {
-            const isActive = pathname === link.href;
+            const isActive = link.href === "/" 
+              ? pathname === "/" 
+              : pathname.startsWith(link.href);
             return (
               <Link key={link.href} href={link.href}>
                 <Button
@@ -145,7 +134,7 @@ export default function Navbar() {
               onClick={handleThemeToggle}
               className="relative"
             >
-              <span style={{ viewTransitionName: "theme-toggle" }} className="flex items-center justify-center">
+              <span style={{ viewTransitionName: "theme-icon" }} className="flex items-center justify-center">
                 {resolvedTheme === "dark" ? (
                   <Moon className="h-5 w-5" />
                 ) : (
@@ -208,16 +197,21 @@ export default function Navbar() {
 
           {/* Mobile Menu Toggle — animated hamburger */}
           <button
+            type="button"
             className="md:hidden relative flex h-10 w-10 items-center justify-center rounded-md hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => setMobileOpen(!mobileOpen)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setMobileOpen(!mobileOpen);
+            }}
             aria-label="Toggle menu"
           >
-            <div className="flex flex-col items-center justify-center w-5 h-5">
+            <div className="flex flex-col items-center justify-center w-5 h-5 gap-[5px]">
               <span
-                className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out ${
+                className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out origin-center ${
                   mobileOpen
-                    ? "translate-y-[3px] rotate-45"
-                    : "-translate-y-[3px]"
+                    ? "translate-y-[7px] rotate-45"
+                    : ""
                 }`}
               />
               <span
@@ -226,10 +220,10 @@ export default function Navbar() {
                 }`}
               />
               <span
-                className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out ${
+                className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out origin-center ${
                   mobileOpen
-                    ? "-translate-y-[3px] -rotate-45"
-                    : "translate-y-[3px]"
+                    ? "-translate-y-[7px] -rotate-45"
+                    : ""
                 }`}
               />
             </div>
@@ -237,19 +231,21 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Nav */}
+      {/* Mobile Nav — overlay below navbar, doesn't push content */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25, ease: "easeInOut" }}
-            className="md:hidden border-t bg-background overflow-hidden"
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="md:hidden absolute left-0 right-0 top-full border-t border-border/50 bg-background/95 backdrop-blur-xl shadow-lg"
           >
-          <div className="container mx-auto px-4 py-4 space-y-2">
+            <div className="container mx-auto px-4 py-4 space-y-2">
             {navLinks.map((link) => {
-              const isActive = pathname === link.href;
+              const isActive = link.href === "/" 
+                ? pathname === "/" 
+                : pathname.startsWith(link.href);
               return (
                 <Link
                   key={link.href}
@@ -260,7 +256,7 @@ export default function Navbar() {
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${
                       isActive
                         ? "bg-primary/10 text-primary font-medium"
-                        : "hover:bg-muted hover:translate-x-1"
+                        : "hover:bg-muted/50 hover:translate-x-1"
                     }`}
                   >
                     <link.icon className="h-4 w-4 transition-transform duration-200" />
@@ -271,12 +267,12 @@ export default function Navbar() {
             })}
             {!session && (
               <div className="flex gap-2 pt-2 border-t">
-                <Link href="/auth/login" className="flex-1">
+                <Link href="/auth/login" className="flex-1" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" className="w-full" size="sm">
                     Log in
                   </Button>
                 </Link>
-                <Link href="/auth/register" className="flex-1">
+                <Link href="/auth/register" className="flex-1" onClick={() => setMobileOpen(false)}>
                   <Button className="w-full" size="sm">
                     Sign up
                   </Button>
@@ -287,6 +283,7 @@ export default function Navbar() {
           </motion.div>
         )}
       </AnimatePresence>
-    </header>
+      </header>
+    </>
   );
 }

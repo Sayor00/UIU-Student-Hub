@@ -155,93 +155,271 @@ function CourseRow({
       initial={{ opacity: 0, x: -20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
-      className="grid grid-cols-12 gap-2 items-end"
+      className="rounded-lg border border-border/50 bg-card/30 p-3 space-y-1.5 hover:border-border transition-colors"
     >
-      {/* Course Name */}
-      <div className="col-span-12 sm:col-span-4">
-        <Label className="text-xs text-muted-foreground mb-1 block">
-          Course Name
-        </Label>
-        <Input
-          placeholder="e.g. CSE 1111"
-          value={course.name}
-          onChange={(e) => onUpdate({ ...course, name: e.target.value })}
-          className="h-9 text-sm"
-        />
-      </div>
+      {/* Desktop (sm+): single flexible row */}
+      <div className="hidden sm:flex sm:items-end sm:gap-2">
+        {/* Course Name */}
+        <div className="flex-[3] min-w-0">
+          <Label className="text-xs text-muted-foreground mb-1 block">
+            Course Name
+          </Label>
+          <Input
+            placeholder="e.g. CSE 1111"
+            value={course.name}
+            onChange={(e) => onUpdate({ ...course, name: e.target.value })}
+            className="h-9 text-sm"
+          />
+        </div>
 
-      {/* Credits */}
-      <div className="col-span-4 sm:col-span-2">
-        <Label className="text-xs text-muted-foreground mb-1 block">
-          Credits
-        </Label>
-        <Select
-          value={String(course.credit)}
-          onValueChange={(v) =>
-            onUpdate({ ...course, credit: parseFloat(v) })
-          }
-        >
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CREDIT_OPTIONS.map((c) => (
-              <SelectItem key={c} value={String(c)}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* Credits */}
+        <div className="w-20 shrink-0">
+          <Label className="text-xs text-muted-foreground mb-1 block">
+            Credits
+          </Label>
+          <Select
+            value={String(course.credit)}
+            onValueChange={(v) =>
+              onUpdate({ ...course, credit: parseFloat(v) })
+            }
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CREDIT_OPTIONS.map((c) => (
+                <SelectItem key={c} value={String(c)}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      {/* Grade */}
-      <div className="col-span-4 sm:col-span-3">
-        <Label className="text-xs text-muted-foreground mb-1 block">
-          Grade
-        </Label>
-        <Select
-          value={course.grade}
-          onValueChange={(v) => onUpdate({ ...course, grade: v })}
-        >
-          <SelectTrigger className="h-9 text-sm">
-            <SelectValue placeholder="Grade" />
-          </SelectTrigger>
-          <SelectContent>
-            {GRADE_OPTIONS.map((g) => (
-              <SelectItem key={g.value} value={g.value}>
-                {g.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+        {/* Grade */}
+        <div className="w-24 shrink-0">
+          <Label className="text-xs text-muted-foreground mb-1 block">
+            {course.isRetake ? "New Grade" : "Grade"}
+          </Label>
+          <Select
+            value={course.grade}
+            onValueChange={(v) => onUpdate({ ...course, grade: v })}
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="Grade" />
+            </SelectTrigger>
+            <SelectContent>
+              {GRADE_OPTIONS.map((g) => (
+                <SelectItem key={g.value} value={g.value}>
+                  {g.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-      {/* Retake Badge + Remove */}
-      <div className="col-span-4 sm:col-span-3 flex items-center gap-1">
-        <Button
-          type="button"
-          variant={course.isRetake ? "default" : "outline"}
-          size="sm"
-          className={`h-9 text-xs flex-1 ${
-            course.isRetake
-              ? "bg-orange-500 hover:bg-orange-600 text-white"
-              : ""
-          }`}
-          onClick={() => onUpdate({ ...course, isRetake: !course.isRetake })}
-        >
-          <RefreshCw className="h-3 w-3 mr-1" />
-          {course.isRetake ? "Retake" : "Retake?"}
-        </Button>
+        {/* Old Grade (before retake btn) - visible when retake selected */}
+        <AnimatePresence mode="popLayout">
+          {course.isRetake && (
+            <motion.div
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: "auto", opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden shrink-0"
+            >
+              <Label className="text-xs text-orange-500 dark:text-orange-400 mb-1 block whitespace-nowrap">
+                Old Grade
+              </Label>
+              <Select
+                value={course.previousGrade}
+                onValueChange={(v) =>
+                  onUpdate({ ...course, previousGrade: v })
+                }
+              >
+                <SelectTrigger className="h-9 w-24 text-xs border-orange-300 dark:border-orange-700">
+                  <SelectValue placeholder="Old" />
+                </SelectTrigger>
+                <SelectContent>
+                  {GRADE_OPTIONS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>
+                      {g.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Retake Toggle */}
+        <motion.div layout className="shrink-0 self-end">
+          <Button
+            type="button"
+            variant={course.isRetake ? "default" : "outline"}
+            size={course.isRetake ? "icon" : "sm"}
+            className={`h-9 transition-all duration-200 ${
+              course.isRetake
+                ? "w-9 bg-orange-500 hover:bg-orange-600 text-white"
+                : "gap-1.5"
+            }`}
+            onClick={() =>
+              onUpdate({
+                ...course,
+                isRetake: !course.isRetake,
+                previousGrade: !course.isRetake ? course.previousGrade : "",
+              })
+            }
+            title={course.isRetake ? "Remove retake" : "Mark as retake"}
+          >
+            <RefreshCw className={`shrink-0 ${course.isRetake ? "h-4 w-4" : "h-3.5 w-3.5"}`} />
+            {!course.isRetake && <span className="text-xs">Retake?</span>}
+          </Button>
+        </motion.div>
+
+        {/* Remove */}
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-9 w-9 text-destructive hover:text-destructive shrink-0"
+          className="h-9 w-9 text-destructive hover:text-destructive shrink-0 self-end"
           onClick={onRemove}
           disabled={!canRemove}
         >
           <Trash2 className="h-4 w-4" />
         </Button>
+      </div>
+
+      {/* Mobile: spacious layout */}
+      <div className="flex flex-col gap-1.5 sm:hidden">
+        {/* Course Name with action buttons */}
+        <div className="flex items-end gap-2">
+          <div className="flex-1 min-w-0">
+            <Label className="text-xs text-muted-foreground mb-1 block">
+              Course Name
+            </Label>
+            <Input
+              placeholder="e.g. CSE 1111"
+              value={course.name}
+              onChange={(e) => onUpdate({ ...course, name: e.target.value })}
+              className="h-9 text-sm"
+            />
+          </div>
+          <Button
+            type="button"
+            variant={course.isRetake ? "default" : "outline"}
+            size={course.isRetake ? "icon" : "sm"}
+            className={`h-9 shrink-0 transition-all duration-200 ${
+              course.isRetake
+                ? "w-9 bg-orange-500 hover:bg-orange-600 text-white"
+                : "gap-1"
+            }`}
+            onClick={() =>
+              onUpdate({
+                ...course,
+                isRetake: !course.isRetake,
+                previousGrade: !course.isRetake ? course.previousGrade : "",
+              })
+            }
+            title={course.isRetake ? "Remove retake" : "Mark as retake"}
+          >
+            <RefreshCw className={`shrink-0 ${course.isRetake ? "h-4 w-4" : "h-3.5 w-3.5"}`} />
+            {!course.isRetake && <span className="text-xs">Retake?</span>}
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9 text-destructive hover:text-destructive shrink-0"
+            onClick={onRemove}
+            disabled={!canRemove}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+
+        {/* Credits and Grade side by side */}
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">
+              Credits
+            </Label>
+            <Select
+              value={String(course.credit)}
+              onValueChange={(v) =>
+                onUpdate({ ...course, credit: parseFloat(v) })
+              }
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CREDIT_OPTIONS.map((c) => (
+                  <SelectItem key={c} value={String(c)}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground mb-1 block">
+              {course.isRetake ? "New Grade" : "Grade"}
+            </Label>
+            <Select
+              value={course.grade}
+              onValueChange={(v) => onUpdate({ ...course, grade: v })}
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Grade" />
+              </SelectTrigger>
+              <SelectContent>
+                {GRADE_OPTIONS.map((g) => (
+                  <SelectItem key={g.value} value={g.value}>
+                    {g.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* Old Grade - full width when retake is active */}
+        <AnimatePresence>
+          {course.isRetake && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <div>
+                <Label className="text-xs text-orange-500 dark:text-orange-400 mb-1 block">
+                  Old Grade (previous attempt)
+                </Label>
+                <Select
+                  value={course.previousGrade}
+                  onValueChange={(v) =>
+                    onUpdate({ ...course, previousGrade: v })
+                  }
+                >
+                  <SelectTrigger className="h-9 text-sm border-orange-300 dark:border-orange-700">
+                    <SelectValue placeholder="Select old grade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GRADE_OPTIONS.map((g) => (
+                      <SelectItem key={g.value} value={g.value}>
+                        {g.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );
@@ -295,9 +473,9 @@ function TrimesterCard({
     >
       <Card className="overflow-hidden border-2 hover:border-primary/30 transition-colors">
         {/* Trimester Header */}
-        <div className="bg-gradient-to-r from-primary/5 to-orange-500/5 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold">
+        <div className="bg-gradient-to-r from-primary/5 to-orange-500/5 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs sm:text-sm font-bold shrink-0">
               {index + 1}
             </div>
             <Input
@@ -306,10 +484,10 @@ function TrimesterCard({
                 onUpdate({ ...trimester, name: e.target.value })
               }
               placeholder={`Trimester ${index + 1} (e.g. Spring 2025)`}
-              className="h-8 border-0 bg-transparent text-base font-semibold px-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+              className="h-7 sm:h-8 border-0 bg-transparent text-sm sm:text-base font-semibold px-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
             />
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
             <Button
               variant="ghost"
               size="icon"
@@ -343,7 +521,7 @@ function TrimesterCard({
               transition={{ duration: 0.2 }}
               className="overflow-hidden"
             >
-              <CardContent className="pt-4 space-y-3">
+              <CardContent className="pt-3 sm:pt-4 px-3 sm:px-6 space-y-4">
                 <AnimatePresence mode="popLayout">
                   {trimester.courses.map((course) => (
                     <CourseRow
@@ -364,20 +542,10 @@ function TrimesterCard({
                     variant="outline"
                     size="sm"
                     onClick={() => addCourse(false)}
-                    className="gap-1"
+                    className="gap-1 text-xs sm:text-sm"
                   >
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     Add Course
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => addCourse(true)}
-                    className="gap-1 border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400 dark:hover:bg-orange-950"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" />
-                    Add Retake Course
                   </Button>
                 </div>
               </CardContent>
@@ -418,43 +586,43 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
       className="space-y-6"
     >
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
         <Card className={`border ${getGPABg(lastResult.cgpa)}`}>
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Current CGPA
             </p>
-            <p className={`text-3xl font-bold ${getGPAColor(lastResult.cgpa)}`}>
+            <p className={`text-2xl sm:text-3xl font-bold ${getGPAColor(lastResult.cgpa)}`}>
               {lastResult.cgpa.toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card className="border">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Last GPA
             </p>
-            <p className={`text-3xl font-bold ${getGPAColor(lastResult.gpa)}`}>
+            <p className={`text-2xl sm:text-3xl font-bold ${getGPAColor(lastResult.gpa)}`}>
               {lastResult.gpa.toFixed(2)}
             </p>
           </CardContent>
         </Card>
         <Card className="border">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Total Credits
             </p>
-            <p className="text-3xl font-bold text-foreground">
+            <p className="text-2xl sm:text-3xl font-bold text-foreground">
               {lastResult.totalCredits}
             </p>
           </CardContent>
         </Card>
         <Card className="border">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
+          <CardContent className="p-3 sm:p-4 text-center">
+            <p className="text-[10px] sm:text-xs text-muted-foreground uppercase tracking-wider mb-1">
               Earned Credits
             </p>
-            <p className="text-3xl font-bold text-foreground">
+            <p className="text-2xl sm:text-3xl font-bold text-foreground">
               {lastResult.earnedCredits}
             </p>
           </CardContent>
@@ -464,24 +632,24 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
       {/* Trimester Details Table */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-primary" />
+          <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+            <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             Trimester Results
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
+        <CardContent className="px-3 sm:px-6">
+          <div className="rounded-lg border overflow-x-auto">
+            <table className="w-full text-xs sm:text-sm min-w-[320px]">
               <thead>
                 <tr className="bg-muted/50">
-                  <th className="text-left px-4 py-2.5 font-medium">
+                  <th className="text-left px-2.5 sm:px-4 py-2 sm:py-2.5 font-medium">
                     Trimester
                   </th>
-                  <th className="text-center px-4 py-2.5 font-medium">
+                  <th className="text-center px-2 sm:px-4 py-2 sm:py-2.5 font-medium">
                     Credits
                   </th>
-                  <th className="text-center px-4 py-2.5 font-medium">GPA</th>
-                  <th className="text-center px-4 py-2.5 font-medium">CGPA</th>
+                  <th className="text-center px-2 sm:px-4 py-2 sm:py-2.5 font-medium">GPA</th>
+                  <th className="text-center px-2 sm:px-4 py-2 sm:py-2.5 font-medium">CGPA</th>
                 </tr>
               </thead>
               <tbody>
@@ -492,21 +660,21 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
                       i % 2 === 0 ? "bg-background" : "bg-muted/20"
                     } hover:bg-muted/40 transition-colors`}
                   >
-                    <td className="px-4 py-2.5 font-medium">
+                    <td className="px-2.5 sm:px-4 py-2 sm:py-2.5 font-medium truncate max-w-[120px] sm:max-w-none">
                       {r.trimesterName || `Trimester ${i + 1}`}
                     </td>
-                    <td className="px-4 py-2.5 text-center">
+                    <td className="px-2 sm:px-4 py-2 sm:py-2.5 text-center">
                       {r.trimesterCredits}
                     </td>
                     <td
-                      className={`px-4 py-2.5 text-center font-semibold ${getGPAColor(
+                      className={`px-2 sm:px-4 py-2 sm:py-2.5 text-center font-semibold ${getGPAColor(
                         r.gpa
                       )}`}
                     >
                       {r.gpa.toFixed(2)}
                     </td>
                     <td
-                      className={`px-4 py-2.5 text-center font-semibold ${getGPAColor(
+                      className={`px-2 sm:px-4 py-2 sm:py-2.5 text-center font-semibold ${getGPAColor(
                         r.cgpa
                       )}`}
                     >
@@ -532,8 +700,8 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
               Your CGPA and GPA trend across trimesters
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-[300px] sm:h-[350px] w-full">
+          <CardContent className="px-2 sm:px-6">
+            <div className="h-[250px] sm:h-[300px] lg:h-[380px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart
                   data={results.map((r, i) => ({
@@ -541,7 +709,7 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
                     CGPA: r.cgpa,
                     GPA: r.gpa,
                   }))}
-                  margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                   <XAxis
@@ -603,49 +771,54 @@ function ResultsPanel({ results }: { results: CGPAResult[] }) {
 // ─── Skeleton Loader ────────────────────────────────────────────
 function PageSkeleton() {
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 max-w-4xl">
       <div className="animate-pulse">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="h-12 w-12 rounded-xl bg-muted" />
-          <div className="space-y-2">
-            <div className="h-7 w-52 rounded-md bg-muted" />
-            <div className="h-4 w-80 rounded-md bg-muted" />
+        <div className="flex items-center gap-3 mb-6 sm:mb-8">
+          <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-muted shrink-0" />
+          <div className="space-y-2 min-w-0">
+            <div className="h-6 sm:h-7 w-44 sm:w-52 rounded-md bg-muted" />
+            <div className="h-3 sm:h-4 w-64 sm:w-80 max-w-full rounded-md bg-muted" />
           </div>
         </div>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
           <div className="rounded-xl border border-dashed p-4">
             <div className="flex items-center gap-2">
               <div className="h-4 w-4 rounded bg-muted" />
               <div className="h-4 w-36 rounded bg-muted" />
             </div>
           </div>
-          <div className="rounded-xl border p-6 space-y-4">
+          <div className="rounded-xl border p-4 sm:p-6 space-y-4">
             <div className="space-y-2">
-              <div className="h-5 w-48 rounded bg-muted" />
-              <div className="h-4 w-72 rounded bg-muted" />
+              <div className="h-5 w-40 sm:w-48 rounded bg-muted" />
+              <div className="h-3 sm:h-4 w-60 sm:w-72 rounded bg-muted" />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2"><div className="h-4 w-32 rounded bg-muted" /><div className="h-10 w-full rounded-md bg-muted" /></div>
-              <div className="space-y-2"><div className="h-4 w-28 rounded bg-muted" /><div className="h-10 w-full rounded-md bg-muted" /></div>
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-2"><div className="h-3 sm:h-4 w-28 sm:w-32 rounded bg-muted" /><div className="h-9 sm:h-10 w-full rounded-md bg-muted" /></div>
+              <div className="space-y-2"><div className="h-3 sm:h-4 w-24 sm:w-28 rounded bg-muted" /><div className="h-9 sm:h-10 w-full rounded-md bg-muted" /></div>
             </div>
           </div>
           <div className="rounded-xl border-2 overflow-hidden">
-            <div className="bg-muted/20 px-4 py-3 flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-muted" />
-              <div className="h-5 w-48 rounded bg-muted" />
+            <div className="bg-muted/20 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center gap-2 sm:gap-3">
+              <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-full bg-muted" />
+              <div className="h-5 w-40 sm:w-48 rounded bg-muted" />
             </div>
-            <div className="p-4 space-y-4">
+            <div className="p-3 sm:p-4 space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="grid grid-cols-12 gap-2">
-                  <div className="col-span-12 sm:col-span-4"><div className="h-3 w-20 rounded bg-muted mb-1.5" /><div className="h-9 w-full rounded-md bg-muted" /></div>
-                  <div className="col-span-4 sm:col-span-2"><div className="h-3 w-14 rounded bg-muted mb-1.5" /><div className="h-9 w-full rounded-md bg-muted" /></div>
-                  <div className="col-span-4 sm:col-span-3"><div className="h-3 w-12 rounded bg-muted mb-1.5" /><div className="h-9 w-full rounded-md bg-muted" /></div>
-                  <div className="col-span-4 sm:col-span-3 flex items-end gap-1"><div className="h-9 flex-1 rounded-md bg-muted" /><div className="h-9 w-9 rounded-md bg-muted" /></div>
+                <div key={i} className="space-y-2">
+                  <div className="h-9 w-full rounded-md bg-muted" />
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="h-9 w-full rounded-md bg-muted" />
+                    <div className="h-9 w-full rounded-md bg-muted" />
+                    <div className="h-9 w-full rounded-md bg-muted" />
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-          <div className="flex gap-3"><div className="h-11 w-44 rounded-md bg-muted" /><div className="h-11 w-24 rounded-md bg-muted" /></div>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
+            <div className="h-11 col-span-2 sm:w-44 rounded-md bg-muted" />
+            <div className="h-11 sm:w-24 rounded-md bg-muted" />
+          </div>
         </div>
       </div>
     </div>
@@ -692,6 +865,18 @@ export default function CGPACalculatorPage() {
     if (!hasValidCourse) {
       toast.error("Please add at least one course with a grade.");
       return;
+    }
+
+    // Validate retake courses have a previous grade selected
+    for (const t of trimesters) {
+      for (const c of t.courses) {
+        if (c.isRetake && c.grade && c.credit > 0 && !c.previousGrade) {
+          toast.error(
+            `Retake course "${c.name || "Unnamed"}" is missing the old grade. Please select the grade from the previous attempt.`
+          );
+          return;
+        }
+      }
     }
 
     const prevCredits = parseFloat(previousCredits) || 0;
@@ -746,6 +931,7 @@ export default function CGPACalculatorPage() {
               credit: c.credit,
               grade: c.grade,
               isRetake: c.isRetake,
+              previousGrade: c.previousGrade || undefined,
             })),
           })),
           results,
@@ -763,24 +949,23 @@ export default function CGPACalculatorPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <div className="container mx-auto px-3 sm:px-4 py-6 sm:py-8 max-w-4xl">
       {/* Page Header */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
+        className="mb-6 sm:mb-8"
       >
         <div className="flex items-center gap-3 mb-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-orange-500/20">
-            <Calculator className="h-6 w-6 text-primary" />
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-orange-500/20 shrink-0">
+            <Calculator className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           </div>
-          <div>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">
+          <div className="min-w-0">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-primary to-orange-500 bg-clip-text text-transparent">
               CGPA Calculator
             </h1>
-            <p className="text-sm text-muted-foreground">
-              Calculate your UIU CGPA with support for retakes & multiple
-              trimesters
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Calculate your UIU CGPA with retakes & multiple trimesters
             </p>
           </div>
         </div>
@@ -792,20 +977,20 @@ export default function CGPACalculatorPage() {
 
         {/* Previous Academic Info */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <GraduationCap className="h-5 w-5 text-primary" />
+          <CardHeader className="pb-3 px-4 sm:px-6">
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <GraduationCap className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               Previous Academic Info
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
               Enter your completed credits and current CGPA (if any). Leave blank
               if this is your first trimester.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="prevCredits">Completed Credits</Label>
+          <CardContent className="px-4 sm:px-6">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="prevCredits" className="text-xs sm:text-sm">Completed Credits</Label>
                 <Input
                   id="prevCredits"
                   type="number"
@@ -815,12 +1000,13 @@ export default function CGPACalculatorPage() {
                   placeholder="e.g. 45"
                   value={previousCredits}
                   onChange={(e) => setPreviousCredits(e.target.value)}
+                  className="h-9 sm:h-10"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="prevCGPA">
+              <div className="space-y-1.5 sm:space-y-2">
+                <Label htmlFor="prevCGPA" className="text-xs sm:text-sm">
                   Current CGPA{" "}
-                  <span className="text-muted-foreground">(Optional)</span>
+                  <span className="text-muted-foreground hidden sm:inline">(Optional)</span>
                 </Label>
                 <Input
                   id="prevCGPA"
@@ -831,6 +1017,7 @@ export default function CGPACalculatorPage() {
                   placeholder="e.g. 3.50"
                   value={previousCGPA}
                   onChange={(e) => setPreviousCGPA(e.target.value)}
+                  className="h-9 sm:h-10"
                 />
               </div>
             </div>
@@ -839,21 +1026,10 @@ export default function CGPACalculatorPage() {
 
         {/* Trimesters */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-primary" />
-              Trimesters
-            </h2>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={addTrimester}
-              className="gap-1"
-            >
-              <Plus className="h-4 w-4" />
-              Add Trimester
-            </Button>
-          </div>
+          <h2 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+            <BookOpen className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            Trimesters
+          </h2>
 
           <AnimatePresence mode="popLayout">
             {trimesters.map((trimester, idx) => (
@@ -867,16 +1043,25 @@ export default function CGPACalculatorPage() {
               />
             ))}
           </AnimatePresence>
+
+          <Button
+            variant="outline"
+            onClick={addTrimester}
+            className="w-full gap-2 border-dashed border-2 hover:border-primary/50 hover:bg-primary/5 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            Add Trimester
+          </Button>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:gap-3">
           <Button
             onClick={handleCalculate}
             size="lg"
-            className="gap-2 shadow-lg shadow-primary/25 flex-1 sm:flex-none"
+            className="gap-2 shadow-lg shadow-primary/25 col-span-2 sm:flex-none text-sm sm:text-base"
           >
-            <Calculator className="h-5 w-5" />
+            <Calculator className="h-4 w-4 sm:h-5 sm:w-5" />
             Calculate CGPA
           </Button>
           {session && results.length > 0 && (
@@ -884,10 +1069,10 @@ export default function CGPACalculatorPage() {
               onClick={handleSave}
               variant="outline"
               size="lg"
-              className="gap-2 flex-1 sm:flex-none"
+              className="gap-2 sm:flex-none text-sm sm:text-base"
               disabled={saving}
             >
-              <Save className="h-5 w-5" />
+              <Save className="h-4 w-4 sm:h-5 sm:w-5" />
               {saving ? "Saving..." : "Save Record"}
             </Button>
           )}
@@ -895,9 +1080,9 @@ export default function CGPACalculatorPage() {
             onClick={handleReset}
             variant="ghost"
             size="lg"
-            className="gap-2 text-muted-foreground flex-1 sm:flex-none"
+            className="gap-2 text-muted-foreground sm:flex-none text-sm sm:text-base"
           >
-            <RotateCcw className="h-5 w-5" />
+            <RotateCcw className="h-4 w-4 sm:h-5 sm:w-5" />
             Reset
           </Button>
         </div>

@@ -115,18 +115,18 @@
 }
 
 /* Theme toggle icon: spin crossfade independent of page circle */
-::view-transition-old(theme-toggle),
-::view-transition-new(theme-toggle) {
+::view-transition-old(theme-icon),
+::view-transition-new(theme-icon) {
   height: 100%;
   width: 100%;
 }
 
 /* Old icon on top so its spin-out is visible; as it shrinks/fades the new icon shows through */
-::view-transition-old(theme-toggle) {
+::view-transition-old(theme-icon) {
   animation: icon-spin-out 500ms ease forwards;
   z-index: 2;
 }
-::view-transition-new(theme-toggle) {
+::view-transition-new(theme-icon) {
   animation: icon-spin-in 500ms ease forwards;
   z-index: 1;
 }

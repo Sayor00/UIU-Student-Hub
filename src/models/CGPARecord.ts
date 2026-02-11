@@ -11,6 +11,7 @@ export interface ICGPARecord extends Document {
       credit: number;
       grade: string;
       isRetake: boolean;
+      previousGrade?: string;
     }[];
   }[];
   results: {
@@ -49,6 +50,7 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
             credit: { type: Number, required: true },
             grade: { type: String, required: true },
             isRetake: { type: Boolean, default: false },
+            previousGrade: { type: String },
           },
         ],
       },

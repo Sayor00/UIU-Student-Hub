@@ -51,20 +51,20 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-12">
+    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center px-4 py-8 sm:py-12">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
+        className="w-full max-w-[380px] sm:max-w-md"
       >
         <Card className="border-2">
-          <CardHeader className="space-y-3 text-center">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
-              <GraduationCap className="h-7 w-7 text-primary" />
+          <CardHeader className="space-y-2 sm:space-y-3 text-center px-4 sm:px-6">
+            <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-full bg-primary/10">
+              <GraduationCap className="h-6 w-6 sm:h-7 sm:w-7 text-primary" />
             </div>
-            <CardTitle className="text-2xl">Welcome Back</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-xl sm:text-2xl">Welcome Back</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
               Log in to your UIU Student Hub account
             </CardDescription>
           </CardHeader>

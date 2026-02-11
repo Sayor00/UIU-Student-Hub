@@ -40,6 +40,7 @@ export interface CourseInput {
   credit: number;
   grade: string;
   isRetake: boolean;
+  previousGrade: string; // The old grade being replaced (only used when isRetake is true)
 }
 
 export interface TrimesterInput {
@@ -95,8 +96,13 @@ export function calculateTrimesterGPA(courses: CourseInput[]): {
 }
 
 /**
- * Calculate CGPA across all trimesters, considering previous credits/CGPA
- * CGPA = (Previous Total Points + Current Total Points) / (Previous Credits + Current Credits)
+ * Calculate CGPA across all trimesters, considering previous credits/CGPA.
+ *
+ * UIU Retake Policy:
+ * - When a student retakes a course, the NEW grade replaces the OLD grade.
+ * - Credits are counted only ONCE (not double-counted).
+ * - The old grade's contribution (credit × old_grade_point) is subtracted
+ *   from the cumulative total and replaced with (credit × new_grade_point).
  */
 export function calculateCGPA(
   trimesters: TrimesterInput[],
@@ -104,7 +110,7 @@ export function calculateCGPA(
   previousCGPA: number = 0
 ): CGPAResult[] {
   const results: CGPAResult[] = [];
-  
+
   let cumulativeCredits = previousCredits;
   let cumulativePoints = previousCredits * previousCGPA;
   let cumulativeEarnedCredits = previousCredits; // Assume all previous credits were earned
@@ -113,32 +119,34 @@ export function calculateCGPA(
     const { gpa, totalCredits, earnedCredits, totalPoints } =
       calculateTrimesterGPA(trimester.courses);
 
-    // Handle retake courses: For retakes, the old course grade is replaced
-    // So we need to handle the credit differently
-    let retakeCreditsToSubtract = 0;
-    let retakePointsToSubtract = 0;
+    // Handle retake courses per UIU policy:
+    // - Don't add retake credits again (already counted in previous CGPA)
+    // - Subtract the old grade's points, new grade's points are in totalPoints
+    let retakeCreditsAlreadyCounted = 0;
+    let oldRetakePoints = 0;
 
     for (const course of trimester.courses) {
-      if (course.isRetake && course.credit > 0 && course.grade) {
-        // For a retake, we assume the previous grade was already counted
-        // We subtract the old credit from cumulative (it will be re-added with new grade)
-        // Since we don't know the old grade, we just track the credit
-        retakeCreditsToSubtract += course.credit;
-        // The old points are unknown, so we use an approximation:
-        // We don't subtract points, but we don't add the credits again
+      if (course.isRetake && course.credit > 0 && course.grade && course.previousGrade) {
+        const oldGradePoint = getGradePoint(course.previousGrade);
+        retakeCreditsAlreadyCounted += course.credit;
+        oldRetakePoints += course.credit * oldGradePoint;
+
+        // If old grade was passing (>= D), subtract from earned credits
+        // so the new earned status is applied correctly
+        if (oldGradePoint >= 1.0) {
+          cumulativeEarnedCredits -= course.credit;
+        }
       }
     }
 
-    // For non-retake courses, add credits and points normally
-    // For retake courses, only add the new points (credits already counted)
-    const newCredits = totalCredits - retakeCreditsToSubtract;
-    
+    // Only add NEW course credits (retake credits were already in the cumulative total)
+    const newCredits = totalCredits - retakeCreditsAlreadyCounted;
+
+    // Subtract old retake points, add all new points (retake + regular)
     cumulativeCredits += newCredits;
-    cumulativePoints += totalPoints;
+    cumulativePoints = cumulativePoints - oldRetakePoints + totalPoints;
     cumulativeEarnedCredits += earnedCredits;
 
-    // Recalculate: For retakes, subtract old points and add new ones
-    // Since we don't know old grade, we recalculate from cumulative
     const cgpa =
       cumulativeCredits > 0 ? cumulativePoints / cumulativeCredits : 0;
 
@@ -172,6 +180,7 @@ export function createEmptyCourse(isRetake: boolean = false): CourseInput {
     credit: 3,
     grade: "",
     isRetake,
+    previousGrade: "",
   };
 }
 
