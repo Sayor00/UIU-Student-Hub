@@ -8,7 +8,6 @@ import { useSession, signOut } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  GraduationCap,
   Moon,
   Sun,
   LogOut,
@@ -18,6 +17,9 @@ import {
   CalendarDays,
   DollarSign,
   Star,
+  Wrench,
+  ChevronDown,
+  ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,12 +30,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navLinks = [
-  { href: "/", label: "Home", icon: LayoutDashboard },
-  { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator },
-  { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays },
-  { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign },
-  { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star },
+const toolLinks = [
+  { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator, description: "Calculate your GPA & CGPA" },
+  { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays, description: "Plan your class schedule" },
+  { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign, description: "Estimate tuition fees" },
+  { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, description: "Rate & review faculty" },
 ];
 
 export default function Navbar() {
@@ -114,26 +115,62 @@ export default function Navbar() {
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          {navLinks.map((link) => {
-            const isActive = link.href === "/" 
-              ? pathname === "/" 
-              : pathname.startsWith(link.href);
-            return (
-              <Link key={link.href} href={link.href}>
-                <Button
-                  variant={isActive ? "secondary" : "ghost"}
-                  className={`gap-2 group/nav ${
-                    isActive
-                      ? "bg-primary/10 text-primary hover:bg-primary/15"
-                      : ""
-                  }`}
-                >
-                  <link.icon className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
-                  {link.label}
-                </Button>
-              </Link>
-            );
-          })}
+          <Link href="/">
+            <Button
+              variant={pathname === "/" ? "secondary" : "ghost"}
+              className={`gap-2 group/nav ${
+                pathname === "/"
+                  ? "bg-primary/10 text-primary hover:bg-primary/15"
+                  : ""
+              }`}
+            >
+              <LayoutDashboard className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
+              Home
+            </Button>
+          </Link>
+
+          {/* Tools Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant={pathname.startsWith("/tools") ? "secondary" : "ghost"}
+                className={`gap-2 group/nav ${
+                  pathname.startsWith("/tools")
+                    ? "bg-primary/10 text-primary hover:bg-primary/15"
+                    : ""
+                }`}
+              >
+                <Wrench className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
+                Tools
+                <ChevronDown className="h-3 w-3 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-64">
+              {toolLinks.map((tool) => {
+                const isActive = pathname.startsWith(tool.href);
+                return (
+                  <DropdownMenuItem key={tool.href} asChild className="cursor-pointer">
+                    <Link href={tool.href} className="flex items-start gap-3 py-2.5">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isActive ? "bg-primary/15 text-primary" : "bg-muted"}`}>
+                        <tool.icon className="h-4 w-4" />
+                      </div>
+                      <div className="flex flex-col">
+                        <span className={`text-sm font-medium ${isActive ? "text-primary" : ""}`}>{tool.label}</span>
+                        <span className="text-xs text-muted-foreground">{tool.description}</span>
+                      </div>
+                    </Link>
+                  </DropdownMenuItem>
+                );
+              })}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild className="cursor-pointer">
+                <Link href="/tools" className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  View All Tools
+                </Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Right side */}
@@ -255,29 +292,54 @@ export default function Navbar() {
             className="md:hidden absolute left-0 right-0 top-full border-t border-border/50 bg-background/95 backdrop-blur-xl shadow-lg"
           >
             <div className="container mx-auto px-4 py-4 space-y-2">
-            {navLinks.map((link) => {
-              const isActive = link.href === "/" 
-                ? pathname === "/" 
-                : pathname.startsWith(link.href);
-              return (
+            {/* Home */}
+            <Link href="/" onClick={() => setMobileOpen(false)}>
+              <div
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${
+                  pathname === "/"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "hover:bg-muted/50 hover:translate-x-1"
+                }`}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                Home
+              </div>
+            </Link>
+
+            {/* Tools Section */}
+            <div className="pt-1">
+              <div className="flex items-center justify-between px-3 pb-1">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tools</span>
                 <Link
-                  key={link.href}
-                  href={link.href}
+                  href="/tools"
                   onClick={() => setMobileOpen(false)}
+                  className="text-xs text-primary hover:underline"
                 >
-                  <div
-                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${
-                      isActive
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "hover:bg-muted/50 hover:translate-x-1"
-                    }`}
-                  >
-                    <link.icon className="h-4 w-4 transition-transform duration-200" />
-                    {link.label}
-                  </div>
+                  View All
                 </Link>
-              );
-            })}
+              </div>
+              {toolLinks.map((link) => {
+                const isActive = pathname.startsWith(link.href);
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    <div
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${
+                        isActive
+                          ? "bg-primary/10 text-primary font-medium"
+                          : "hover:bg-muted/50 hover:translate-x-1"
+                      }`}
+                    >
+                      <link.icon className="h-4 w-4" />
+                      {link.label}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
             {!session && (
               <div className="flex gap-2 pt-2 border-t">
                 <Link href="/auth/login" className="flex-1" onClick={() => setMobileOpen(false)}>
