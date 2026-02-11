@@ -17,6 +17,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   DollarSign,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +33,7 @@ const navLinks = [
   { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator },
   { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays },
   { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign },
+  { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star },
 ];
 
 export default function Navbar() {
