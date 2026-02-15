@@ -28,6 +28,7 @@
     "framer-motion": "^11.15.0",
     "html2canvas": "^1.4.1",
     "ics": "^3.8.1",
+    "JSCPP": "^2.0.9",
     "jspdf": "^4.1.0",
     "lucide-react": "^0.468.0",
     "mongoose": "^8.9.0",

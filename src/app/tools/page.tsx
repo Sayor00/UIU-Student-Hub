@@ -11,6 +11,7 @@ import {
   Star,
   Wrench,
   ArrowRight,
+  Cpu,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,16 @@ const tools = [
     tags: ["Reviews", "Faculty", "Ratings"],
     color: "text-orange-500",
     bg: "bg-orange-500/10",
+  },
+  {
+    href: "/tools/code-runner",
+    label: "Code Runner",
+    icon: Cpu,
+    description:
+      "Visualize algorithms and data structures step by step. Simulate code execution with animated visualizations, complexity analysis, and educational annotations.",
+    tags: ["CS", "Algorithms", "Visualization"],
+    color: "text-cyan-500",
+    bg: "bg-cyan-500/10",
   },
 ];
 
