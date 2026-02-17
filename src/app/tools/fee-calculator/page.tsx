@@ -152,14 +152,12 @@ function ProgramSelector({
                           setOpen(false);
                           setSearch("");
                         }}
-                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${
-                          value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
-                        }`}
+                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
+                          }`}
                       >
                         <Check
-                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${
-                            value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
-                          }`}
+                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
+                            }`}
                         />
                         <span>{p.name}</span>
                       </button>
@@ -180,14 +178,12 @@ function ProgramSelector({
                           setOpen(false);
                           setSearch("");
                         }}
-                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${
-                          value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
-                        }`}
+                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
+                          }`}
                       >
                         <Check
-                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${
-                            value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
-                          }`}
+                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
+                            }`}
                         />
                         <span>{p.name}</span>
                       </button>
@@ -311,6 +307,8 @@ function TrimesterFeeCalculator() {
   const [credits, setCredits] = React.useState<string>("");
   const [waiverPreset, setWaiverPreset] = React.useState("none");
   const [customWaiver, setCustomWaiver] = React.useState<string>("");
+  const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
+  const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
   const [includeUpfront, setIncludeUpfront] = React.useState(false);
   const [result, setResult] = React.useState<ReturnType<typeof calculateTermFee> | null>(null);
   const [installments, setInstallments] = React.useState<ReturnType<typeof calculateInstallments> | null>(null);
@@ -337,9 +335,19 @@ function TrimesterFeeCalculator() {
       return;
     }
 
+    let effectivePerCreditFee = selectedProgram.perCreditFee;
+    if (isCustomFeeEnabled) {
+      const customFee = parseFloat(customCreditFee);
+      if (isNaN(customFee) || customFee < 0) {
+        toast.error("Please enter a valid custom credit fee.");
+        return;
+      }
+      effectivePerCreditFee = customFee;
+    }
+
     const feeResult = calculateTermFee(
       creditNum,
-      selectedProgram.perCreditFee,
+      effectivePerCreditFee,
       waiverPercentage,
       selectedProgram.termType,
       selectedProgram.labFeePerTerm
@@ -349,7 +357,7 @@ function TrimesterFeeCalculator() {
     setResult(feeResult);
     setInstallments(installmentResult);
     toast.success("Fee calculated!");
-    
+
     // Scroll to result after a brief delay to allow rendering
     setTimeout(() => {
       resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -361,6 +369,8 @@ function TrimesterFeeCalculator() {
     setCredits("");
     setWaiverPreset("none");
     setCustomWaiver("");
+    setIsCustomFeeEnabled(false);
+    setCustomCreditFee("");
     setIncludeUpfront(false);
     setResult(null);
     setInstallments(null);
@@ -410,6 +420,39 @@ function TrimesterFeeCalculator() {
                   </Badge>
                 )}
               </div>
+            )}
+          </div>
+
+          {/* Custom Fee Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="customFee"
+                checked={isCustomFeeEnabled}
+                onChange={(e) => {
+                  setIsCustomFeeEnabled(e.target.checked);
+                  setResult(null);
+                  setInstallments(null);
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="customFee" className="text-sm cursor-pointer">
+                Manually input credit fee?
+              </Label>
+            </div>
+            {isCustomFeeEnabled && (
+              <Input
+                type="number"
+                placeholder="Enter fee per credit"
+                value={customCreditFee}
+                onChange={(e) => {
+                  setCustomCreditFee(e.target.value);
+                  setResult(null);
+                  setInstallments(null);
+                }}
+                min={0}
+              />
             )}
           </div>
 
@@ -527,7 +570,7 @@ function TrimesterFeeCalculator() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-1">
-                <ResultRow label={`Tuition Fee (${credits} × ${formatTaka(selectedProgram?.perCreditFee ?? 0)})`} value={formatTaka(result.tuitionFee)} />
+                <ResultRow label={`Tuition Fee (${credits} × ${formatTaka(isCustomFeeEnabled && customCreditFee ? parseFloat(customCreditFee) : (selectedProgram?.perCreditFee ?? 0))})`} value={formatTaka(result.tuitionFee)} />
                 {result.waiverAmount > 0 && (
                   <ResultRow label={`Waiver (${waiverPercentage}%)`} value={`- ${formatTaka(result.waiverAmount)}`} sub />
                 )}
@@ -593,6 +636,8 @@ function TotalCostEstimator() {
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
   const [waiverPreset, setWaiverPreset] = React.useState("none");
   const [customWaiver, setCustomWaiver] = React.useState<string>("");
+  const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
+  const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
   const [result, setResult] = React.useState<ReturnType<typeof calculateTotalProgramCost> | null>(null);
   const resultRef = React.useRef<HTMLDivElement>(null);
 
@@ -617,10 +662,25 @@ function TotalCostEstimator() {
       return;
     }
 
-    const costResult = calculateTotalProgramCost(selectedProgram, waiverPercentage, effectiveCredits);
+    if (waiverPercentage < 0 || waiverPercentage > 100) {
+      toast.error("Waiver percentage must be between 0 and 100.");
+      return;
+    }
+
+    let programToCalculate = selectedProgram;
+    if (isCustomFeeEnabled) {
+      const customFee = parseFloat(customCreditFee);
+      if (isNaN(customFee) || customFee < 0) {
+        toast.error("Please enter a valid custom credit fee.");
+        return;
+      }
+      programToCalculate = { ...selectedProgram, perCreditFee: customFee };
+    }
+
+    const costResult = calculateTotalProgramCost(programToCalculate, waiverPercentage, effectiveCredits);
     setResult(costResult);
     toast.success("Total cost estimated!");
-    
+
     // Scroll to result
     setTimeout(() => {
       resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -631,7 +691,10 @@ function TotalCostEstimator() {
     setSelectedProgram(null);
     setSelectedVariant("");
     setWaiverPreset("none");
+    setWaiverPreset("none");
     setCustomWaiver("");
+    setIsCustomFeeEnabled(false);
+    setCustomCreditFee("");
     setResult(null);
   };
 
@@ -697,6 +760,37 @@ function TotalCostEstimator() {
               </Select>
             </div>
           )}
+
+          {/* Custom Fee Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="totalCustomFee"
+                checked={isCustomFeeEnabled}
+                onChange={(e) => {
+                  setIsCustomFeeEnabled(e.target.checked);
+                  setResult(null);
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="totalCustomFee" className="text-sm cursor-pointer">
+                Manually input credit fee?
+              </Label>
+            </div>
+            {isCustomFeeEnabled && (
+              <Input
+                type="number"
+                placeholder="Enter fee per credit"
+                value={customCreditFee}
+                onChange={(e) => {
+                  setCustomCreditFee(e.target.value);
+                  setResult(null);
+                }}
+                min={0}
+              />
+            )}
+          </div>
 
           {/* Waiver */}
           <div className="space-y-2">
@@ -769,7 +863,7 @@ function TotalCostEstimator() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-1">
-                <ResultRow label={`Total Tuition (${effectiveCredits} credits × ${formatTaka(selectedProgram?.perCreditFee ?? 0)})`} value={formatTaka(result.totalTuition)} />
+                <ResultRow label={`Total Tuition (${effectiveCredits} credits × ${formatTaka(isCustomFeeEnabled && customCreditFee ? parseFloat(customCreditFee) : (selectedProgram?.perCreditFee ?? 0))})`} value={formatTaka(result.totalTuition)} />
                 {result.totalWaiver > 0 && (
                   <ResultRow label={`Tuition Waiver (${waiverPercentage}%)`} value={`- ${formatTaka(result.totalWaiver)}`} sub />
                 )}
@@ -787,7 +881,7 @@ function TotalCostEstimator() {
                 <ResultRow label="Caution Money (refundable)" value={formatTaka(result.cautionMoney)} sub />
                 <Separator className="my-2" />
                 <ResultRow label="Estimated Grand Total" value={formatTaka(result.grandTotal)} highlight bold />
-                
+
                 {/* Per-Term Average */}
                 {selectedProgram && (
                   <>
@@ -817,6 +911,8 @@ function RetakeFeeCalculator() {
   const [credits, setCredits] = React.useState<string>("");
   const [isFirstRetake, setIsFirstRetake] = React.useState<string>("yes");
   const [numCourses, setNumCourses] = React.useState<string>("1");
+  const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
+  const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
   const resultRef = React.useRef<HTMLDivElement>(null);
   const [result, setResult] = React.useState<ReturnType<typeof calculateRetakeFee> | null>(null);
 
@@ -831,13 +927,23 @@ function RetakeFeeCalculator() {
       return;
     }
 
+    let perCreditFee = selectedProgram.perCreditFee;
+    if (isCustomFeeEnabled) {
+      const customFee = parseFloat(customCreditFee);
+      if (isNaN(customFee) || customFee < 0) {
+        toast.error("Please enter a valid custom credit fee.");
+        return;
+      }
+      perCreditFee = customFee;
+    }
+
     const retakeResult = calculateRetakeFee(
       creditNum,
-      selectedProgram.perCreditFee,
+      perCreditFee,
       isFirstRetake === "yes"
     );
     setResult(retakeResult);
-    
+
     // Scroll to result
     setTimeout(() => {
       resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -850,6 +956,8 @@ function RetakeFeeCalculator() {
     setCredits("");
     setIsFirstRetake("yes");
     setNumCourses("1");
+    setIsCustomFeeEnabled(false);
+    setCustomCreditFee("");
     setResult(null);
   };
 
@@ -879,6 +987,37 @@ function RetakeFeeCalculator() {
               }}
               showShortName
             />
+          </div>
+
+          {/* Custom Fee Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="retakeCustomFee"
+                checked={isCustomFeeEnabled}
+                onChange={(e) => {
+                  setIsCustomFeeEnabled(e.target.checked);
+                  setResult(null);
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="retakeCustomFee" className="text-sm cursor-pointer">
+                Manually input credit fee?
+              </Label>
+            </div>
+            {isCustomFeeEnabled && (
+              <Input
+                type="number"
+                placeholder="Enter fee per credit"
+                value={customCreditFee}
+                onChange={(e) => {
+                  setCustomCreditFee(e.target.value);
+                  setResult(null);
+                }}
+                min={0}
+              />
+            )}
           </div>
 
           {/* Credits per course */}
@@ -967,7 +1106,7 @@ function RetakeFeeCalculator() {
               </CardHeader>
               <CardContent className="space-y-1">
                 <ResultRow
-                  label={`Course Fee (${credits} × ${formatTaka(selectedProgram?.perCreditFee ?? 0)})`}
+                  label={`Course Fee (${credits} × ${formatTaka(isCustomFeeEnabled && customCreditFee ? parseFloat(customCreditFee) : (selectedProgram?.perCreditFee ?? 0))})`}
                   value={formatTaka(result.originalFee)}
                 />
                 {result.waiverAmount > 0 && (
@@ -991,7 +1130,7 @@ function RetakeFeeCalculator() {
                     <ResultRow label="Total Retake Fee" value={formatTaka(result.finalFee)} highlight bold />
                   </>
                 )}
-                
+
                 {/* Savings info */}
                 {result.waiverAmount > 0 && (
                   <div className="mt-3 px-3 py-2 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
@@ -1001,7 +1140,7 @@ function RetakeFeeCalculator() {
                     </p>
                   </div>
                 )}
-                
+
                 {isFirstRetake === "no" && (
                   <div className="mt-3 px-3 py-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-200 dark:border-amber-800">
                     <p className="text-xs sm:text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
@@ -1023,6 +1162,8 @@ function RetakeFeeCalculator() {
 function WaiverComparison() {
   const [selectedProgram, setSelectedProgram] = React.useState<ProgramInfo | null>(null);
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
+  const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
+  const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
 
   const effectiveCredits = React.useMemo(() => {
     if (!selectedProgram) return 0;
@@ -1035,15 +1176,23 @@ function WaiverComparison() {
 
   const comparisons = React.useMemo(() => {
     if (!selectedProgram) return [];
-    const waiverLevels = selectedProgram.level === "graduate"
+    let programToUse = selectedProgram;
+    if (isCustomFeeEnabled) {
+      const customFee = parseFloat(customCreditFee);
+      if (!isNaN(customFee) && customFee >= 0) {
+        programToUse = { ...selectedProgram, perCreditFee: customFee };
+      }
+    }
+
+    const waiverLevels = programToUse.level === "graduate"
       ? [0, 25, 50, 100]
       : [0, 25, 50, 100];
 
     return waiverLevels.map((pct) => ({
       percentage: pct,
-      ...calculateTotalProgramCost(selectedProgram, pct, effectiveCredits),
+      ...calculateTotalProgramCost(programToUse, pct, effectiveCredits),
     }));
-  }, [selectedProgram, effectiveCredits]);
+  }, [selectedProgram, effectiveCredits, isCustomFeeEnabled, customCreditFee]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1066,6 +1215,8 @@ function WaiverComparison() {
               onSelect={(prog) => {
                 setSelectedProgram(prog);
                 setSelectedVariant("");
+                setIsCustomFeeEnabled(false);
+                setCustomCreditFee("");
               }}
             />
           </div>
@@ -1088,6 +1239,35 @@ function WaiverComparison() {
               </Select>
             </div>
           )}
+
+          {/* Custom Fee Toggle */}
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="compareCustomFee"
+                checked={isCustomFeeEnabled}
+                onChange={(e) => {
+                  setIsCustomFeeEnabled(e.target.checked);
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+              />
+              <Label htmlFor="compareCustomFee" className="text-sm cursor-pointer">
+                Manually input credit fee?
+              </Label>
+            </div>
+            {isCustomFeeEnabled && (
+              <Input
+                type="number"
+                placeholder="Enter fee per credit"
+                value={customCreditFee}
+                onChange={(e) => {
+                  setCustomCreditFee(e.target.value);
+                }}
+                min={0}
+              />
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -1226,9 +1406,8 @@ export default function FeeCalculatorPage() {
             variant={activeTab === tab.id ? "default" : "outline"}
             size="sm"
             onClick={() => setActiveTab(tab.id)}
-            className={`gap-1 sm:gap-1.5 shrink-0 text-[11px] sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3 ${
-              activeTab === tab.id ? "shadow-md" : ""
-            }`}
+            className={`gap-1 sm:gap-1.5 shrink-0 text-[11px] sm:text-sm h-8 sm:h-9 px-2.5 sm:px-3 ${activeTab === tab.id ? "shadow-md" : ""
+              }`}
           >
             <tab.icon className="h-3 w-3 sm:h-4 sm:w-4" />
             <span className="hidden sm:inline">{tab.label}</span>
@@ -1258,8 +1437,8 @@ export default function FeeCalculatorPage() {
         <p className="flex items-start gap-2">
           <Info className="h-3.5 w-3.5 sm:h-4 sm:w-4 mt-0.5 shrink-0" />
           <span>
-            <strong>Disclaimer:</strong> This calculator is for estimation purposes only, based on publicly available UIU fee data. 
-            Actual fees may vary. UIU reserves the right to change policies, fees, curricula, or any other matters without prior notice. 
+            <strong>Disclaimer:</strong> This calculator is for estimation purposes only, based on publicly available UIU fee data.
+            Actual fees may vary. UIU reserves the right to change policies, fees, curricula, or any other matters without prior notice.
             Always confirm with the{" "}
             <a
               href="https://www.uiu.ac.bd/admission/tuition-fees-payment-policies/"
