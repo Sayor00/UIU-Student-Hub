@@ -139,6 +139,7 @@ Comprehensive fee estimation covering all UIU programs with three calculation mo
   - Lab fee handling for applicable programs
   - Fresher semester toggle (includes admission + caution fees)
   - Detailed installment breakdown (trimester: 20k upfront + 40/30/30 split; semester: 20k upfront + 4×25%)
+  - **Manual Fee Overrides** — input custom credit fee and term fee to calculate costs without selecting a specific program (useful for specific scholarship scenarios)
 - **Total Program Cost Estimator**
   - Full degree cost from start to finish
   - Supports credit variant programs (e.g., MBA 30-credit vs 60-credit)

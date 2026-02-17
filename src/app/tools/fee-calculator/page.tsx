@@ -39,6 +39,20 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 import {
   PROGRAMS,
@@ -63,139 +77,81 @@ function ProgramSelector({
   showShortName?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
-  const [search, setSearch] = React.useState("");
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const inputRef = React.useRef<HTMLInputElement>(null);
 
-  // Close dropdown on outside click
-  React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  const filtered = React.useMemo(() => {
-    if (!search.trim()) return PROGRAMS;
-    const q = search.toLowerCase().trim();
-    return PROGRAMS.filter((p) => {
-      const haystack = [
-        p.name.toLowerCase(),
-        p.shortName.toLowerCase(),
-        p.level,
-        ...p.searchTerms.map((t) => t.toLowerCase()),
-      ].join(" ");
-      return haystack.includes(q);
-    });
-  }, [search]);
-
-  const ugPrograms = filtered.filter((p) => p.level === "undergraduate");
-  const gradPrograms = filtered.filter((p) => p.level === "graduate");
+  // Group programs
+  const ugPrograms = PROGRAMS.filter((p) => p.level === "undergraduate");
+  const gradPrograms = PROGRAMS.filter((p) => p.level === "graduate");
 
   return (
-    <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => {
-          setOpen(!open);
-          if (!open) setTimeout(() => inputRef.current?.focus(), 50);
-        }}
-        className="flex h-9 sm:h-10 w-full items-center justify-between rounded-md border border-input bg-background px-2.5 sm:px-3 py-2 text-xs sm:text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-      >
-        <span className={`truncate ${value ? "text-foreground" : "text-muted-foreground"}`}>
-          {value
-            ? showShortName
-              ? `${value.name} (${value.shortName})`
-              : value.name
-            : "Select your program"}
-        </span>
-        <ChevronDown className={`h-3.5 w-3.5 sm:h-4 sm:w-4 opacity-50 shrink-0 ml-1 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg animate-in fade-in-0 zoom-in-95">
-          {/* Search Input */}
-          <div className="flex items-center border-b px-2.5 sm:px-3 py-2 gap-2">
-            <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder="Search... (e.g. cse, bba, ms)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-xs sm:text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-
-          {/* Program List */}
-          <div className="max-h-60 overflow-y-auto p-1">
-            {filtered.length === 0 ? (
-              <div className="px-3 py-4 text-center text-xs sm:text-sm text-muted-foreground">
-                No programs found
-              </div>
-            ) : (
-              <>
-                {ugPrograms.length > 0 && (
-                  <>
-                    <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-muted-foreground">
-                      Undergraduate
-                    </div>
-                    {ugPrograms.map((p) => (
-                      <button
-                        key={p.shortName}
-                        type="button"
-                        onClick={() => {
-                          onSelect(p);
-                          setOpen(false);
-                          setSearch("");
-                        }}
-                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
-                          }`}
-                      >
-                        <Check
-                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
-                            }`}
-                        />
-                        <span>{p.name}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-                {gradPrograms.length > 0 && (
-                  <>
-                    <div className="px-2.5 sm:px-3 py-1 sm:py-1.5 text-[10px] sm:text-xs font-semibold text-muted-foreground mt-1">
-                      Graduate
-                    </div>
-                    {gradPrograms.map((p) => (
-                      <button
-                        key={p.shortName}
-                        type="button"
-                        onClick={() => {
-                          onSelect(p);
-                          setOpen(false);
-                          setSearch("");
-                        }}
-                        className={`flex w-full items-center gap-1.5 sm:gap-2 rounded-sm px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors ${value?.shortName === p.shortName ? "bg-accent text-accent-foreground" : ""
-                          }`}
-                      >
-                        <Check
-                          className={`h-3 w-3 sm:h-4 sm:w-4 shrink-0 ${value?.shortName === p.shortName ? "opacity-100" : "opacity-0"
-                            }`}
-                        />
-                        <span>{p.name}</span>
-                      </button>
-                    ))}
-                  </>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-full justify-between h-9 sm:h-10 px-2.5 sm:px-3 text-xs sm:text-sm font-normal"
+        >
+          <span className="truncate">
+            {value
+              ? showShortName
+                ? `${value.name} (${value.shortName})`
+                : value.name
+              : "Select your program..."}
+          </span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search program..." />
+          <CommandList>
+            <CommandEmpty>No program found.</CommandEmpty>
+            <CommandGroup heading="Undergraduate">
+              {ugPrograms.map((program) => (
+                <CommandItem
+                  key={program.shortName}
+                  value={program.name} // Search by name
+                  onSelect={() => {
+                    onSelect(program);
+                    setOpen(false);
+                  }}
+                  className="text-xs sm:text-sm"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value?.shortName === program.shortName ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {program.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+            <CommandGroup heading="Graduate">
+              {gradPrograms.map((program) => (
+                <CommandItem
+                  key={program.shortName}
+                  value={program.name}
+                  onSelect={() => {
+                    onSelect(program);
+                    setOpen(false);
+                  }}
+                  className="text-xs sm:text-sm"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value?.shortName === program.shortName ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {program.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -309,6 +265,7 @@ function TrimesterFeeCalculator() {
   const [customWaiver, setCustomWaiver] = React.useState<string>("");
   const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
   const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
+  const [customTermFee, setCustomTermFee] = React.useState<string>("");
   const [includeUpfront, setIncludeUpfront] = React.useState(false);
   const [result, setResult] = React.useState<ReturnType<typeof calculateTermFee> | null>(null);
   const [installments, setInstallments] = React.useState<ReturnType<typeof calculateInstallments> | null>(null);
@@ -317,8 +274,8 @@ function TrimesterFeeCalculator() {
   const waiverPercentage = waiverPreset === "custom" ? (parseFloat(customWaiver) || 0) : (WAIVER_PRESETS.find(w => w.id === waiverPreset)?.percentage ?? 0);
 
   const handleCalculate = () => {
-    if (!selectedProgram) {
-      toast.error("Please select a program.");
+    if (!selectedProgram && !isCustomFeeEnabled) {
+      toast.error("Please select a program or enable custom fee.");
       return;
     }
     const creditNum = parseFloat(credits);
@@ -335,7 +292,9 @@ function TrimesterFeeCalculator() {
       return;
     }
 
-    let effectivePerCreditFee = selectedProgram.perCreditFee;
+    let effectivePerCreditFee = selectedProgram?.perCreditFee ?? 0;
+    let effectiveTermFee: number | undefined;
+
     if (isCustomFeeEnabled) {
       const customFee = parseFloat(customCreditFee);
       if (isNaN(customFee) || customFee < 0) {
@@ -343,16 +302,29 @@ function TrimesterFeeCalculator() {
         return;
       }
       effectivePerCreditFee = customFee;
+
+      if (customTermFee) {
+        const termFee = parseFloat(customTermFee);
+        if (isNaN(termFee) || termFee < 0) {
+          toast.error("Please enter a valid custom term fee.");
+          return;
+        }
+        effectiveTermFee = termFee;
+      }
     }
+
+    const termType = selectedProgram?.termType ?? "trimester";
+    const labFee = selectedProgram?.labFeePerTerm ?? 0;
 
     const feeResult = calculateTermFee(
       creditNum,
       effectivePerCreditFee,
       waiverPercentage,
-      selectedProgram.termType,
-      selectedProgram.labFeePerTerm
+      termType,
+      labFee,
+      effectiveTermFee
     );
-    const installmentResult = calculateInstallments(feeResult.totalFee, selectedProgram.termType);
+    const installmentResult = calculateInstallments(feeResult.totalFee, termType);
 
     setResult(feeResult);
     setInstallments(installmentResult);
@@ -371,6 +343,7 @@ function TrimesterFeeCalculator() {
     setCustomWaiver("");
     setIsCustomFeeEnabled(false);
     setCustomCreditFee("");
+    setCustomTermFee("");
     setIncludeUpfront(false);
     setResult(null);
     setInstallments(null);
@@ -442,17 +415,38 @@ function TrimesterFeeCalculator() {
               </Label>
             </div>
             {isCustomFeeEnabled && (
-              <Input
-                type="number"
-                placeholder="Enter fee per credit"
-                value={customCreditFee}
-                onChange={(e) => {
-                  setCustomCreditFee(e.target.value);
-                  setResult(null);
-                  setInstallments(null);
-                }}
-                min={0}
-              />
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="customCreditFeeInput" className="text-xs text-muted-foreground">Credit Fee</Label>
+                  <Input
+                    id="customCreditFeeInput"
+                    type="number"
+                    placeholder="Fee per credit"
+                    value={customCreditFee}
+                    onChange={(e) => {
+                      setCustomCreditFee(e.target.value);
+                      setResult(null);
+                      setInstallments(null);
+                    }}
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="customTermFeeInput" className="text-xs text-muted-foreground">Term Fee (Optional)</Label>
+                  <Input
+                    id="customTermFeeInput"
+                    type="number"
+                    placeholder="Sem/Tri fee"
+                    value={customTermFee}
+                    onChange={(e) => {
+                      setCustomTermFee(e.target.value);
+                      setResult(null);
+                      setInstallments(null);
+                    }}
+                    min={0}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
@@ -638,6 +632,7 @@ function TotalCostEstimator() {
   const [customWaiver, setCustomWaiver] = React.useState<string>("");
   const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
   const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
+  const [customTermFee, setCustomTermFee] = React.useState<string>("");
   const [result, setResult] = React.useState<ReturnType<typeof calculateTotalProgramCost> | null>(null);
   const resultRef = React.useRef<HTMLDivElement>(null);
 
@@ -668,6 +663,8 @@ function TotalCostEstimator() {
     }
 
     let programToCalculate = selectedProgram;
+    let manualTermFee: number | undefined;
+
     if (isCustomFeeEnabled) {
       const customFee = parseFloat(customCreditFee);
       if (isNaN(customFee) || customFee < 0) {
@@ -675,9 +672,18 @@ function TotalCostEstimator() {
         return;
       }
       programToCalculate = { ...selectedProgram, perCreditFee: customFee };
+
+      if (customTermFee) {
+        const termFee = parseFloat(customTermFee);
+        if (isNaN(termFee) || termFee < 0) {
+          toast.error("Please enter a valid custom term fee.");
+          return;
+        }
+        manualTermFee = termFee;
+      }
     }
 
-    const costResult = calculateTotalProgramCost(programToCalculate, waiverPercentage, effectiveCredits);
+    const costResult = calculateTotalProgramCost(programToCalculate, waiverPercentage, effectiveCredits, manualTermFee);
     setResult(costResult);
     toast.success("Total cost estimated!");
 
@@ -691,10 +697,10 @@ function TotalCostEstimator() {
     setSelectedProgram(null);
     setSelectedVariant("");
     setWaiverPreset("none");
-    setWaiverPreset("none");
     setCustomWaiver("");
     setIsCustomFeeEnabled(false);
     setCustomCreditFee("");
+    setCustomTermFee("");
     setResult(null);
   };
 
@@ -779,16 +785,36 @@ function TotalCostEstimator() {
               </Label>
             </div>
             {isCustomFeeEnabled && (
-              <Input
-                type="number"
-                placeholder="Enter fee per credit"
-                value={customCreditFee}
-                onChange={(e) => {
-                  setCustomCreditFee(e.target.value);
-                  setResult(null);
-                }}
-                min={0}
-              />
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="totalCustomCreditFee" className="text-xs text-muted-foreground">Credit Fee</Label>
+                  <Input
+                    id="totalCustomCreditFee"
+                    type="number"
+                    placeholder="Fee per credit"
+                    value={customCreditFee}
+                    onChange={(e) => {
+                      setCustomCreditFee(e.target.value);
+                      setResult(null);
+                    }}
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="totalCustomTermFee" className="text-xs text-muted-foreground">Term Fee (Optional)</Label>
+                  <Input
+                    id="totalCustomTermFee"
+                    type="number"
+                    placeholder="Sem/Tri fee"
+                    value={customTermFee}
+                    onChange={(e) => {
+                      setCustomTermFee(e.target.value);
+                      setResult(null);
+                    }}
+                    min={0}
+                  />
+                </div>
+              </div>
             )}
           </div>
 
@@ -917,8 +943,8 @@ function RetakeFeeCalculator() {
   const [result, setResult] = React.useState<ReturnType<typeof calculateRetakeFee> | null>(null);
 
   const handleCalculate = () => {
-    if (!selectedProgram) {
-      toast.error("Please select a program.");
+    if (!selectedProgram && !isCustomFeeEnabled) {
+      toast.error("Please select a program or enable custom fee.");
       return;
     }
     const creditNum = parseFloat(credits);
@@ -927,7 +953,7 @@ function RetakeFeeCalculator() {
       return;
     }
 
-    let perCreditFee = selectedProgram.perCreditFee;
+    let perCreditFee = selectedProgram?.perCreditFee ?? 0;
     if (isCustomFeeEnabled) {
       const customFee = parseFloat(customCreditFee);
       if (isNaN(customFee) || customFee < 0) {
@@ -1164,6 +1190,7 @@ function WaiverComparison() {
   const [selectedVariant, setSelectedVariant] = React.useState<string>("");
   const [isCustomFeeEnabled, setIsCustomFeeEnabled] = React.useState(false);
   const [customCreditFee, setCustomCreditFee] = React.useState<string>("");
+  const [customTermFee, setCustomTermFee] = React.useState<string>("");
 
   const effectiveCredits = React.useMemo(() => {
     if (!selectedProgram) return 0;
@@ -1177,10 +1204,17 @@ function WaiverComparison() {
   const comparisons = React.useMemo(() => {
     if (!selectedProgram) return [];
     let programToUse = selectedProgram;
+    let manualTermFee: number | undefined;
+
     if (isCustomFeeEnabled) {
       const customFee = parseFloat(customCreditFee);
       if (!isNaN(customFee) && customFee >= 0) {
         programToUse = { ...selectedProgram, perCreditFee: customFee };
+      }
+
+      const termFee = parseFloat(customTermFee);
+      if (!isNaN(termFee) && termFee >= 0) {
+        manualTermFee = termFee;
       }
     }
 
@@ -1190,9 +1224,9 @@ function WaiverComparison() {
 
     return waiverLevels.map((pct) => ({
       percentage: pct,
-      ...calculateTotalProgramCost(programToUse, pct, effectiveCredits),
+      ...calculateTotalProgramCost(programToUse, pct, effectiveCredits, manualTermFee),
     }));
-  }, [selectedProgram, effectiveCredits, isCustomFeeEnabled, customCreditFee]);
+  }, [selectedProgram, effectiveCredits, isCustomFeeEnabled, customCreditFee, customTermFee]);
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1217,6 +1251,7 @@ function WaiverComparison() {
                 setSelectedVariant("");
                 setIsCustomFeeEnabled(false);
                 setCustomCreditFee("");
+                setCustomTermFee("");
               }}
             />
           </div>
@@ -1257,15 +1292,34 @@ function WaiverComparison() {
               </Label>
             </div>
             {isCustomFeeEnabled && (
-              <Input
-                type="number"
-                placeholder="Enter fee per credit"
-                value={customCreditFee}
-                onChange={(e) => {
-                  setCustomCreditFee(e.target.value);
-                }}
-                min={0}
-              />
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="compareCustomCreditFee" className="text-xs text-muted-foreground">Credit Fee</Label>
+                  <Input
+                    id="compareCustomCreditFee"
+                    type="number"
+                    placeholder="Fee per credit"
+                    value={customCreditFee}
+                    onChange={(e) => {
+                      setCustomCreditFee(e.target.value);
+                    }}
+                    min={0}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="compareCustomTermFee" className="text-xs text-muted-foreground">Term Fee (Optional)</Label>
+                  <Input
+                    id="compareCustomTermFee"
+                    type="number"
+                    placeholder="Sem/Tri fee"
+                    value={customTermFee}
+                    onChange={(e) => {
+                      setCustomTermFee(e.target.value);
+                    }}
+                    min={0}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </CardContent>

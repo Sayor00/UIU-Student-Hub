@@ -302,7 +302,8 @@ export function calculateTermFee(
   perCreditFee: number,
   waiverPercentage: number,
   termType: "trimester" | "semester",
-  labFeePerTerm: number
+  labFeePerTerm: number,
+  manualTermFee?: number
 ): {
   tuitionFee: number;
   waiverAmount: number;
@@ -313,7 +314,7 @@ export function calculateTermFee(
   const tuitionFee = credits * perCreditFee;
   const waiverAmount = tuitionFee * (waiverPercentage / 100);
   const tuitionAfterWaiver = tuitionFee - waiverAmount;
-  const termFee = termType === "semester" ? FIXED_FEES.semesterFee : FIXED_FEES.trimesterFee;
+  const termFee = manualTermFee ?? (termType === "semester" ? FIXED_FEES.semesterFee : FIXED_FEES.trimesterFee);
   const labFee = labFeePerTerm;
   const totalFee = tuitionAfterWaiver + termFee + labFee;
 
@@ -354,7 +355,8 @@ export function calculateInstallments(
 export function calculateTotalProgramCost(
   program: ProgramInfo,
   waiverPercentage: number,
-  totalCredits?: number // Override for variants
+  totalCredits?: number, // Override for variants
+  manualTermFee?: number
 ): {
   totalTuition: number;
   totalWaiver: number;
@@ -367,9 +369,8 @@ export function calculateTotalProgramCost(
   const credits = totalCredits ?? program.totalCredits;
   const totalTuition = credits * program.perCreditFee;
   const totalWaiver = totalTuition * (waiverPercentage / 100);
-  const totalTermFees = program.termType === "semester"
-    ? FIXED_FEES.semesterFee * program.totalTerms
-    : FIXED_FEES.trimesterFee * program.totalTerms;
+  const termFee = manualTermFee ?? (program.termType === "semester" ? FIXED_FEES.semesterFee : FIXED_FEES.trimesterFee);
+  const totalTermFees = termFee * program.totalTerms;
   const totalLabFees = program.labFeePerTerm * program.totalTerms;
   const admissionFee = FIXED_FEES.admissionFee;
   const cautionMoney = FIXED_FEES.cautionMoney;
@@ -414,12 +415,12 @@ export function formatTaka(amount: number): string {
   // Use Bangladeshi numbering format (xx,xx,xxx)
   const rounded = Math.round(amount);
   const str = rounded.toString();
-  
+
   if (str.length <= 3) return `৳ ${str}`;
-  
+
   const lastThree = str.substring(str.length - 3);
   const rest = str.substring(0, str.length - 3);
   const formatted = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + lastThree;
-  
+
   return `৳ ${formatted}`;
 }
