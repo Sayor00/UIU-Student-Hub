@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Globe,
   ClipboardList,
+  CalendarDays,
   Loader2,
   ShieldAlert,
 } from "lucide-react";
@@ -19,10 +20,12 @@ import { Button } from "@/components/ui/button";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/admin/academic-calendars", label: "Academic Calendars", icon: CalendarDays },
   { href: "/admin/faculty-requests", label: "Faculty Requests", icon: ClipboardList },
   { href: "/admin/faculty", label: "Faculty", icon: GraduationCap },
   { href: "/admin/reviews", label: "Reviews", icon: MessageSquare },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/programs", label: "Programs", icon: GraduationCap },
   { href: "/admin/domains", label: "Email Domains", icon: Globe },
 ];
 
@@ -77,11 +80,10 @@ export default function AdminLayout({
                   <Link key={link.href} href={link.href}>
                     <Button
                       variant={isActive ? "secondary" : "ghost"}
-                      className={`w-full justify-start gap-2 whitespace-nowrap ${
-                        isActive
-                          ? "bg-primary/20 text-primary hover:bg-primary/25 font-medium"
-                          : ""
-                      }`}
+                      className={`w-full justify-start gap-2 whitespace-nowrap ${isActive
+                        ? "bg-primary/20 text-primary hover:bg-primary/25 font-medium"
+                        : ""
+                        }`}
                       size="sm"
                     >
                       <link.icon className="h-4 w-4" />

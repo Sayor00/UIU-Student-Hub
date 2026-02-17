@@ -11,6 +11,7 @@ import {
   Star,
   Wrench,
   ArrowRight,
+  BookOpen,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,16 @@ const tools = [
     tags: ["Reviews", "Faculty", "Ratings"],
     color: "text-orange-500",
     bg: "bg-orange-500/10",
+  },
+  {
+    href: "/tools/academic-calendar",
+    label: "Academic Calendar",
+    icon: BookOpen,
+    description:
+      "Interactive academic calendar with events, todos, and personal planning. Stay on track with your semester schedule.",
+    tags: ["Calendar", "Events", "Planner", "Schedule"],
+    color: "text-violet-500",
+    bg: "bg-violet-500/10",
   },
 ];
 

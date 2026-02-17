@@ -1,3 +1,4 @@
+import { getServerSession } from "next-auth";
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
@@ -70,3 +71,11 @@ export const authOptions: NextAuthOptions = {
     },
   },
 };
+
+export async function requireAdmin() {
+  const session = await getServerSession(authOptions);
+  if (!session || (session.user as any).role !== "admin") {
+    throw new Error("Unauthorized");
+  }
+  return session;
+}

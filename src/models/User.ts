@@ -1,5 +1,17 @@
 import mongoose, { Schema, Document, Model } from "mongoose";
 
+export interface IRecentTool {
+  href: string;
+  label: string;
+  visitedAt: Date;
+}
+
+export interface IUserPreferences {
+  pinnedCalendarIds: string[];
+  recentTools: IRecentTool[];
+  focusMode: boolean;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -9,6 +21,7 @@ export interface IUser extends Document {
   emailVerified: boolean;
   verificationCode?: string;
   verificationExpires?: Date;
+  preferences: IUserPreferences;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -50,6 +63,20 @@ const UserSchema = new Schema<IUser>(
     },
     verificationExpires: {
       type: Date,
+    },
+    preferences: {
+      pinnedCalendarIds: { type: [String], default: [] },
+      recentTools: {
+        type: [
+          {
+            href: String,
+            label: String,
+            visitedAt: { type: Date, default: Date.now },
+          },
+        ],
+        default: [],
+      },
+      focusMode: { type: Boolean, default: false },
     },
   },
   {

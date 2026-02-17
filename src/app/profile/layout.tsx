@@ -10,6 +10,7 @@ import {
   GraduationCap,
   MessageSquare,
   ClipboardList,
+  CalendarDays,
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ const profileLinks = [
   { href: "/profile/academic", label: "Academic", icon: GraduationCap },
   { href: "/profile/reviews", label: "My Reviews", icon: MessageSquare },
   { href: "/profile/faculties", label: "My Faculties", icon: ClipboardList },
+  { href: "/profile/calendars", label: "My Calendars", icon: CalendarDays },
 ];
 
 export default function ProfileLayout({
@@ -66,11 +68,10 @@ export default function ProfileLayout({
                   <Link key={link.href} href={link.href}>
                     <Button
                       variant={isActive ? "secondary" : "ghost"}
-                      className={`w-full justify-start gap-2 whitespace-nowrap ${
-                        isActive
+                      className={`w-full justify-start gap-2 whitespace-nowrap ${isActive
                           ? "bg-primary/20 text-primary hover:bg-primary/25 font-medium"
                           : ""
-                      }`}
+                        }`}
                       size="sm"
                     >
                       <link.icon className="h-4 w-4" />

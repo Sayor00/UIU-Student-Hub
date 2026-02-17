@@ -109,7 +109,26 @@ A smart class schedule planner that directly parses UIU's official class routine
 
 ---
 
-### 💰 Fee Calculator
+### � Academic Calendar
+
+A centralized hub for tracking academic timelines, exam schedules, and personal deadlines.
+
+- **Unified Calendar View** — toggle between **Academic** (public) and **Personal** (private) calendars
+- **Interactive Grid** — visual indicators for events, deadlines, and comments
+- **Smart Filtering** — filter by Program (e.g., Undergraduate, Graduate) and Trimester
+- **Personalization:**
+  - **Create custom calendars** for personal study plans or clubs
+  - **Add private events**, todos, and notes directly on the calendar grid
+  - **Pin calendars** to your dashboard for quick access
+- **Todo & Note Integration:**
+  - **Deadlines** appear on the calendar with time-specific alerts
+  - **Comments** allow you to annotate specific dates with private notes
+- **Search & Navigation** — global search for events, comments, and todos with date navigation
+- **Export** — download calendars as `.ics` files for Google/Apple Calendar integration
+
+---
+
+### �💰 Fee Calculator
 
 Comprehensive fee estimation covering all UIU programs with three calculation modes.
 
@@ -166,15 +185,15 @@ An anonymous faculty rating and review system for sharing academic experiences.
 
 A personalized dashboard for registered users with four sections:
 
-- **Personal Info** — avatar, name (editable), email with verification status, student ID (editable, numeric only), department (derived from email domain), role, member since date
-- **Academic** — overview of saved CGPA data:
-  - Stat cards: current CGPA, credits earned, trimesters completed, last trimester GPA
-  - Trimester-wise performance with animated color-coded GPA bars and cumulative CGPA tracking
-  - Direct link to CGPA Calculator
-- **My Faculties** — faculty members submitted by the user, grouped by status (Approved / Pending / Declined)
-  - Shows admin modifications for approved requests with edits
-  - Links to approved faculty detail pages
-- **My Reviews** — all reviews written by the user with faculty info, course, trimester, rating, and difficulty
+- **Dashboard Home:**
+  - **Greeting** based on time of day
+  - **Quick Access** to recently used tools
+  - **Upcoming Events** list drawn from all your active calendars
+  - **Pinned Calendars** — quick links to your most vital schedules with unpin capability
+  - **Daily Focus** & **Study Tips**
+- **Profile Info** — avatar, name (editable), email, student ID, department, role
+- **Academic Stats** — overview of saved CGPA data, credits earned, and trimester performance
+- **My Content** — manage your submitted faculty requests and written reviews
 
 ---
 
@@ -182,43 +201,24 @@ A personalized dashboard for registered users with four sections:
 
 A full administrative dashboard for platform management.
 
-- **Dashboard** — overview stats: total users, faculty members, total reviews, pending requests; recent users list; pending faculty requests preview
-- **User Management**
+- **Dashboard** — overview stats: total users, faculty members, total reviews, pending requests; recent users list
+- **Academic Calendar Management:**
+  - **Create/Edit Calendars** with rich inline event management
+  - **Manage Programs** — customizable list of academic programs for calendar tagging
+  - **Publish/Draft** status toggling
+- **User Management:**
   - Searchable, paginated user list
-  - Promote/demote users to admin role
-  - Delete users (with confirmation; self-deletion blocked)
-  - Verified/admin badges on user cards
-- **Faculty Management**
+  - Role management (promote/demote admins)
+  - User deletion
+- **Faculty Management:**
   - Full CRUD operations for faculty members
-  - Create faculty directly (auto-approved)
-  - Edit all faculty fields including contact info, social links, bio
-  - Toggle approval status
-  - Real-time initials uniqueness validation
-- **Faculty Requests**
-  - Review user-submitted faculty requests
-  - Filter by status (Pending / Approved / Declined)
-  - **Approve with edits** — admin can modify fields before approval; changes tracked as diffs
-  - Decline with admin note
-  - Bulk clear processed requests by status
-- **Review Moderation**
-  - Paginated review list with faculty info
-  - View full review details
-  - Delete inappropriate reviews (triggers faculty rating recalculation)
-- **Domain Management**
-  - Manage allowed email domains for user registration
-  - Add/remove domains with format validation
-  - Reset to default UIU domains
-  - Minimum 1 domain enforced
-
-**Default allowed email domains:**
-
-```
-bscse.uiu.ac.bd, bsds.uiu.ac.bd, bseee.uiu.ac.bd, bsce.uiu.ac.bd,
-bba.uiu.ac.bd, bbaais.uiu.ac.bd, bsseds.uiu.ac.bd, bssmsj.uiu.ac.bd,
-baeng.uiu.ac.bd, bpharm.uiu.ac.bd, bsbge.uiu.ac.bd, bsseco.uiu.ac.bd,
-mscse.uiu.ac.bd, msceee.uiu.ac.bd, mba.uiu.ac.bd, emba.uiu.ac.bd,
-uiu.ac.bd
-```
+  - Request moderation (Approve with edits / Decline)
+  - Real-time initials validation
+- **Review Moderation:**
+  - View full review details and delete inappropriate content
+- **Domain Management:**
+  - Manage allowed email domains for user registration (`*.uiu.ac.bd`, etc.)
+- **System Stats** — monitor platform growth and engagement
 
 ---
 
