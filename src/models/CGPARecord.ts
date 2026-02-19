@@ -6,6 +6,7 @@ export interface ICGPARecord extends Document {
   previousCGPA: number;
   trimesters: {
     name: string;
+    code: string; // Added code
     isCompleted?: boolean;
     courses: {
       name: string;
@@ -52,12 +53,12 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
     },
     trimesters: [
       {
-        name: { type: String, required: true },
+        code: { type: String, required: true },
         isCompleted: { type: Boolean, default: false },
         courses: [
           {
             name: { type: String },
-            code: { type: String }, // Added code
+            code: { type: String },
             credit: { type: Number, required: true },
             grade: { type: String }, // Made optional
             isRetake: { type: Boolean, default: false },

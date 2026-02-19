@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getTrimesterName, parseStudentId, calculateAcademicStats } from "@/lib/trimesterUtils";
 
 export default function ResultTracker() {
     const router = useRouter();
@@ -63,34 +64,14 @@ export default function ResultTracker() {
             const data = await res.json();
             if (res.ok && data.records && data.records.length > 0) {
                 const latest = data.records[0];
-                let currentTrimesters = latest.trimesters || [];
+                const currentTrimesters = latest.trimesters || [];
 
-                currentTrimesters = currentTrimesters.map((t: any) => {
-                    if (!t.gpa) {
-                        const gradePoints: Record<string, number> = {
-                            "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                            "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-                        };
-                        let totalP = 0;
-                        let totalC = 0;
-                        t.courses.forEach((c: any) => {
-                            totalP += (gradePoints[c.grade] || 0) * c.credit;
-                            totalC += c.credit;
-                        });
-                        t.gpa = totalC > 0 ? totalP / totalC : 0;
-                        t.totalCredits = totalC;
-                    }
-                    return t;
-                });
+                // Use centralized calculation to enrich data (isRetake, etc.)
+                const stats = calculateAcademicStats(currentTrimesters, latest.previousCGPA, latest.previousCredits);
 
-                setTrimesters(currentTrimesters);
-
-                if (latest.previousCGPA) setCgpa(latest.previousCGPA);
-
-                const totalCr = currentTrimesters.reduce((acc: number, t: any) => {
-                    return (t.isCompleted) ? acc + (t.totalCredits || 0) : acc;
-                }, 0);
-                setTotalCredits(totalCr);
+                setTrimesters([...stats.trimesters].reverse());
+                setCgpa(stats.cgpa);
+                setTotalCredits(stats.totalCredits);
             } else {
                 setTrimesters([]);
                 setCgpa(0);
@@ -113,9 +94,9 @@ export default function ResultTracker() {
         return "bg-red-500/15 text-red-600 dark:text-red-500 border-red-500/30";
     };
 
-    const handleDelete = (trimesterName: string, e?: React.MouseEvent) => {
+    const handleDelete = (trimesterCode: string, e?: React.MouseEvent) => { // Expect code
         if (e) e.stopPropagation();
-        setDeleteName(trimesterName);
+        setDeleteName(trimesterCode);
     };
 
     const confirmDelete = async () => {
@@ -129,31 +110,17 @@ export default function ResultTracker() {
             const latest = getData.records[0];
             const currentTrimesters = latest.trimesters || [];
 
-            const updatedTrimesters = currentTrimesters.filter((t: any) => t.name !== deleteName);
+            const updatedTrimesters = currentTrimesters.filter((t: any) => t.code !== deleteName); // Filter by code
 
             // Recalculate Stats
-            let allCredits = 0;
-            let allPoints = 0;
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
-
-            updatedTrimesters.forEach((t: any) => {
-                t.courses.forEach((c: any) => {
-                    allCredits += c.credit;
-                    allPoints += (gradePoints[c.grade] || 0) * c.credit;
-                });
-            });
-
-            const newCGPA = allCredits > 0 ? allPoints / allCredits : 0;
+            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
 
             const payload = {
-                trimesters: updatedTrimesters,
+                trimesters: stats.trimesters,
                 previousCredits: 0,
-                previousCGPA: newCGPA,
-                results: updatedTrimesters.map((t: any) => {
-                    return { trimesterName: t.name, cgpa: newCGPA };
+                previousCGPA: stats.cgpa,
+                results: stats.trimesters.map((t: any) => {
+                    return { trimesterCode: t.code, cgpa: stats.cgpa };
                 })
             };
 
@@ -175,8 +142,8 @@ export default function ResultTracker() {
         }
     };
 
-    const handleAddCourse = (trimesterName: string) => {
-        setAddCourseTrimester(trimesterName);
+    const handleAddCourse = (trimesterCode: string) => {
+        setAddCourseTrimester(trimesterCode);
         setCourseCodeInput("");
     };
 
@@ -201,7 +168,7 @@ export default function ResultTracker() {
             // Might be good, but maybe not strictly required by user yet.
 
             const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.name === addCourseTrimester) {
+                if (t.code === addCourseTrimester) { // Match by code
                     return {
                         ...t,
                         courses: [...t.courses, { name: "", code: newCourseCode, credit: 3, grade: "" }],
@@ -211,41 +178,21 @@ export default function ResultTracker() {
                 return t;
             });
 
-            // Recalc Logic
-            let allCredits = 0;
-            let allPoints = 0;
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
+            // Recalc Logic using Centralized Utility
+            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
 
-            const processedTrimesters = updatedTrimesters.map((t: any) => {
-                let tCredits = 0;
-                let tPoints = 0;
-                t.courses.forEach((c: any) => {
-                    if (c.grade) {
-                        tCredits += c.credit;
-                        tPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    }
-                    if (t.isCompleted && c.grade) {
-                        allCredits += c.credit;
-                        allPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    }
-                });
-                return {
-                    ...t,
-                    gpa: tCredits > 0 ? tPoints / tCredits : 0,
-                    totalCredits: tCredits
-                };
-            });
-
-            const newCGPA = allCredits > 0 ? allPoints / allCredits : 0;
-
+            // Only send necessary fields to API
             const payload = {
-                trimesters: processedTrimesters,
+                // stats contains enriched trimesters
+                trimesters: stats.trimesters,
                 previousCredits: 0,
-                previousCGPA: newCGPA,
-                results: processedTrimesters.map((t: any) => ({ trimesterName: t.name, cgpa: newCGPA }))
+                previousCGPA: stats.cgpa,
+                results: stats.trimesters.map(t => ({
+                    trimesterCode: t.code,
+                    cgpa: stats.cgpa,
+                    trimesterCredits: t.totalCredits,
+                    gpa: t.gpa
+                }))
             };
 
 
@@ -331,13 +278,9 @@ export default function ResultTracker() {
         cumulativeCredits += tCredits;
         const currentCGPA = cumulativeCredits > 0 ? cumulativePoints / cumulativeCredits : 0;
 
-        // Label Format
-        const parts = t.name.split(' ');
-        const season = parts[0];
-        const yearShort = parts[1] ? parts[1].slice(-2) : "";
-
         return {
-            name: `${season} '${yearShort}`,
+            name: t.code, // X-Axis: "241"
+            fullName: getTrimesterName(t.code), // Tooltip: "Spring 2024"
             gpa: t.gpa || (tCredits > 0 ? tPoints / tCredits : 0),
             cgpa: currentCGPA
         };
@@ -360,7 +303,21 @@ export default function ResultTracker() {
                     </p>
                 </motion.div>
                 <motion.div variants={itemVariants}>
-
+                    {session?.user && (session.user as any).studentId && (
+                        <div className="flex items-center gap-3 bg-muted/30 px-4 py-2 rounded-full border border-black/5 dark:border-white/5 backdrop-blur-sm">
+                            {(() => {
+                                const sId = (session.user as any).studentId;
+                                const info = parseStudentId(sId);
+                                if (!info) return <span className="text-sm font-mono opacity-70">{sId}</span>;
+                                return (
+                                    <>
+                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{info.program}</Badge>
+                                        <span className="text-sm font-medium text-muted-foreground">{info.admissionTrimester} Intake</span>
+                                    </>
+                                )
+                            })()}
+                        </div>
+                    )}
                 </motion.div>
             </div>
 
@@ -413,7 +370,7 @@ export default function ResultTracker() {
                                     <div className="hidden md:flex flex-1 items-center justify-between pr-4">
                                         <div className="flex flex-col gap-1 text-left">
                                             <div className="flex items-center gap-3">
-                                                <h3 className="text-xl font-bold tracking-tight text-foreground">{t.name}</h3>
+                                                <h3 className="text-xl font-bold tracking-tight text-foreground">{getTrimesterName(t.code)}</h3>
                                                 {t.isCompleted ? (
                                                     <Badge className="bg-green-600/20 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-600/30 text-xs">Completed</Badge>
                                                 ) : (
@@ -439,7 +396,7 @@ export default function ResultTracker() {
                                     {/* Mobile Layout */}
                                     <div className="flex md:hidden flex-1 flex-col gap-3 pr-2 w-full">
                                         <div className="flex items-center justify-between w-full">
-                                            <h3 className="text-lg font-bold tracking-tight text-foreground">{t.name}</h3>
+                                            <h3 className="text-lg font-bold tracking-tight text-foreground">{getTrimesterName(t.code)}</h3>
                                             {t.isCompleted ? (
                                                 <Badge className="bg-green-600/20 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-600/30 text-[10px]">Completed</Badge>
                                             ) : (
@@ -485,10 +442,22 @@ export default function ResultTracker() {
                                                         {/* Course Name */}
                                                         <div className="w-full md:w-auto md:col-span-6 font-medium text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-100 transition-colors">
                                                             <div className="flex items-center justify-between md:justify-start gap-2">
-                                                                <span className="truncate">{course.name}</span>
-                                                                {course.code && <span className="md:hidden text-xs px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-muted-foreground">{course.code}</span>}
+                                                                <span className="truncate">{course.name || course.code}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    {course.code && course.name && <span className="md:hidden text-xs px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-muted-foreground">{course.code}</span>}
+                                                                    {course.isRetake && (
+                                                                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-orange-500/10 text-orange-600 border-orange-500/20">
+                                                                            Retake
+                                                                        </Badge>
+                                                                    )}
+                                                                    {course.hasRetake && (
+                                                                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                                                            Retaken Later
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            {course.code && <span className="hidden md:inline ml-2 text-xs text-muted-foreground font-normal">({course.code})</span>}
+                                                            {course.code && course.name && <span className="hidden md:inline ml-2 text-xs text-muted-foreground font-normal">({course.code})</span>}
                                                         </div>
 
                                                         {/* Meta Data */}
@@ -516,7 +485,7 @@ export default function ResultTracker() {
                                                                     variant="ghost"
                                                                     size="sm"
                                                                     className="h-8 text-xs gap-1 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-500/10 px-2 md:px-3"
-                                                                    onClick={() => router.push(`/dashboard/academic/${encodeURIComponent(course.code || course.name)}?trimester=${encodeURIComponent(t.name)}`)}
+                                                                    onClick={() => router.push(`/dashboard/academic/${encodeURIComponent(course.code || course.name)}?trimester=${encodeURIComponent(t.code)}`)}
                                                                 >
                                                                     Manage <ArrowUpRight className="h-3 w-3" />
                                                                 </Button>
@@ -536,7 +505,7 @@ export default function ResultTracker() {
                                                 variant="ghost"
                                                 size="sm"
                                                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2 h-9"
-                                                onClick={(e) => handleDelete(t.name, e)}
+                                                onClick={(e) => handleDelete(t.code, e)}
                                             >
                                                 <Trash2 className="h-4 w-4" /> Delete Trimester
                                             </Button>
@@ -544,7 +513,7 @@ export default function ResultTracker() {
                                                 variant="secondary"
                                                 size="sm"
                                                 className="gap-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-foreground border-0"
-                                                onClick={() => handleAddCourse(t.name)}
+                                                onClick={() => handleAddCourse(t.code)}
                                             >
                                                 <BookOpen className="h-4 w-4" /> Add Course
                                             </Button>
@@ -591,7 +560,7 @@ export default function ResultTracker() {
                     <DialogHeader>
                         <DialogTitle>Delete Trimester</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete <strong>{deleteName}</strong>? <br />
+                            Are you sure you want to delete <strong>{deleteName ? getTrimesterName(deleteName) : ""}</strong>? <br />
                             This will permanently remove all courses and grades associated with this trimester.
                         </DialogDescription>
                     </DialogHeader>
@@ -610,7 +579,7 @@ export default function ResultTracker() {
                     <DialogHeader>
                         <DialogTitle>Add New Course</DialogTitle>
                         <DialogDescription>
-                            Enter the course code to create a new course in <strong>{addCourseTrimester}</strong>.
+                            Enter the course code to create a new course in <strong>{addCourseTrimester ? getTrimesterName(addCourseTrimester) : ""}</strong>.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">

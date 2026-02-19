@@ -16,6 +16,8 @@ import { Label } from "@/components/ui/label";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { getTrimesterName } from "@/lib/trimesterUtils";
+
 interface AddResultModalProps {
     onSuccess: () => void;
     trigger?: React.ReactNode;
@@ -40,25 +42,12 @@ export default function AddResultModal({
     const [loading, setLoading] = useState(false);
     const [trimesterCode, setTrimesterCode] = useState("");
 
-    const getTrimesterName = (code: string) => {
-        if (code.length !== 3) return "";
-        const year = code.substring(0, 2);
-        const term = code.substring(2, 3);
-
-        let termName = "";
-        if (term === "1") termName = "Spring";
-        else if (term === "2") termName = "Summer";
-        else if (term === "3") termName = "Fall";
-        else return "";
-
-        return `${termName} 20${year}`;
-    };
-
     const handleSubmit = async () => {
         const generatedName = getTrimesterName(trimesterCode);
 
-        if (!trimesterCode || !generatedName) {
-            toast.error("Please enter a valid 3-digit Trimester Code (e.g., 241 for Spring 2024)");
+        // Basic validation in case utility returns code itself on failure, or check pattern
+        if (!trimesterCode || trimesterCode.length !== 3 || !/^\d{3}$/.test(trimesterCode)) {
+            toast.error("Please enter a valid 3-digit Trimester Code (e.g., 241)");
             return;
         }
 
@@ -67,38 +56,34 @@ export default function AddResultModal({
             const getRes = await fetch("/api/cgpa");
             const getData = await getRes.json();
 
-            let currentTrimesters = [];
+            let currentTrimesters: any[] = [];
             if (getData.records && getData.records.length > 0) {
                 currentTrimesters = getData.records[0].trimesters || [];
             }
 
             // Check for duplicates
-            if (currentTrimesters.some((t: any) => t.name === generatedName)) {
+            if (currentTrimesters.some((t: any) => t.code === trimesterCode)) { // Check against code
                 toast.error("Trimester already exists!");
                 setLoading(false);
                 return;
             }
 
             const newTrimester = {
-                name: generatedName,
+                code: trimesterCode, // Save CODE
                 courses: [], // No courses initially
                 isCompleted: false
             };
 
             const updatedTrimesters = [newTrimester, ...currentTrimesters];
 
-            // Payload - we can just send the updated trimesters list. 
-            // The backend handles the rest (recalculating stats mostly relevant when courses exist)
-            // But strict Schema might require some values.
-
             const payload = {
                 trimesters: updatedTrimesters,
                 previousCredits: 0,
-                previousCGPA: 0, // Will be recalculated by backend or simplified here
+                previousCGPA: 0,
                 results: updatedTrimesters.map((t: any) => ({
-                    trimesterName: t.name,
-                    gpa: t.gpa || 0,
-                    cgpa: 0
+                    trimesterCode: t.code,
+                    cgpa: t.gpa || 0,
+                    cgpa_prev: 0
                 }))
             };
 

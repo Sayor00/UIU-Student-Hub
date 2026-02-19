@@ -133,9 +133,13 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
                             <Tooltip
                                 content={({ active, payload, label }) => {
                                     if (active && payload && payload.length) {
+                                        // Try to get fullName from the data object (payload[0].payload)
+                                        const dataItem = payload[0].payload;
+                                        const displayLabel = dataItem.fullName || label;
+
                                         return (
                                             <div className="rounded-xl border border-black/5 dark:border-white/10 bg-white/80 dark:bg-black/60 backdrop-blur-md shadow-xl p-4 text-xs space-y-2 text-foreground">
-                                                <p className="font-bold text-sm mb-1 text-foreground">{label}</p>
+                                                <p className="font-bold text-sm mb-1 text-foreground">{displayLabel}</p>
                                                 {payload.map((entry: any, index: number) => (
                                                     <div key={index} className="flex items-center justify-between gap-4">
                                                         <div className="flex items-center gap-2">

@@ -30,8 +30,10 @@ export interface Assessment {
 }
 
 export const DEFAULT_ASSESSMENTS: Assessment[] = [
+    // Standard UIU Distribution (approximate, varies by dept)
     { id: "1", name: "Attendance", weight: 5, obtained: 0, total: 5 },
     { id: "2", name: "Assignment", weight: 5, obtained: 0, total: 5 },
+    // CTs: Usually Best 2 of 3, or Best 3 of 4. Total weight 15-20%
     { id: "3", name: "Class Test 1", weight: 20, obtained: 0, total: 20, isCT: true, bestN: true, group: "CT" },
     { id: "4", name: "Class Test 2", weight: 20, obtained: 0, total: 20, isCT: true, bestN: true, group: "CT" },
     { id: "5", name: "Class Test 3", weight: 20, obtained: 0, total: 20, isCT: true, bestN: true, group: "CT" },
@@ -471,7 +473,7 @@ const CourseGradePlanner = memo(({
                 <div className="text-center">CT?</div>
                 <div className="text-center">Weight</div>
                 <div className="text-center">Marks / Total</div>
-                <div className="text-center">Observed %</div>
+                <div className="text-center">Observed%</div>
                 <div></div> {/* Actions */}
             </div>
 

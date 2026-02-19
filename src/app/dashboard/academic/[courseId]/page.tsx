@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { MoveLeft, GraduationCap, Save, Loader2, AlertCircle } from "lucide-react";
 import CourseGradePlanner, { Assessment, DEFAULT_ASSESSMENTS } from "@/components/academic/CourseGradePlanner";
 import { useEffect, useState, useCallback } from "react";
+import { calculateAcademicStats } from "@/lib/trimesterUtils";
 import { Input } from "@/components/ui/input";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,8 @@ export default function CoursePlannerPage() {
     const router = useRouter();
 
     const courseId = decodeURIComponent(params.courseId as string);
-    const trimesterName = searchParams.get("trimester");
+    // This is now the CODE (e.g. "241")
+    const trimesterCode = searchParams.get("trimester");
 
     const isCode = (str: string) => /^[A-Z]{3,4}\d{3,4}$/i.test(str.replace(/\s/g, ''));
 
@@ -39,23 +41,24 @@ export default function CoursePlannerPage() {
 
     // Initialize with empty data to prevent "Ghost" content from URL
     const [courseData, setCourseData] = useState({
+        _id: "", // Store Database ID
         name: "",
         code: "",
         credit: 3,
         grade: "",
-        trimester: trimesterName || ""
+        trimester: trimesterCode || ""
     });
 
     const [originalName, setOriginalName] = useState("");
 
     useEffect(() => {
-        if (!trimesterName) {
+        if (!trimesterCode) {
             toast.error("Invalid URL: Trimester not specified.");
             router.replace("/dashboard/academic/history");
             return;
         }
         fetchCourseDetails();
-    }, [trimesterName, courseId]);
+    }, [trimesterCode, courseId]);
 
     const fetchCourseDetails = async () => {
         try {
@@ -64,7 +67,8 @@ export default function CoursePlannerPage() {
                 const data = await res.json();
                 if (data.records && data.records.length > 0) {
                     const latest = data.records[0];
-                    const trimester = latest.trimesters.find((t: any) => t.name === trimesterName);
+                    // Match by CODE
+                    const trimester = latest.trimesters.find((t: any) => t.code === trimesterCode);
 
                     if (trimester) {
                         // Find by Code OR Name (migration support)
@@ -76,11 +80,12 @@ export default function CoursePlannerPage() {
 
                         if (course) {
                             setCourseData({
+                                _id: course._id, // Capture ID
                                 name: course.name,
                                 code: course.code || "",
                                 credit: course.credit,
                                 grade: course.grade || "",
-                                trimester: trimesterName || ""
+                                trimester: trimesterCode || ""
                             });
                             setOriginalName(course.name); // Keep original name for update logic
 
@@ -124,7 +129,7 @@ export default function CoursePlannerPage() {
     };
 
     const handleSave = async () => {
-        if (!trimesterName) return;
+        if (!trimesterCode) return;
         setSaving(true);
         try {
             const getRes = await fetch("/api/cgpa");
@@ -143,21 +148,17 @@ export default function CoursePlannerPage() {
             }
 
             const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.name === trimesterName) {
+                if (t.code === trimesterCode) {
                     // Update the specific course
                     const updatedCourses = t.courses.map((c: any) => {
-                        // Match by Original Name OR Code (if we initialized from code)
-                        const matchesOriginal = c.name === originalName;
-                        const matchesCode = c.code === originalName; // If originalName was actually a code
-
-                        if (matchesOriginal || matchesCode) {
+                        // Match by ID (Robust)
+                        if (c._id && courseData._id && c._id === courseData._id) {
                             return {
                                 ...c,
-                                name: courseData.name || c.name, // Fallback to existing name if empty
+                                name: courseData.name || c.name,
                                 code: sanitizedCode,
                                 credit: courseData.credit,
                                 grade: courseData.grade,
-                                // Save Assessments
                                 assessments: assessments.map(a => ({
                                     name: a.name,
                                     totalMarks: a.total,
@@ -167,6 +168,31 @@ export default function CoursePlannerPage() {
                                 }))
                             };
                         }
+
+                        // Fallback: Match by Original Name OR Code (legacy/no-id support)
+                        // ONLY if we don't have an ID context
+                        if (!courseData._id) {
+                            const matchesOriginal = c.name === originalName;
+                            const matchesCode = c.code === originalName;
+
+                            if (matchesOriginal || matchesCode) {
+                                return {
+                                    ...c,
+                                    name: courseData.name || c.name,
+                                    code: sanitizedCode,
+                                    credit: courseData.credit,
+                                    grade: courseData.grade,
+                                    assessments: assessments.map(a => ({
+                                        name: a.name,
+                                        totalMarks: a.total,
+                                        obtainedMarks: a.obtained,
+                                        weight: a.weight,
+                                        isCT: a.isCT
+                                    }))
+                                };
+                            }
+                        }
+
                         return c;
                     });
 
@@ -190,31 +216,14 @@ export default function CoursePlannerPage() {
                 "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
             };
 
-            const processedTrimesters = updatedTrimesters.map((t: any) => {
-                let tCredits = 0;
-                let tPoints = 0;
-                t.courses.forEach((c: any) => {
-                    tCredits += c.credit;
-                    tPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    if (t.isCompleted) {
-                        allCredits += c.credit;
-                        allPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    }
-                });
-                return {
-                    ...t,
-                    gpa: tCredits > 0 ? tPoints / tCredits : 0,
-                    totalCredits: tCredits
-                };
-            });
-
-            const newCGPA = allCredits > 0 ? allPoints / allCredits : 0;
+            // Recalculate Logic using centralized utility
+            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
 
             const payload = {
-                trimesters: processedTrimesters,
+                trimesters: stats.trimesters,
                 previousCredits: 0,
-                previousCGPA: newCGPA,
-                results: processedTrimesters.map((t: any) => ({ trimesterName: t.name, cgpa: newCGPA }))
+                previousCGPA: stats.cgpa,
+                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
             };
 
             const saveRes = await fetch("/api/cgpa", {
@@ -228,9 +237,8 @@ export default function CoursePlannerPage() {
                 setOriginalName(courseData.name);
 
                 // Redirect to Code-based URL if different from current URL param
-                // Also handle special characters in Code
                 if (courseId !== sanitizedCode) {
-                    router.replace(`/dashboard/academic/${encodeURIComponent(sanitizedCode)}?trimester=${encodeURIComponent(trimesterName)}`);
+                    router.replace(`/dashboard/academic/${encodeURIComponent(sanitizedCode)}?trimester=${encodeURIComponent(trimesterCode || "")}`);
                 }
             } else {
                 toast.error("Failed to save changes");
@@ -247,7 +255,7 @@ export default function CoursePlannerPage() {
     const [projectedMarks, setProjectedMarks] = useState(0);
 
     const handleDelete = async () => {
-        if (!trimesterName) return;
+        if (!trimesterCode) return;
         setSaving(true);
         try {
             const getRes = await fetch("/api/cgpa");
@@ -258,7 +266,7 @@ export default function CoursePlannerPage() {
             const currentTrimesters = latest.trimesters || [];
 
             const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.name === trimesterName) {
+                if (t.code === trimesterCode) {
                     const updatedCourses = t.courses.filter((c: any) =>
                         c.name !== originalName &&
                         c.code !== courseData.code // Ensure safe deletion by both name and code
@@ -276,39 +284,14 @@ export default function CoursePlannerPage() {
                 return t;
             });
 
-            // Recalculate Stats (Simplified for delete)
-            let allCredits = 0;
-            let allPoints = 0;
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
-
-            const processedTrimesters = updatedTrimesters.map((t: any) => {
-                let tCredits = 0;
-                let tPoints = 0;
-                t.courses.forEach((c: any) => {
-                    tCredits += c.credit;
-                    tPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    if (t.isCompleted) {
-                        allCredits += c.credit;
-                        allPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    }
-                });
-                return {
-                    ...t,
-                    gpa: tCredits > 0 ? tPoints / tCredits : 0,
-                    totalCredits: tCredits
-                };
-            });
-
-            const newCGPA = allCredits > 0 ? allPoints / allCredits : 0;
+            // Recalculate Logic using centralized utility
+            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
 
             const payload = {
-                trimesters: processedTrimesters,
+                trimesters: stats.trimesters,
                 previousCredits: 0,
-                previousCGPA: newCGPA,
-                results: processedTrimesters.map((t: any) => ({ trimesterName: t.name, cgpa: newCGPA }))
+                previousCGPA: stats.cgpa,
+                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
             };
 
             const saveRes = await fetch("/api/cgpa", {
@@ -331,7 +314,7 @@ export default function CoursePlannerPage() {
     };
 
     const handleCompleteCourse = async () => {
-        if (!trimesterName) return;
+        if (!trimesterCode) return;
         setSaving(true);
         try {
             const getRes = await fetch("/api/cgpa");
@@ -347,7 +330,7 @@ export default function CoursePlannerPage() {
 
             // 2. Update Trimesters
             const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.name === trimesterName) {
+                if (t.code === trimesterCode) {
                     const updatedCourses = t.courses.map((c: any) => {
                         if (c.name === originalName) {
                             return { ...c, grade: finalGrade };
@@ -420,7 +403,7 @@ export default function CoursePlannerPage() {
                 trimesters: processedTrimesters,
                 previousCredits: 0,
                 previousCGPA: newCGPA,
-                results: processedTrimesters.map((t: any) => ({ trimesterName: t.name, cgpa: newCGPA }))
+                results: processedTrimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: newCGPA }))
             };
 
             const saveRes = await fetch("/api/cgpa", {
@@ -433,7 +416,7 @@ export default function CoursePlannerPage() {
                 toast.success(`Course Completed! Grade: ${finalGrade}`);
                 setCourseData({ ...courseData, grade: finalGrade });
                 // Verify if trimester completed
-                const myTrimester = processedTrimesters.find((t: any) => t.name === trimesterName);
+                const myTrimester = processedTrimesters.find((t: any) => t.code === trimesterCode);
                 if (myTrimester?.isCompleted) {
                     toast.success("Trimester Completed!");
                 }
