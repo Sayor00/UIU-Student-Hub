@@ -8,17 +8,17 @@ export interface GradeInfo {
 }
 
 export const GRADING_SYSTEM: GradeInfo[] = [
-  { letter: "A",  point: 4.00, minMarks: 90, maxMarks: 100, assessment: "Outstanding" },
-  { letter: "A-", point: 3.67, minMarks: 86, maxMarks: 89,  assessment: "Excellent" },
-  { letter: "B+", point: 3.33, minMarks: 82, maxMarks: 85,  assessment: "Very Good" },
-  { letter: "B",  point: 3.00, minMarks: 78, maxMarks: 81,  assessment: "Good" },
-  { letter: "B-", point: 2.67, minMarks: 74, maxMarks: 77,  assessment: "Above Average" },
-  { letter: "C+", point: 2.33, minMarks: 70, maxMarks: 73,  assessment: "Average" },
-  { letter: "C",  point: 2.00, minMarks: 66, maxMarks: 69,  assessment: "Below Average" },
-  { letter: "C-", point: 1.67, minMarks: 62, maxMarks: 65,  assessment: "Poor" },
-  { letter: "D+", point: 1.33, minMarks: 58, maxMarks: 61,  assessment: "Very Poor" },
-  { letter: "D",  point: 1.00, minMarks: 55, maxMarks: 57,  assessment: "Pass" },
-  { letter: "F",  point: 0.00, minMarks: 0,  maxMarks: 54,  assessment: "Fail" },
+  { letter: "A", point: 4.00, minMarks: 90, maxMarks: 100, assessment: "Outstanding" },
+  { letter: "A-", point: 3.67, minMarks: 86, maxMarks: 89, assessment: "Excellent" },
+  { letter: "B+", point: 3.33, minMarks: 82, maxMarks: 85, assessment: "Very Good" },
+  { letter: "B", point: 3.00, minMarks: 78, maxMarks: 81, assessment: "Good" },
+  { letter: "B-", point: 2.67, minMarks: 74, maxMarks: 77, assessment: "Above Average" },
+  { letter: "C+", point: 2.33, minMarks: 70, maxMarks: 73, assessment: "Average" },
+  { letter: "C", point: 2.00, minMarks: 66, maxMarks: 69, assessment: "Below Average" },
+  { letter: "C-", point: 1.67, minMarks: 62, maxMarks: 65, assessment: "Poor" },
+  { letter: "D+", point: 1.33, minMarks: 58, maxMarks: 61, assessment: "Very Poor" },
+  { letter: "D", point: 1.00, minMarks: 55, maxMarks: 57, assessment: "Pass" },
+  { letter: "F", point: 0.00, minMarks: 0, maxMarks: 54, assessment: "Fail" },
 ];
 
 export const GRADE_OPTIONS = GRADING_SYSTEM.map((g) => ({

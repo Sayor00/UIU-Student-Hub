@@ -4,6 +4,7 @@ export interface ICGPARecord extends Document {
   userId: mongoose.Types.ObjectId;
   previousCredits: number;
   previousCGPA: number;
+  earnedCredits: number; // Root-level: total earned credits (grades >= D)
   trimesters: {
     name: string;
     code: string; // Added code
@@ -48,6 +49,10 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
       default: 0,
     },
     previousCGPA: {
+      type: Number,
+      default: 0,
+    },
+    earnedCredits: {
       type: Number,
       default: 0,
     },

@@ -113,6 +113,7 @@ export interface Trimester {
 export interface AcademicStats {
     cgpa: number;
     totalCredits: number;
+    earnedCredits: number; // For grades >= D
     trimesters: Trimester[]; // Enriched with retake flags and GPAs
 }
 
@@ -204,7 +205,7 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
                 if (c.grade === "W" || c.grade === "I") return;
 
                 const gp = gradePoints[c.grade] || 0;
-                if (!bestGrades[code] || gp >= bestGrades[code].point) {
+                if (!bestGrades[code] || gp > bestGrades[code].point) {
                     bestGrades[code] = { grade: c.grade, credit: c.credit, point: gp };
                 }
             }
@@ -214,6 +215,7 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
     // 5. Final CGPA Calculation from Best Grades
     let totalPoints = 0;
     let totalCredits = 0;
+    let earnedCredits = 0; // Credits where grade >= D
 
     Object.values(bestGrades).forEach(item => {
         // Count Passed courses AND Failed courses for attempted credits (Standard CGPA policy)
@@ -222,8 +224,15 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
             // Double check exclusion of W/I (Redundant safety)
             if (item.grade === "W" || item.grade === "I") return;
 
+            const gp = gradePoints[item.grade] || 0;
+
             totalCredits += item.credit;
             totalPoints += item.point * item.credit;
+
+            // Only count as EARNED if grade is D (1.00) or higher
+            if (gp >= 1.00) {
+                earnedCredits += item.credit;
+            }
         }
     });
 
@@ -232,6 +241,7 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
     return {
         cgpa,
         totalCredits,
+        earnedCredits, // New field
         trimesters: processedTrimesters
     };
 }
@@ -240,7 +250,15 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
  * Calculates the cumulative CGPA trend over time.
  * Correctly handles retakes by applying the "Best Grade" policy chronologically.
  */
-export function calculateTrimesterTrends(trimesters: Trimester[]): { trimesterCode: string; cgpa: number; gpa: number }[] {
+export interface TrimesterTrend {
+    trimesterCode: string;
+    cgpa: number;
+    gpa: number;
+    earnedCredits: number;
+    totalCredits: number;
+}
+
+export function calculateTrimesterTrends(trimesters: Trimester[]): TrimesterTrend[] {
     // 1. Sort Chronologically
     const sorted = [...trimesters].sort((a, b) => a.code.localeCompare(b.code));
 
@@ -252,11 +270,10 @@ export function calculateTrimesterTrends(trimesters: Trimester[]): { trimesterCo
         "F": 0.00, "I": 0.00, "W": 0.00
     };
 
-    const trends: { trimesterCode: string; cgpa: number; gpa: number }[] = [];
+    const trends: TrimesterTrend[] = [];
 
     sorted.forEach(t => {
-        // Skip if not completed or empty
-        // Skip if not completed or empty
+        // Skip if not completed or has no real grades
         if (!t.isCompleted && (!t.courses || t.courses.length === 0 || t.courses.every(c => !c.grade || c.grade === "W" || c.grade === "I"))) {
             return;
         }
@@ -283,9 +300,19 @@ export function calculateTrimesterTrends(trimesters: Trimester[]): { trimesterCo
         // Calculate CGPA at this point in time
         let totalPoints = 0;
         let totalCredits = 0;
+        let earnedCredits = 0;
+
         Object.values(cumulativeBestGrades).forEach(item => {
-            totalCredits += item.credit;
-            totalPoints += item.point * item.credit;
+            // Count Passed courses AND Failed courses for attempted credits (Standard CGPA policy)
+            if (item.grade && item.grade !== "N/A" && item.grade !== "" && item.grade !== "W" && item.grade !== "I") {
+                totalCredits += item.credit;
+                totalPoints += item.point * item.credit;
+
+                // Earned: D or higher
+                if (item.point >= 1.00) {
+                    earnedCredits += item.credit;
+                }
+            }
         });
 
         const currentCGPA = totalCredits > 0 ? totalPoints / totalCredits : 0;
@@ -294,7 +321,9 @@ export function calculateTrimesterTrends(trimesters: Trimester[]): { trimesterCo
         trends.push({
             trimesterCode: t.code,
             cgpa: currentCGPA,
-            gpa: t.gpa || 0
+            gpa: t.gpa || 0,
+            earnedCredits,
+            totalCredits
         });
     });
 

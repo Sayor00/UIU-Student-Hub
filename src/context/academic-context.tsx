@@ -9,6 +9,7 @@ export interface AcademicDataState {
     trimesters: any[];
     cgpa: number;
     totalCredits: number;
+    earnedCredits: number; // Add this
     loading: boolean;
     latestRecord: any | null;
     trends: any[];
@@ -30,6 +31,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         trimesters: [],
         cgpa: 0,
         totalCredits: 0,
+        earnedCredits: 0,
         loading: true,
         latestRecord: null,
         trends: []
@@ -52,6 +54,8 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
                         trimesters: stats.trimesters,
                         cgpa: stats.cgpa,
                         totalCredits: stats.totalCredits,
+                        // Prefer persisted value (root-level on DB doc); fall back to recalculated
+                        earnedCredits: latest.earnedCredits ?? stats.earnedCredits,
                         loading: false,
                         latestRecord: latest,
                         trends: latest.results || []
@@ -61,6 +65,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
                         trimesters: [],
                         cgpa: 0,
                         totalCredits: 0,
+                        earnedCredits: 0,
                         loading: false,
                         latestRecord: null,
                         trends: []
@@ -84,6 +89,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
                 trimesters: [],
                 cgpa: 0,
                 totalCredits: 0,
+                earnedCredits: 0,
                 loading: false, // Not loading, just no data
                 latestRecord: null,
                 trends: []
@@ -102,6 +108,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
             trimesters: stats.trimesters,
             previousCredits: prevCredits,
             previousCGPA: prevCGPA,
+            earnedCredits: stats.earnedCredits, // Root-level field on CGPARecord
             results: trends
         };
 
