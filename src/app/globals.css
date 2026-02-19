@@ -53,6 +53,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
   }
@@ -82,6 +83,7 @@
     opacity: 0;
     transform: rotate(180deg) scale(0);
   }
+
   to {
     opacity: 1;
     transform: rotate(0deg) scale(1);
@@ -93,6 +95,7 @@
     opacity: 1;
     transform: rotate(0deg) scale(1);
   }
+
   to {
     opacity: 0;
     transform: rotate(-180deg) scale(0);
@@ -126,6 +129,7 @@
   animation: icon-spin-out 500ms ease forwards;
   z-index: 2;
 }
+
 ::view-transition-new(theme-icon) {
   animation: icon-spin-in 500ms ease forwards;
   z-index: 1;
@@ -146,6 +150,14 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
+
+/* Hide number input spinners */
+.no-spinner::-webkit-inner-spin-button,
+.no-spinner::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-spinner {
+  -moz-appearance: textfield;
 }
