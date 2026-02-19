@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { MoveLeft, History, PlusCircle, Trash2, ArrowUpRight, BookOpen, AlertCircle, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -20,108 +19,55 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import AddResultModal from "@/components/academic/AddResultModal";
 import { cn } from "@/lib/utils";
-import { getTrimesterName, calculateAcademicStats } from "@/lib/trimesterUtils";
+import { getTrimesterName } from "@/lib/trimesterUtils";
 import { motion, AnimatePresence } from "framer-motion";
+import { useAcademicData } from "@/hooks/useAcademicData"; // Import Hook
+import { Label } from "@/components/ui/label"; // Ensure Label is imported
 
 export default function AcademicHistoryPage() {
     const router = useRouter();
     const { data: session } = useSession();
-    const [trimesters, setTrimesters] = useState<any[]>([]);
-    const [loading, setLoading] = useState(true);
 
-    const fetchTrimesters = async () => {
-        try {
-            const res = await fetch("/api/cgpa", { cache: "no-store" });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.records && data.records.length > 0) {
-                    const latest = data.records[0];
-                    const currentTrimesters = latest.trimesters || [];
+    // Use Custom Hook
+    const { trimesters, loading, fetchAcademicData, deleteTrimester, addCourse, addTrimester } = useAcademicData();
 
-                    // Use centralized calculation
-                    const stats = calculateAcademicStats(currentTrimesters, latest.previousCGPA, latest.previousCredits);
+    // Fetch on load
+    useEffect(() => {
+        if (session) fetchAcademicData();
+    }, [session, fetchAcademicData]);
 
-                    setTrimesters([...stats.trimesters].reverse());
-                } else {
-                    setTrimesters([]);
-                }
-            }
-        } catch (error) {
-            toast.error("Failed to load history.");
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Add Course State
+    // Add Course State (UI Only)
     const [addCourseTrimester, setAddCourseTrimester] = useState<string | null>(null);
     const [courseCodeInput, setCourseCodeInput] = useState("");
 
-    const handleAddCourse = (trimesterCode: string) => {
+    const handleAddCourseClick = (trimesterCode: string) => {
         setAddCourseTrimester(trimesterCode);
         setCourseCodeInput("");
     };
 
     const submitAddCourse = async () => {
-        if (!courseCodeInput.trim()) {
-            toast.error("Course Code is required");
-            return;
-        }
+        if (!addCourseTrimester) return;
 
-        try {
-            const getRes = await fetch("/api/cgpa", { cache: "no-store" });
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
-            // Format: Uppercase and remove ALL spaces
-            const newCourseCode = courseCodeInput.toUpperCase().replace(/\s+/g, '');
-
-            const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.code === addCourseTrimester) {
-                    return {
-                        ...t,
-                        courses: [...t.courses, { name: "", code: newCourseCode, credit: 3, grade: "" }],
-                        isCompleted: false // Reset completion status
-                    };
-                }
-                return t;
-            });
-
-            // Recalculate Logic
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
-
-            const payload = {
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
-            };
-
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
-                toast.success("Course added! Redirecting...");
-                const targetTrim = addCourseTrimester;
-                setAddCourseTrimester(null);
-                router.push(`/dashboard/academic/${encodeURIComponent(newCourseCode)}?trimester=${encodeURIComponent(targetTrim || "")}`);
-            } else {
-                toast.error("Failed to add course.");
-            }
-        } catch (e) {
-            toast.error("Error adding course.");
+        const success = await addCourse(addCourseTrimester, courseCodeInput);
+        if (success) {
+            setAddCourseTrimester(null);
+            // Redirect to course page
+            const formattedCode = courseCodeInput.toUpperCase().replace(/\s+/g, '');
+            router.push(`/dashboard/academic/${encodeURIComponent(formattedCode)}?trimester=${encodeURIComponent(addCourseTrimester)}`);
         }
     };
 
@@ -149,28 +95,31 @@ export default function AcademicHistoryPage() {
         }
 
         if (!searchQuery.trim()) {
-            setFilteredTrimesters(trimesters);
-            // Default to expanding the first trimester if no search query
-            setExpandedValues(trimesters.length > 0 ? [trimesters[0].code] : []);
+            // Reverse trimesters for display (Newest First) if needed? 
+            // The hook returns them sorted properly for logic (Oldest First).
+            // Usually history is shown Newest First.
+            setFilteredTrimesters([...trimesters].reverse());
+            // Default to expanding the first trimester (newest) if no search query
+            setExpandedValues(trimesters.length > 0 ? [trimesters[trimesters.length - 1].code] : []);
             return;
         }
 
         const query = searchQuery.toLowerCase();
-        const matches = trimesters.filter((t: any) => {
+        // Search on reversed copy to keep display order
+        const searchSource = [...trimesters].reverse();
+
+        const matches = searchSource.filter((t: any) => {
             // 1. Trimester Name Match
             if (getTrimesterName(t.code).toLowerCase().includes(query)) return true; // Use decoded name
 
             // 2. Course Logic
             const hasCourseMatch = t.courses.some((c: any) => {
                 const courseName = c.name?.toLowerCase() || "";
-                // Assuming course code might be part of the name or a separate field
-                // If course code is embedded like "Course Name (CODE)", extract it.
                 let courseCode = "";
                 const codeMatch = courseName.match(/\(([^)]+)\)/);
                 if (codeMatch && codeMatch[1]) {
                     courseCode = codeMatch[1].toLowerCase();
                 }
-                // If there's a separate 'code' field, use that too
                 if (c.code) {
                     courseCode = c.code.toLowerCase();
                 }
@@ -197,56 +146,16 @@ export default function AcademicHistoryPage() {
 
     const [deleteName, setDeleteName] = useState<string | null>(null);
 
-    const handleDelete = (trimesterCode: string, e?: React.MouseEvent) => {
+    const handleDeleteClick = (trimesterCode: string, e?: React.MouseEvent) => {
         e?.stopPropagation(); // Prevent accordion toggle
         setDeleteName(trimesterCode);
     };
 
     const confirmDelete = async () => {
         if (!deleteName) return;
-
-        try {
-            const getRes = await fetch("/api/cgpa", { cache: "no-store" });
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-            const updatedTrimesters = currentTrimesters.filter((t: any) => t.code !== deleteName);
-
-            // Recalculate Logic using centralized utility
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
-
-            const payload = {
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
-            };
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
-                toast.success("Trimester deleted");
-                fetchTrimesters();
-            } else {
-                toast.error("Failed to delete");
-            }
-
-        } catch (e) {
-            toast.error("Error deleting");
-        } finally {
-            setDeleteName(null);
-        }
+        await deleteTrimester(deleteName);
+        setDeleteName(null);
     };
-
-    useEffect(() => {
-        if (session) fetchTrimesters();
-    }, [session]);
 
     // Grade Color Helper
     const getGradeColor = (grade: string) => {
@@ -274,11 +183,24 @@ export default function AcademicHistoryPage() {
                         <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your complete trimester records.</p>
                     </div>
                 </div>
-                <AddResultModal onSuccess={fetchTrimesters} trigger={
-                    <Button className="w-full md:w-auto gap-2 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-900/20">
-                        <PlusCircle className="h-4 w-4" /> Add Trimester
-                    </Button>
-                } />
+                {/* 
+                   Pass addTrimester from hook to the modal via props, 
+                   Assuming AddResultModal can accept an 'onAdd' or 'addTrimester' prop? 
+                   Currently it handles submission internally. Use onSuccess to refresh.
+                   Ideally, refactor AddResultModal to take `addTrimester` function.
+                   For now, let's keep it as is (it calls API directly) but give it onSuccess={fetchAcademicData}.
+                   Wait, AddResultModal ALSO needs the fix for previousCGPA.
+                   So I MUST refactor AddResultModal to use the hook or accept the function.
+                   Let's pass the specialized function.
+                */}
+                <AddResultModal
+                    onSuccess={fetchAcademicData}
+                    onAddTrimester={addTrimester} // New prop for dependency injection
+                    trigger={
+                        <Button className="w-full md:w-auto gap-2 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-900/20">
+                            <PlusCircle className="h-4 w-4" /> Add Trimester
+                        </Button>
+                    } />
             </div>
 
             {/* Search Bar */}
@@ -304,7 +226,7 @@ export default function AcademicHistoryPage() {
                         {filteredTrimesters.map((t, i) => (
                             <AccordionItem
                                 key={i}
-                                value={t.code} // Use code as value for reliable control
+                                value={t.code}
                                 className="border border-black/5 dark:border-white/5 rounded-xl overflow-hidden bg-white/40 dark:bg-background/40 backdrop-blur-xl shadow-lg transition-all duration-300 data-[state=open]:border-orange-500/20 data-[state=open]:ring-1 data-[state=open]:ring-orange-500/20"
                             >
                                 <AccordionTrigger className="px-4 md:px-6 py-4 md:py-5 hover:bg-black/5 dark:hover:bg-white/5 hover:no-underline focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 transition-colors [&[data-state=open]]:bg-black/5 dark:[&[data-state=open]]:bg-white/5">
@@ -314,7 +236,6 @@ export default function AcademicHistoryPage() {
                                             <div className="flex items-center gap-3">
                                                 <h3 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
                                                     {getTrimesterName(t.code)}
-                                                    {/* Highlight match if searching */}
                                                     {searchQuery && getTrimesterName(t.code).toLowerCase().includes(searchQuery.toLowerCase()) && (
                                                         <Badge variant="secondary" className="text-[10px] h-5 px-1.5 bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border-0">Matched</Badge>
                                                     )}
@@ -372,7 +293,7 @@ export default function AcademicHistoryPage() {
                                     {/* Course Table */}
                                     <div className="p-0">
                                         <div className="divide-y divide-black/5 dark:divide-white/5">
-                                            {/* Table Header - Hidden on Mobile */}
+                                            {/* Table Header */}
                                             <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-black/5 dark:bg-white/5">
                                                 <div className="col-span-6">Course Name</div>
                                                 <div className="col-span-2 text-center">Credit</div>
@@ -383,7 +304,6 @@ export default function AcademicHistoryPage() {
                                             {/* Rows */}
                                             {t.courses.length > 0 ? (
                                                 t.courses.map((course: any, idx: number) => {
-                                                    // Highlight Logic
                                                     const isMatch = searchQuery && (
                                                         course.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                                                         (course.code && course.code.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -401,12 +321,11 @@ export default function AcademicHistoryPage() {
                                                                 isMatch ? "bg-orange-500/5 dark:bg-orange-500/10 border-l-2 border-l-orange-500" : ""
                                                             )}
                                                         >
-                                                            {/* Course Name - Full width on mobile */}
+                                                            {/* Course Name */}
                                                             <div className="w-full md:w-auto md:col-span-6 font-medium text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-100 transition-colors">
                                                                 <div className="flex items-center justify-between md:justify-start gap-2">
                                                                     <span className="truncate">{course.name || course.code}</span>
                                                                     <div className="flex items-center gap-2">
-                                                                        {/* Mobile-only Code Badge */}
                                                                         {course.code && course.name && <span className="md:hidden text-xs px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-muted-foreground">{course.code}</span>}
                                                                         {course.isRetake && (
                                                                             <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-orange-500/10 text-orange-600 border-orange-500/20">
@@ -423,9 +342,8 @@ export default function AcademicHistoryPage() {
                                                                 {course.code && course.name && <span className="hidden md:inline ml-2 text-xs text-muted-foreground font-normal">({course.code})</span>}
                                                             </div>
 
-                                                            {/* Mobile Row for Meta Data */}
+                                                            {/* Meta Data */}
                                                             <div className="w-full md:w-auto md:col-span-6 flex items-center justify-between md:grid md:grid-cols-6 md:gap-4">
-
                                                                 <div className="md:col-span-2 text-sm text-muted-foreground flex items-center gap-2 md:justify-center">
                                                                     <span className="md:hidden text-xs uppercase">Credit:</span>
                                                                     {course.credit}
@@ -472,7 +390,7 @@ export default function AcademicHistoryPage() {
                                                 variant="ghost"
                                                 size="sm"
                                                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2 h-9"
-                                                onClick={(e) => handleDelete(t.code, e)}
+                                                onClick={(e) => handleDeleteClick(t.code, e)}
                                             >
                                                 <Trash2 className="h-4 w-4" /> Delete Trimester
                                             </Button>
@@ -480,7 +398,7 @@ export default function AcademicHistoryPage() {
                                                 variant="secondary"
                                                 size="sm"
                                                 className="gap-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-foreground border-0"
-                                                onClick={() => handleAddCourse(t.code)}
+                                                onClick={() => handleAddCourseClick(t.code)}
                                             >
                                                 <BookOpen className="h-4 w-4" /> Add Course
                                             </Button>
@@ -506,73 +424,102 @@ export default function AcademicHistoryPage() {
                                     <History className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
                                     <h3 className="text-xl font-semibold mb-2 text-foreground">No History Recorded</h3>
                                     <p className="text-muted-foreground max-w-sm mx-auto mb-6">Start by adding your first trimester to track your academic journey.</p>
-                                    <AddResultModal onSuccess={fetchTrimesters} trigger={
-                                        <Button className="gap-2 bg-primary text-primary-foreground">
-                                            <PlusCircle className="h-4 w-4" /> Add First Trimester
-                                        </Button>
-                                    } />
+                                    <AddResultModal
+                                        onSuccess={fetchAcademicData}
+                                        onAddTrimester={addTrimester}
+                                        trigger={
+                                            <Button className="gap-2 bg-primary text-primary-foreground">
+                                                <PlusCircle className="h-4 w-4" /> Add First Trimester
+                                            </Button>
+                                        } />
                                 </>
                             )
                         )}
                     </div>
                 )}
                 {/* Add Course Modal */}
-                <Dialog open={!!addCourseTrimester} onOpenChange={(open) => !open && setAddCourseTrimester(null)}>
-                    <DialogContent>
+                <Dialog
+                    open={!!addCourseTrimester}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setAddCourseTrimester(null);
+                            setCourseCodeInput("");
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-[425px] bg-background/20 backdrop-blur-xl border-white/10 shadow-2xl">
                         <DialogHeader>
-                            <DialogTitle>Add New Course</DialogTitle>
+                            <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+                                <div className="p-2 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                                    <BookOpen className="h-5 w-5" />
+                                </div>
+                                Add New Course
+                            </DialogTitle>
                             <DialogDescription>
-                                Enter the course code to create a new course in <strong>{addCourseTrimester ? getTrimesterName(addCourseTrimester) : ""}</strong>.
+                                Create a new course in <strong>{addCourseTrimester ? getTrimesterName(addCourseTrimester) : ""}</strong>.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-start gap-4">
-                                <Label htmlFor="courseCode" className="text-right pt-2">
+                        <div className="grid gap-6 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="courseCode" className="text-xs font-bold uppercase text-muted-foreground tracking-wider ml-1">
                                     Course Code
                                 </Label>
-                                <div className="col-span-3 space-y-1">
+                                <div className="space-y-2">
                                     <Input
                                         id="courseCode"
                                         value={courseCodeInput}
                                         onChange={(e) => setCourseCodeInput(e.target.value)}
                                         placeholder="e.g. CSE 123"
+                                        className="h-12 text-lg font-mono tracking-wide bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/5 focus-visible:ring-1 focus-visible:ring-orange-500/50 focus-visible:border-orange-500/50 transition-all font-bold"
                                         autoFocus
                                     />
                                     {courseCodeInput.trim() && (
-                                        <div className="text-sm text-muted-foreground">
-                                            Will be created as: <span className="font-bold text-primary">{courseCodeInput.toUpperCase().replace(/\s+/g, '')}</span>
+                                        <div className="text-xs text-muted-foreground ml-1 flex items-center gap-1">
+                                            Will be created as: <span className="font-bold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">{courseCodeInput.toUpperCase().replace(/\s+/g, '')}</span>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setAddCourseTrimester(null)}>Cancel</Button>
-                            <Button onClick={submitAddCourse} disabled={!courseCodeInput.trim()}>
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    setAddCourseTrimester(null);
+                                    setCourseCodeInput("");
+                                }}
+                                className="hover:bg-black/5 dark:hover:bg-white/5"
+                            >
+                                Cancel
+                            </Button>
+                            <Button onClick={submitAddCourse} disabled={!courseCodeInput.trim()} className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20">
                                 Create Course
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
 
-                {/* Delete Confirmation Modal */}
-                <Dialog open={!!deleteName} onOpenChange={(open) => !open && setDeleteName(null)}>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Delete Trimester</DialogTitle>
-                            <DialogDescription>
-                                Are you sure you want to delete <strong>{deleteName ? getTrimesterName(deleteName) : ""}</strong>? <br />
-                                This will permanently remove all courses and grades associated with this trimester.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setDeleteName(null)}>Cancel</Button>
-                            <Button variant="destructive" onClick={confirmDelete}>
-                                Delete Permanently
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                {/* Delete Confirmation Alert Dialog */}
+                <AlertDialog open={!!deleteName} onOpenChange={(open) => !open && setDeleteName(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the trimester
+                                <strong> {deleteName ? getTrimesterName(deleteName) : ""}</strong> and all associated data.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setDeleteName(null)}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={confirmDelete}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                Delete
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </div>
     );

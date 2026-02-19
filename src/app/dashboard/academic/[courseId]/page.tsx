@@ -4,15 +4,15 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MoveLeft, GraduationCap, Save, Loader2, AlertCircle } from "lucide-react";
 import CourseGradePlanner, { Assessment, DEFAULT_ASSESSMENTS } from "@/components/academic/CourseGradePlanner";
-import { useEffect, useState, useCallback } from "react";
-import { calculateAcademicStats } from "@/lib/trimesterUtils";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { calculateAcademicStats, calculateTrimesterTrends, getTrimesterName } from "@/lib/trimesterUtils";
 import { Input } from "@/components/ui/input";
 import { BufferedInput } from "@/components/ui/buffered-input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import {
     Dialog,
     DialogContent,
@@ -23,6 +23,18 @@ import {
     DialogTrigger,
     DialogClose
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useAcademicData } from "@/hooks/useAcademicData";
 
 export default function CoursePlannerPage() {
     const params = useParams();
@@ -33,13 +45,20 @@ export default function CoursePlannerPage() {
     // This is now the CODE (e.g. "241")
     const trimesterCode = searchParams.get("trimester");
 
-    const isCode = (str: string) => /^[A-Z]{3,4}\d{3,4}$/i.test(str.replace(/\s/g, ''));
+    // Use Shared Hook
+    const {
+        trimesters,
+        loading: hookLoading,
+        fetchAcademicData,
+        updateTrimesters
+    } = useAcademicData();
 
+    // Local Loading State for finding the specific course
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [assessments, setAssessments] = useState<Assessment[]>([]);
 
-    // Initialize with empty data to prevent "Ghost" content from URL
+    // Initialize with empty data
     const [courseData, setCourseData] = useState({
         _id: "", // Store Database ID
         name: "",
@@ -51,94 +70,98 @@ export default function CoursePlannerPage() {
 
     const [originalName, setOriginalName] = useState("");
 
+    // Fetch on Mount
     useEffect(() => {
+        fetchAcademicData();
+    }, [fetchAcademicData]);
+
+    // Derived Logic to find Course from Hook Data
+    useEffect(() => {
+        if (hookLoading) return; // Wait for hook to finish loading
+
         if (!trimesterCode) {
             toast.error("Invalid URL: Trimester not specified.");
             router.replace("/dashboard/academic/history");
             return;
         }
-        fetchCourseDetails();
-    }, [trimesterCode, courseId]);
 
-    const fetchCourseDetails = async () => {
-        try {
-            const res = await fetch("/api/cgpa");
-            if (res.ok) {
-                const data = await res.json();
-                if (data.records && data.records.length > 0) {
-                    const latest = data.records[0];
-                    // Match by CODE
-                    const trimester = latest.trimesters.find((t: any) => t.code === trimesterCode);
+        const trimester = trimesters.find((t: any) => t.code === trimesterCode);
 
-                    if (trimester) {
-                        // Find by Code OR Name (migration support)
-                        const course = trimester.courses.find((c: any) =>
-                            c.code === courseId ||
-                            c.name === courseId ||
-                            (c.code && c.code.replace(/\s/g, '') === courseId) // specific check for sanitized code URL
-                        );
+        if (trimester) {
+            // Find by Code OR Name (migration support)
+            const course = trimester.courses.find((c: any) =>
+                c.code === courseId ||
+                c.name === courseId ||
+                (c.code && c.code.replace(/\s/g, '') === courseId) // specific check for sanitized code URL
+            );
 
-                        if (course) {
-                            setCourseData({
-                                _id: course._id, // Capture ID
-                                name: course.name,
-                                code: course.code || "",
-                                credit: course.credit,
-                                grade: course.grade || "",
-                                trimester: trimesterCode || ""
-                            });
-                            setOriginalName(course.name); // Keep original name for update logic
+            if (course) {
+                // Determine if this is a "first load" or if we should preserve local edits?
+                // For simplicity and consistency, let's reset to hook data.
+                // But wait, if user is typing... no, this effect runs on hook load.
+                // We should only set if loading is true.
+                if (loading) {
+                    setCourseData({
+                        _id: course._id, // Capture ID
+                        name: course.name,
+                        code: course.code || "",
+                        credit: course.credit,
+                        grade: course.grade || "",
+                        trimester: trimesterCode || ""
+                    });
+                    setOriginalName(course.name); // Keep original name for update logic
 
-                            // Load Assessments
-                            if (course.assessments && course.assessments.length > 0) {
-                                setAssessments(course.assessments.map((a: any) => ({
-                                    id: a._id || Math.random().toString(),
-                                    name: a.name,
-                                    weight: a.weight || 0,
-                                    obtained: a.obtainedMarks || 0,
-                                    total: a.totalMarks || 0,
-                                    isCT: a.isCT || false,
-                                    bestN: a.isCT || a.name.includes("Class Test"),
-                                    group: (a.isCT || a.name.includes("Class Test")) ? "CT" : undefined
-                                })));
-                            } else {
-                                setAssessments(DEFAULT_ASSESSMENTS);
-                            }
-                            setLoading(false); // Success!
-                        } else {
-                            // Security Fix: Ghost Course Prevention
-                            toast.error("Course not found in this trimester.");
-                            router.replace("/dashboard/academic/history");
-                            return;
-                        }
+                    // Load Assessments
+                    if (course.assessments && course.assessments.length > 0) {
+                        setAssessments(course.assessments.map((a: any) => ({
+                            id: a._id || Math.random().toString(),
+                            name: a.name,
+                            weight: a.weight || 0,
+                            obtained: a.obtainedMarks || 0,
+                            total: a.totalMarks || 0,
+                            isCT: a.isCT || false,
+                            bestN: a.isCT || a.name.includes("Class Test"),
+                            group: (a.isCT || a.name.includes("Class Test")) ? "CT" : undefined
+                        })));
                     } else {
-                        // Security Fix: Invalid Trimester Param
-                        toast.error("Trimester not found.");
-                        router.replace("/dashboard/academic/history");
-                        return;
+                        setAssessments(DEFAULT_ASSESSMENTS);
                     }
+                    setLoading(false); // Success!
                 }
             } else {
-                setLoading(false);
+                if (loading) {
+                    // Security Fix: Ghost Course Prevention
+                    console.error("Course not found:", courseId, "in trimester:", trimesterCode);
+                    toast.error("Course not found in this trimester.");
+                    router.replace("/dashboard/academic/history");
+                }
             }
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load course details");
-            setLoading(false);
+        } else {
+            console.log("Trimester list:", trimesters);
+            // Only redirect if data loaded but trimester missing
+            if (loading && trimesters.length > 0) {
+                // Security Fix: Invalid Trimester Param
+                console.error("Trimester not found:", trimesterCode);
+                toast.error("Trimester not found.");
+                router.replace("/dashboard/academic/history");
+            } else if (loading && trimesters.length === 0) {
+                // Empty data loaded? That's fine, just wait or redirect if truly empty.
+                // If trimesters is empty array but loading is false, then user has no history.
+                console.warn("No trimesters loaded.");
+                // We can stay here or redirect.
+                // If no history, they can't be editing a course.
+                setLoading(false);
+                toast.error("Course not found.");
+                router.replace("/dashboard/academic/history");
+            }
         }
-    };
+    }, [hookLoading, trimesters, trimesterCode, courseId, loading, router]);
+
 
     const handleSave = async () => {
         if (!trimesterCode) return;
         setSaving(true);
         try {
-            const getRes = await fetch("/api/cgpa");
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
             // Sanitize Code
             const sanitizedCode = courseData.code.replace(/\s+/g, '').toUpperCase();
 
@@ -147,7 +170,7 @@ export default function CoursePlannerPage() {
                 setCourseData(prev => ({ ...prev, code: sanitizedCode }));
             }
 
-            const updatedTrimesters = currentTrimesters.map((t: any) => {
+            const updatedTrimesters = trimesters.map((t: any) => {
                 if (t.code === trimesterCode) {
                     // Update the specific course
                     const updatedCourses = t.courses.map((c: any) => {
@@ -208,31 +231,10 @@ export default function CoursePlannerPage() {
                 return t;
             });
 
-            // Recalculate Stats (GPA/CGPA)
-            let allCredits = 0;
-            let allPoints = 0;
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
+            // Use exposed hook method to save (Handles consistent validation/trends)
+            const success = await updateTrimesters(updatedTrimesters);
 
-            // Recalculate Logic using centralized utility
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
-
-            const payload = {
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
-            };
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
+            if (success) {
                 toast.success("Course details saved!");
                 setOriginalName(courseData.name);
 
@@ -245,6 +247,7 @@ export default function CoursePlannerPage() {
             }
 
         } catch (error) {
+            console.error(error);
             toast.error("Error saving changes");
         } finally {
             setSaving(false);
@@ -258,18 +261,13 @@ export default function CoursePlannerPage() {
         if (!trimesterCode) return;
         setSaving(true);
         try {
-            const getRes = await fetch("/api/cgpa");
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
-            const updatedTrimesters = currentTrimesters.map((t: any) => {
+            const updatedTrimesters = trimesters.map((t: any) => {
                 if (t.code === trimesterCode) {
                     const updatedCourses = t.courses.filter((c: any) =>
-                        c.name !== originalName &&
-                        c.code !== courseData.code // Ensure safe deletion by both name and code
+                        // If we have ID, filter by ID
+                        (courseData._id && c._id ? c._id !== courseData._id : true) &&
+                        // If we don't have ID, filter by name/code match (fallback)
+                        (!courseData._id ? (c.name !== originalName && c.code !== courseData.code) : true)
                     );
 
                     // Check if remaining courses are all completed
@@ -284,23 +282,9 @@ export default function CoursePlannerPage() {
                 return t;
             });
 
-            // Recalculate Logic using centralized utility
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
+            const success = await updateTrimesters(updatedTrimesters);
 
-            const payload = {
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: stats.cgpa }))
-            };
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
+            if (success) {
                 toast.success("Course deleted");
                 router.replace("/dashboard/academic/history");
             } else {
@@ -317,22 +301,19 @@ export default function CoursePlannerPage() {
         if (!trimesterCode) return;
         setSaving(true);
         try {
-            const getRes = await fetch("/api/cgpa");
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
             // 1. Calculate Grade from Projected Marks if not manually overriding
             // Actually, we use the projectedGrade calculated live
             const finalGrade = projectedGrade !== "N/A" ? projectedGrade : "F";
 
             // 2. Update Trimesters
-            const updatedTrimesters = currentTrimesters.map((t: any) => {
+            const updatedTrimesters = trimesters.map((t: any) => {
                 if (t.code === trimesterCode) {
                     const updatedCourses = t.courses.map((c: any) => {
-                        if (c.name === originalName) {
+                        // Match Logic same as Save
+                        if (c._id && courseData._id && c._id === courseData._id) {
+                            return { ...c, grade: finalGrade };
+                        }
+                        if (!courseData._id && (c.name === originalName || c.code === originalName)) {
                             return { ...c, grade: finalGrade };
                         }
                         return c;
@@ -350,73 +331,14 @@ export default function CoursePlannerPage() {
                 return t;
             });
 
-            // Recalculate Stats
-            let allCredits = 0;
-            let allPoints = 0;
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
+            const success = await updateTrimesters(updatedTrimesters);
 
-            const processedTrimesters = updatedTrimesters.map((t: any) => {
-                let tCredits = 0;
-                let tPoints = 0;
-                t.courses.forEach((c: any) => {
-                    if (c.grade) {
-                        tCredits += c.credit;
-                        tPoints += (gradePoints[c.grade] || 0) * c.credit;
-                    }
-                });
-
-                if (t.isCompleted) {
-                    t.courses.forEach((c: any) => {
-                        if (c.grade) {
-                            allCredits += c.credit;
-                            allPoints += (gradePoints[c.grade] || 0) * c.credit;
-                        }
-                    });
-                }
-
-                return {
-                    ...t,
-                    gpa: tCredits > 0 ? tPoints / tCredits : 0,
-                    totalCredits: tCredits
-                };
-            });
-
-            let totalCreditsCalc = 0;
-            let totalPointsCalc = 0;
-            processedTrimesters.forEach((t: any) => {
-                if (t.isCompleted) {
-                    t.courses.forEach((c: any) => {
-                        if (c.grade) {
-                            totalCreditsCalc += c.credit;
-                            totalPointsCalc += (gradePoints[c.grade] || 0) * c.credit;
-                        }
-                    });
-                }
-            });
-
-            const newCGPA = totalCreditsCalc > 0 ? totalPointsCalc / totalCreditsCalc : 0;
-
-            const payload = {
-                trimesters: processedTrimesters,
-                previousCredits: 0,
-                previousCGPA: newCGPA,
-                results: processedTrimesters.map((t: any) => ({ trimesterCode: t.code, cgpa: newCGPA }))
-            };
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
+            if (success) {
                 toast.success(`Course Completed! Grade: ${finalGrade}`);
                 setCourseData({ ...courseData, grade: finalGrade });
                 // Verify if trimester completed
-                const myTrimester = processedTrimesters.find((t: any) => t.code === trimesterCode);
+                // Need to find updated trimester from updatedTrimesters array we just created
+                const myTrimester = updatedTrimesters.find((t: any) => t.code === trimesterCode);
                 if (myTrimester?.isCompleted) {
                     toast.success("Trimester Completed!");
                 }
@@ -449,7 +371,7 @@ export default function CoursePlannerPage() {
         setProjectedGrade(grade);
     }, []);
 
-    if (loading) {
+    if (loading || hookLoading) {
         return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
     }
 
@@ -476,36 +398,36 @@ export default function CoursePlannerPage() {
                 </div>
 
                 <div className="shrink-0 ml-2">
-                    <Dialog>
-                        <DialogTrigger asChild>
-                            <Button variant="destructive" size="sm" disabled={saving} className="h-8 md:h-10 px-3 md:px-4 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-none">
-                                <span className="hidden md:inline">Delete Course</span>
-                                <span className="md:hidden">Delete</span>
-                            </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
-                            <DialogHeader>
-                                <DialogTitle className="flex items-center gap-2 text-destructive">
-                                    <AlertCircle className="h-5 w-5" />
-                                    Delete Course
-                                </DialogTitle>
-                                <DialogDescription>
-                                    Are you sure you want to delete <strong>{courseData.name}</strong>?
-                                    <br /><br />
-                                    This action cannot be undone. All grades and assessment data associated with this course will be permanently removed.
-                                </DialogDescription>
-                            </DialogHeader>
-                            <DialogFooter className="mt-4 gap-2 sm:gap-0">
-                                <DialogClose asChild>
-                                    <Button variant="outline">Cancel</Button>
-                                </DialogClose>
-                                <Button onClick={handleDelete} variant="destructive" disabled={saving}>
-                                    {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    Delete Permanently
+                    <div className="shrink-0 ml-2">
+                        <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm" disabled={saving} className="h-8 md:h-10 px-3 md:px-4 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-none">
+                                    <span className="hidden md:inline">Delete Course</span>
+                                    <span className="md:hidden">Delete</span>
                                 </Button>
-                            </DialogFooter>
-                        </DialogContent>
-                    </Dialog>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent className="sm:max-w-[425px]">
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                                        <AlertCircle className="h-5 w-5" />
+                                        Delete Course
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        Are you sure you want to delete <strong>{courseData.name}</strong>?
+                                        <br /><br />
+                                        This action cannot be undone. All grades and assessment data associated with this course will be permanently removed.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="mt-4 gap-2 sm:gap-0">
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90" disabled={saving}>
+                                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        Delete Permanently
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+                    </div>
                 </div>
             </div>
 
@@ -573,6 +495,8 @@ export default function CoursePlannerPage() {
                                         <SelectItem value="D+">D+ (1.33)</SelectItem>
                                         <SelectItem value="D">D (1.00)</SelectItem>
                                         <SelectItem value="F">F (0.00)</SelectItem>
+                                        <SelectItem value="I">Incomplete (I)</SelectItem>
+                                        <SelectItem value="W">Withdraw (W)</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -581,17 +505,26 @@ export default function CoursePlannerPage() {
                         {/* 3. Projected Grade & Actions (Compact on Mobile) */}
                         <div className="col-span-1 md:col-span-1 lg:col-span-1 lg:col-start-3 lg:row-start-1 lg:row-span-2 flex flex-row md:flex-col items-center justify-between gap-4 md:gap-6 border-t md:border-t-0 md:border-l border-black/5 dark:border-white/10 pt-4 md:pt-0 pl-0 md:pl-8">
                             <div className="flex flex-col items-start md:items-end text-left md:text-right h-full justify-center lg:justify-start">
-                                <h3 className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-0 md:mb-1">Projected Grade</h3>
+                                <h3 className="text-[9px] md:text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-0 md:mb-1">
+                                    {courseData.grade ? "Final Grade" : "Projected Grade"}
+                                </h3>
                                 <div className={cn(
                                     "text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter transition-colors duration-500 leading-none",
-                                    projectedGrade === "F" ? "text-destructive" :
-                                        projectedGrade.startsWith("A") ? "text-green-500" :
-                                            projectedGrade === "N/A" ? "text-muted-foreground/30" : "text-orange-500"
+                                    (courseData.grade || projectedGrade) === "F" ? "text-destructive" :
+                                        (courseData.grade || projectedGrade).startsWith("A") ? "text-green-500" :
+                                            (courseData.grade || projectedGrade) === "N/A" ? "text-muted-foreground/30" :
+                                                ((courseData.grade || projectedGrade) === "W" || (courseData.grade || projectedGrade) === "I") ? "text-muted-foreground" : "text-orange-500"
                                 )}>
-                                    {projectedGrade}
+                                    {courseData.grade || projectedGrade}
                                 </div>
                                 <p className="text-[10px] md:text-xs font-medium text-muted-foreground mt-1 md:mt-2">
-                                    <span className="text-foreground font-bold">{projectedMarks.toFixed(1)}%</span> marks
+                                    {courseData.grade ? (
+                                        <span className="text-foreground font-bold">Official Record</span>
+                                    ) : (
+                                        <>
+                                            <span className="text-foreground font-bold">{projectedMarks.toFixed(1)}%</span> marks
+                                        </>
+                                    )}
                                 </p>
                             </div>
 
@@ -608,7 +541,7 @@ export default function CoursePlannerPage() {
                                     variant="outline"
                                     className={cn(
                                         "w-full gap-2 h-12 border-green-500/30 text-green-600 hover:bg-green-500/10 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300",
-                                        projectedGrade === "N/A" && "opacity-50 pointer-events-none"
+                                        projectedGrade === "N/A" && !courseData.grade && "opacity-50 pointer-events-none"
                                     )}
                                     onClick={!courseData.grade ? handleCompleteCourse : undefined}
                                     disabled={saving || (!!courseData.grade)}

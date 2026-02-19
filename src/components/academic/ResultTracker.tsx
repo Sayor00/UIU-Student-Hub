@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { History, ArrowUpRight, Trash2, BookOpen } from "lucide-react";
+import { History, ArrowUpRight, Trash2, BookOpen, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import CGPAStats from "./CGPAStats";
-import AddResultModal from "./AddResultModal";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import GradeDistributionAnalysis from "./GradeDistributionAnalysis";
 import CGPATrendChart from "./CGPATrendChart";
 import CGPASimulator from "./CGPASimulator";
 import {
@@ -26,24 +26,47 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import AddResultModal from "./AddResultModal";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getTrimesterName, parseStudentId, calculateAcademicStats } from "@/lib/trimesterUtils";
+import { calculateAcademicStats, getTrimesterName, parseStudentId } from "@/lib/trimesterUtils";
+import { useAcademicData } from "@/hooks/useAcademicData";
 
 export default function ResultTracker() {
     const router = useRouter();
     const { data: session } = useSession();
-    const [trimesters, setTrimesters] = useState<any[]>([]);
-    const [cgpa, setCgpa] = useState(0);
-    const [totalCredits, setTotalCredits] = useState(0);
-    const [loading, setLoading] = useState(true);
 
-    // Edit State
-    const [editModalOpen, setEditModalOpen] = useState(false);
-    const [editingTrimester, setEditingTrimester] = useState<any>(null);
+    // Use Shared Hook
+    const {
+        trimesters,
+        cgpa,
+        totalCredits,
+        loading,
+        deleteTrimester,
+        addCourse,
+        addTrimester,
+        fetchAcademicData,
+        trends // NEW: Server-side trends
+    } = useAcademicData();
+
+    useEffect(() => {
+        if (session?.user) {
+            fetchAcademicData();
+        }
+    }, [session, fetchAcademicData]);
 
     // Delete State
     const [deleteName, setDeleteName] = useState<string | null>(null);
@@ -51,38 +74,6 @@ export default function ResultTracker() {
     // Add Course State
     const [addCourseTrimester, setAddCourseTrimester] = useState<string | null>(null);
     const [courseCodeInput, setCourseCodeInput] = useState("");
-
-    useEffect(() => {
-        if (session?.user) {
-            fetchResults();
-        }
-    }, [session]);
-
-    const fetchResults = async () => {
-        try {
-            const res = await fetch("/api/cgpa");
-            const data = await res.json();
-            if (res.ok && data.records && data.records.length > 0) {
-                const latest = data.records[0];
-                const currentTrimesters = latest.trimesters || [];
-
-                // Use centralized calculation to enrich data (isRetake, etc.)
-                const stats = calculateAcademicStats(currentTrimesters, latest.previousCGPA, latest.previousCredits);
-
-                setTrimesters([...stats.trimesters].reverse());
-                setCgpa(stats.cgpa);
-                setTotalCredits(stats.totalCredits);
-            } else {
-                setTrimesters([]);
-                setCgpa(0);
-                setTotalCredits(0);
-            }
-        } catch (e) {
-            toast.error("Failed to fetch results");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     // Grade Color Helper
     const getGradeColor = (grade: string) => {
@@ -94,131 +85,36 @@ export default function ResultTracker() {
         return "bg-red-500/15 text-red-600 dark:text-red-500 border-red-500/30";
     };
 
-    const handleDelete = (trimesterCode: string, e?: React.MouseEvent) => { // Expect code
+    const handleDeleteClick = (trimesterCode: string, e?: React.MouseEvent) => {
         if (e) e.stopPropagation();
         setDeleteName(trimesterCode);
     };
 
     const confirmDelete = async () => {
         if (!deleteName) return;
-
-        try {
-            const getRes = await fetch("/api/cgpa");
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
-            const updatedTrimesters = currentTrimesters.filter((t: any) => t.code !== deleteName); // Filter by code
-
-            // Recalculate Stats
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
-
-            const payload = {
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map((t: any) => {
-                    return { trimesterCode: t.code, cgpa: stats.cgpa };
-                })
-            };
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
-                toast.success("Trimester deleted");
-                fetchResults();
-                setDeleteName(null);
-            } else {
-                toast.error("Failed to delete");
-            }
-        } catch (e) {
-            toast.error("Error deleting");
-        }
+        await deleteTrimester(deleteName);
+        setDeleteName(null);
     };
 
-    const handleAddCourse = (trimesterCode: string) => {
+    const handleAddCourseClick = (trimesterCode: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         setAddCourseTrimester(trimesterCode);
         setCourseCodeInput("");
     };
 
     const submitAddCourse = async () => {
-        if (!courseCodeInput.trim()) {
+        if (!courseCodeInput.trim() || !addCourseTrimester) {
             toast.error("Course Code is required");
             return;
         }
 
-        try {
-            const getRes = await fetch("/api/cgpa");
-            const getData = await getRes.json();
-            if (!getData.records || getData.records.length === 0) return;
-
-            const latest = getData.records[0];
-            const currentTrimesters = latest.trimesters || [];
-
-            // Format: Uppercase and remove ALL spaces
-            const newCourseCode = courseCodeInput.toUpperCase().replace(/\s+/g, '');
-
-            // Check if course already exists in this trimester? 
-            // Might be good, but maybe not strictly required by user yet.
-
-            const updatedTrimesters = currentTrimesters.map((t: any) => {
-                if (t.code === addCourseTrimester) { // Match by code
-                    return {
-                        ...t,
-                        courses: [...t.courses, { name: "", code: newCourseCode, credit: 3, grade: "" }],
-                        isCompleted: false
-                    };
-                }
-                return t;
-            });
-
-            // Recalc Logic using Centralized Utility
-            const stats = calculateAcademicStats(updatedTrimesters, latest.previousCGPA, latest.previousCredits);
-
-            // Only send necessary fields to API
-            const payload = {
-                // stats contains enriched trimesters
-                trimesters: stats.trimesters,
-                previousCredits: 0,
-                previousCGPA: stats.cgpa,
-                results: stats.trimesters.map(t => ({
-                    trimesterCode: t.code,
-                    cgpa: stats.cgpa,
-                    trimesterCredits: t.totalCredits,
-                    gpa: t.gpa
-                }))
-            };
-
-
-            const saveRes = await fetch("/api/cgpa", {
-                method: "POST",
-                body: JSON.stringify(payload),
-                headers: { "Content-Type": "application/json" }
-            });
-
-            if (saveRes.ok) {
-                toast.success("Course added! Redirecting...");
-                const targetTrim = addCourseTrimester;
-                setAddCourseTrimester(null); // Close modal
-                router.push(`/dashboard/academic/${encodeURIComponent(newCourseCode)}?trimester=${encodeURIComponent(targetTrim || "")}`);
-            } else {
-                toast.error("Failed to add course.");
-            }
-        } catch (e) {
-            toast.error("Error adding course.");
+        const success = await addCourse(addCourseTrimester, courseCodeInput);
+        if (success) {
+            const code = courseCodeInput.toUpperCase().replace(/\s+/g, '');
+            const targetTrim = addCourseTrimester;
+            setAddCourseTrimester(null);
+            router.push(`/dashboard/academic/${encodeURIComponent(code)}?trimester=${encodeURIComponent(targetTrim)}`);
         }
-    };
-
-
-    const handleEdit = (trimester: any) => {
-        setEditingTrimester(trimester);
-        setEditModalOpen(true);
     };
 
     // Animation Variants
@@ -226,65 +122,73 @@ export default function ResultTracker() {
         hidden: { opacity: 0 },
         visible: {
             opacity: 1,
-            transition: {
-                staggerChildren: 0.1
-            }
+            transition: { staggerChildren: 0.1 }
         }
     };
 
     const itemVariants = {
         hidden: { y: 20, opacity: 0 },
-        visible: {
-            y: 0,
-            opacity: 1
-        }
+        visible: { y: 0, opacity: 1 }
     };
 
-    // Prepare Chart Data
-    // Prepare Chart Data with REAL Cumulative Calculation
-    const chronologicalTrimesters = [...trimesters]
-        .filter(t => t.isCompleted)
-        .reverse(); // Assuming API returns latest first
+    // Recalculate stats for GradeDistributionAnalysis and Charts
+    const displayTrimesters = useMemo(() => {
+        return [...trimesters].reverse();
+    }, [trimesters]);
 
-    let cumulativePoints = 0;
-    let cumulativeCredits = 0;
+    const stats = useMemo(() => calculateAcademicStats(trimesters, 0, 0), [trimesters]);
 
-    const chartData = chronologicalTrimesters.map((t) => {
-        // Calculate Trimester Stats
-        let tCredits = 0;
-        let tPoints = 0;
-
-        // Use pre-calculated values if available, or recalc
-        if (t.totalCredits && t.gpa) {
-            tCredits = t.totalCredits;
-            tPoints = t.gpa * t.totalCredits;
-        } else {
-            // Fallback recalc if needed (though fetchResults usually does this)
-            const gradePoints: Record<string, number> = {
-                "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
-                "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
-            };
-            t.courses.forEach((c: any) => {
-                if (c.grade) {
-                    const credit = Number(c.credit) || 0;
-                    tCredits += credit;
-                    tPoints += (gradePoints[c.grade] || 0) * credit;
-                }
-            });
+    const chartData = useMemo(() => {
+        // Use server-side calculated trends if available to prevent duplicate logic
+        if (trends && trends.length > 0) {
+            return trends.map((t: any) => ({
+                name: t.trimesterCode || t.code || "N/A",
+                fullName: getTrimesterName(t.trimesterCode || t.code),
+                gpa: t.gpa,
+                cgpa: t.cgpa
+            }));
         }
 
-        // Update Cumulative
-        cumulativePoints += tPoints;
-        cumulativeCredits += tCredits;
-        const currentCGPA = cumulativeCredits > 0 ? cumulativePoints / cumulativeCredits : 0;
+        // Fallback: Calculate locally if server data is empty (e.g. legacy records)
+        // Sort chronologically for calculation
+        const chronologicalTrimesters = [...trimesters]
+            .filter(t => t.isCompleted || (t.courses && t.courses.some((c: any) => c.grade)))
+            .sort((a, b) => a.code.localeCompare(b.code));
 
-        return {
-            name: t.code, // X-Axis: "241"
-            fullName: getTrimesterName(t.code), // Tooltip: "Spring 2024"
-            gpa: t.gpa || (tCredits > 0 ? tPoints / tCredits : 0),
-            cgpa: currentCGPA
-        };
-    });
+        let cumulativePoints = 0;
+        let cumulativeCredits = 0;
+
+        return chronologicalTrimesters.map((t) => {
+            let tCredits = t.totalCredits || 0;
+            let tPoints = (t.gpa || 0) * tCredits;
+
+            // Recalc from courses if totals missing (fallback)
+            if (tCredits === 0 && t.courses?.length > 0) {
+                const gradePoints: Record<string, number> = {
+                    "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
+                    "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00, "F": 0.00
+                };
+                t.courses.forEach((c: any) => {
+                    if (c.grade) {
+                        const cr = Number(c.credit) || 0;
+                        tCredits += cr;
+                        tPoints += (gradePoints[c.grade] || 0) * cr;
+                    }
+                });
+            }
+
+            cumulativePoints += tPoints;
+            cumulativeCredits += tCredits;
+            const currentCGPA = cumulativeCredits > 0 ? cumulativePoints / cumulativeCredits : 0;
+
+            return {
+                name: t.code,
+                fullName: getTrimesterName(t.code),
+                gpa: t.gpa || (tCredits > 0 ? tPoints / tCredits : 0),
+                cgpa: currentCGPA
+            };
+        });
+    }, [trends, trimesters]);
 
     return (
         <motion.div
@@ -329,13 +233,8 @@ export default function ResultTracker() {
                 <motion.div variants={itemVariants} className="lg:col-span-2">
                     <CGPATrendChart data={chartData} />
                 </motion.div>
-                <div className="lg:col-span-1 flex flex-col justify-center">
-                    <Card className="h-full flex items-center justify-center p-6 bg-muted/20 border-dashed">
-                        <div className="text-center space-y-2">
-                            <p className="text-sm text-muted-foreground font-medium">More tools coming soon</p>
-                            <p className="text-xs text-muted-foreground">Stay tuned for Grade Distribution Analysis</p>
-                        </div>
-                    </Card>
+                <div className="lg:col-span-1 h-full">
+                    <GradeDistributionAnalysis stats={stats} />
                 </div>
                 <motion.div variants={itemVariants} className="col-span-full">
                     <CGPASimulator
@@ -350,16 +249,27 @@ export default function ResultTracker() {
             <motion.div variants={itemVariants} className="space-y-4">
                 <div className="flex items-center justify-between">
                     <h3 className="text-xl font-semibold">Recent History</h3>
-                    <Link href="/dashboard/academic/history">
-                        <Button variant="outline" size="sm" className="gap-2">
-                            View All <ArrowUpRight className="h-4 w-4" />
-                        </Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                        <AddResultModal
+                            onSuccess={fetchAcademicData}
+                            onAddTrimester={addTrimester}
+                            trigger={
+                                <Button variant="secondary" size="sm" className="gap-2 bg-black/5 hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10 border border-black/5 dark:border-white/5">
+                                    <BookOpen className="h-4 w-4" /> Add Trimester
+                                </Button>
+                            }
+                        />
+                        <Link href="/dashboard/academic/history">
+                            <Button variant="outline" size="sm" className="gap-2">
+                                View All <ArrowUpRight className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
 
-                {trimesters.length > 0 ? (
-                    <Accordion type="single" collapsible className="space-y-4">
-                        {trimesters.slice(0, 4).map((t, i) => (
+                {displayTrimesters.length > 0 ? (
+                    <Accordion type="single" collapsible className="space-y-6">
+                        {displayTrimesters.slice(0, 4).map((t, i) => (
                             <AccordionItem
                                 key={i}
                                 value={`item-${i}`}
@@ -370,7 +280,9 @@ export default function ResultTracker() {
                                     <div className="hidden md:flex flex-1 items-center justify-between pr-4">
                                         <div className="flex flex-col gap-1 text-left">
                                             <div className="flex items-center gap-3">
-                                                <h3 className="text-xl font-bold tracking-tight text-foreground">{getTrimesterName(t.code)}</h3>
+                                                <h3 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                                                    {getTrimesterName(t.code)}
+                                                </h3>
                                                 {t.isCompleted ? (
                                                     <Badge className="bg-green-600/20 text-green-600 dark:text-green-400 border-green-500/30 hover:bg-green-600/30 text-xs">Completed</Badge>
                                                 ) : (
@@ -424,7 +336,7 @@ export default function ResultTracker() {
                                     {/* Course Table */}
                                     <div className="p-0">
                                         <div className="divide-y divide-black/5 dark:divide-white/5">
-                                            {/* Table Header - Hidden on Mobile */}
+                                            {/* Table Header */}
                                             <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider bg-black/5 dark:bg-white/5">
                                                 <div className="col-span-6">Course Name</div>
                                                 <div className="col-span-2 text-center">Credit</div>
@@ -434,86 +346,90 @@ export default function ResultTracker() {
 
                                             {/* Rows */}
                                             {t.courses.length > 0 ? (
-                                                t.courses.map((course: any, idx: number) => (
-                                                    <div
-                                                        key={idx}
-                                                        className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 px-4 md:px-6 py-4 items-start md:items-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors group border-b border-black/5 dark:border-white/5 md:border-0 last:border-0"
-                                                    >
-                                                        {/* Course Name */}
-                                                        <div className="w-full md:w-auto md:col-span-6 font-medium text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-100 transition-colors">
-                                                            <div className="flex items-center justify-between md:justify-start gap-2">
-                                                                <span className="truncate">{course.name || course.code}</span>
-                                                                <div className="flex items-center gap-2">
-                                                                    {course.code && course.name && <span className="md:hidden text-xs px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-muted-foreground">{course.code}</span>}
-                                                                    {course.isRetake && (
-                                                                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-orange-500/10 text-orange-600 border-orange-500/20">
-                                                                            Retake
-                                                                        </Badge>
-                                                                    )}
-                                                                    {course.hasRetake && (
-                                                                        <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-blue-500/20">
-                                                                            Retaken Later
-                                                                        </Badge>
+                                                t.courses.map((course: any, idx: number) => {
+                                                    return (
+                                                        <motion.div
+                                                            key={idx}
+                                                            initial={{ opacity: 0, y: 10 }}
+                                                            whileInView={{ opacity: 1, y: 0 }}
+                                                            transition={{ delay: idx * 0.05 }}
+                                                            className="flex flex-col md:grid md:grid-cols-12 gap-3 md:gap-4 px-4 md:px-6 py-4 items-start md:items-center hover:bg-black/5 dark:hover:bg-white/5 transition-colors group border-b border-black/5 dark:border-white/5 md:border-0 last:border-0"
+                                                        >
+                                                            {/* Course Name */}
+                                                            <div className="w-full md:w-auto md:col-span-6 font-medium text-foreground group-hover:text-orange-600 dark:group-hover:text-orange-100 transition-colors">
+                                                                <div className="flex items-center justify-between md:justify-start gap-2">
+                                                                    <span className="truncate">{course.name || course.code}</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        {course.code && course.name && <span className="md:hidden text-xs px-1.5 py-0.5 rounded bg-black/10 dark:bg-white/10 text-muted-foreground">{course.code}</span>}
+                                                                        {course.isRetake && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-orange-500/10 text-orange-600 border-orange-500/20">
+                                                                                Retake
+                                                                            </Badge>
+                                                                        )}
+                                                                        {course.hasRetake && (
+                                                                            <Badge variant="outline" className="text-[10px] px-1.5 h-5 bg-blue-500/10 text-blue-600 border-blue-500/20">
+                                                                                Retaken Later
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                {course.code && course.name && <span className="hidden md:inline ml-2 text-xs text-muted-foreground font-normal">({course.code})</span>}
+                                                            </div>
+
+                                                            {/* Meta Data */}
+                                                            <div className="w-full md:w-auto md:col-span-6 flex items-center justify-between md:grid md:grid-cols-6 md:gap-4">
+                                                                <div className="md:col-span-2 text-sm text-muted-foreground flex items-center gap-2 md:justify-center">
+                                                                    <span className="md:hidden text-xs uppercase">Credit:</span>
+                                                                    {course.credit}
+                                                                </div>
+
+                                                                <div className="md:col-span-2 flex items-center justify-center">
+                                                                    <span className="md:hidden text-xs text-muted-foreground uppercase mr-2">Grade:</span>
+                                                                    {course.grade ? (
+                                                                        <div className={cn("px-2.5 py-0.5 rounded-md border text-xs font-bold", getGradeColor(course.grade))}>
+                                                                            {course.grade}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="px-2.5 py-0.5 rounded-md border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-xs text-muted-foreground">
+                                                                            Running
+                                                                        </div>
                                                                     )}
                                                                 </div>
-                                                            </div>
-                                                            {course.code && course.name && <span className="hidden md:inline ml-2 text-xs text-muted-foreground font-normal">({course.code})</span>}
-                                                        </div>
 
-                                                        {/* Meta Data */}
-                                                        <div className="w-full md:w-auto md:col-span-6 flex items-center justify-between md:grid md:grid-cols-6 md:gap-4">
-                                                            <div className="md:col-span-2 text-sm text-muted-foreground flex items-center gap-2 md:justify-center">
-                                                                <span className="md:hidden text-xs uppercase">Credit:</span>
-                                                                {course.credit}
+                                                                <div className="md:col-span-2 flex justify-end">
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-8 text-xs gap-1 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-500/10 px-2 md:px-3"
+                                                                        onClick={() => router.push(`/dashboard/academic/${encodeURIComponent(course.code || course.name)}?trimester=${encodeURIComponent(t.code)}`)}
+                                                                    >
+                                                                        Manage <ArrowUpRight className="h-3 w-3" />
+                                                                    </Button>
+                                                                </div>
                                                             </div>
-
-                                                            <div className="md:col-span-2 flex items-center justify-center">
-                                                                <span className="md:hidden text-xs text-muted-foreground uppercase mr-2">Grade:</span>
-                                                                {course.grade ? (
-                                                                    <div className={cn("px-2.5 py-0.5 rounded-md border text-xs font-bold", getGradeColor(course.grade))}>
-                                                                        {course.grade}
-                                                                    </div>
-                                                                ) : (
-                                                                    <div className="px-2.5 py-0.5 rounded-md border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 text-xs text-muted-foreground">
-                                                                        Running
-                                                                    </div>
-                                                                )}
-                                                            </div>
-
-                                                            <div className="md:col-span-2 flex justify-end">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    className="h-8 text-xs gap-1 hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-500/10 px-2 md:px-3"
-                                                                    onClick={() => router.push(`/dashboard/academic/${encodeURIComponent(course.code || course.name)}?trimester=${encodeURIComponent(t.code)}`)}
-                                                                >
-                                                                    Manage <ArrowUpRight className="h-3 w-3" />
-                                                                </Button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))
+                                                        </motion.div>
+                                                    )
+                                                })
                                             ) : (
-                                                <div className="py-8 text-center text-muted-foreground flex flex-col items-center gap-2">
-                                                    <p>No courses added yet.</p>
+                                                <div className="py-8 text-center text-muted-foreground border-b border-black/5 dark:border-white/5">
+                                                    No courses added yet.
                                                 </div>
                                             )}
                                         </div>
-                                        {/* Footer Actions */}
                                         <div className="flex items-center justify-between px-6 py-4 bg-black/[0.015] dark:bg-white/[0.015] border-t border-black/5 dark:border-white/5">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
                                                 className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-2 h-9"
-                                                onClick={(e) => handleDelete(t.code, e)}
+                                                onClick={(e) => handleDeleteClick(t.code, e)}
                                             >
-                                                <Trash2 className="h-4 w-4" /> Delete Trimester
+                                                <Trash2 className="h-4 w-4" /> Delete
                                             </Button>
                                             <Button
                                                 variant="secondary"
                                                 size="sm"
                                                 className="gap-2 bg-black/10 dark:bg-white/10 hover:bg-black/20 dark:hover:bg-white/20 text-foreground border-0"
-                                                onClick={() => handleAddCourse(t.code)}
+                                                onClick={(e) => handleAddCourseClick(t.code, e)}
                                             >
                                                 <BookOpen className="h-4 w-4" /> Add Course
                                             </Button>
@@ -524,93 +440,107 @@ export default function ResultTracker() {
                         ))}
                     </Accordion>
                 ) : (
-                    <Card className="bg-muted/10 border-dashed p-8 text-center space-y-4">
-                        <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                            <History className="h-6 w-6 text-primary" />
-                        </div>
-                        <div>
-                            <h4 className="text-lg font-semibold">No Recent History</h4>
-                            <p className="text-muted-foreground text-sm max-w-sm mx-auto mt-1">
-                                Start by adding your first trimester to populate your dashboard.
-                            </p>
-                        </div>
-                        <Link href="/dashboard/academic/history">
-                            <Button>Add Trimester</Button>
-                        </Link>
-                    </Card>
-                )}
-            </motion.div>
-
-
-            <AddResultModal
-                open={editModalOpen}
-                onOpenChange={setEditModalOpen}
-                mode="edit"
-                initialData={editingTrimester}
-                onSuccess={() => {
-                    fetchResults();
-                    setEditModalOpen(false);
-                    setEditingTrimester(null);
-                }}
-            />
-
-            {/* Delete Confirmation Modal */}
-            <Dialog open={!!deleteName} onOpenChange={(open) => !open && setDeleteName(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Delete Trimester</DialogTitle>
-                        <DialogDescription>
-                            Are you sure you want to delete <strong>{deleteName ? getTrimesterName(deleteName) : ""}</strong>? <br />
-                            This will permanently remove all courses and grades associated with this trimester.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setDeleteName(null)}>Cancel</Button>
-                        <Button variant="destructive" onClick={confirmDelete}>
-                            Delete Permanently
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Add Course Modal */}
-            <Dialog open={!!addCourseTrimester} onOpenChange={(open) => !open && setAddCourseTrimester(null)}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Add New Course</DialogTitle>
-                        <DialogDescription>
-                            Enter the course code to create a new course in <strong>{addCourseTrimester ? getTrimesterName(addCourseTrimester) : ""}</strong>.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-start gap-4">
-                            <Label htmlFor="courseCode" className="text-right pt-2">
-                                Course Code
-                            </Label>
-                            <div className="col-span-3 space-y-1">
-                                <Input
-                                    id="courseCode"
-                                    value={courseCodeInput}
-                                    onChange={(e) => setCourseCodeInput(e.target.value)}
-                                    placeholder="e.g. CSE 123"
-                                    autoFocus
-                                />
-                                {courseCodeInput.trim() && (
-                                    <div className="text-sm text-muted-foreground">
-                                        Will be created as: <span className="font-bold text-primary">{courseCodeInput.toUpperCase().replace(/\s+/g, '')}</span>
-                                    </div>
-                                )}
-                            </div>
+                    <div className="text-center py-12 border border-dashed rounded-xl bg-black/[0.02]">
+                        <AlertCircle className="h-10 w-10 mx-auto text-muted-foreground/30 mb-3" />
+                        <h3 className="font-medium text-foreground">No History Yet</h3>
+                        <p className="text-sm text-muted-foreground">Add your first trimester to start tracking.</p>
+                        <div className="mt-4">
+                            <AddResultModal
+                                onSuccess={fetchAcademicData}
+                                onAddTrimester={addTrimester}
+                                trigger={
+                                    <Button size="sm" className="gap-2 bg-primary text-primary-foreground">
+                                        <BookOpen className="h-4 w-4" /> Add Trimester
+                                    </Button>
+                                }
+                            />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setAddCourseTrimester(null)}>Cancel</Button>
-                        <Button onClick={submitAddCourse} disabled={!courseCodeInput.trim()}>
-                            Create Course
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                )}
+
+                <Dialog
+                    open={!!addCourseTrimester}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setAddCourseTrimester(null);
+                            setCourseCodeInput("");
+                        }
+                    }}
+                >
+                    <DialogContent className="sm:max-w-[425px] bg-background/20 backdrop-blur-xl border-white/10 shadow-2xl">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2 text-xl font-bold tracking-tight">
+                                <div className="p-2 rounded-full bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                                    <BookOpen className="h-5 w-5" />
+                                </div>
+                                Add New Course
+                            </DialogTitle>
+                            <DialogDescription>
+                                Create a new course in <strong>{addCourseTrimester ? getTrimesterName(addCourseTrimester) : ""}</strong>.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-6 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="courseCode" className="text-xs font-bold uppercase text-muted-foreground tracking-wider ml-1">
+                                    Course Code
+                                </Label>
+                                <div className="space-y-2">
+                                    <Input
+                                        id="courseCode"
+                                        value={courseCodeInput}
+                                        onChange={(e) => setCourseCodeInput(e.target.value)}
+                                        placeholder="e.g. CSE 123"
+                                        className="h-12 text-lg font-mono tracking-wide bg-black/5 dark:bg-white/5 border-black/5 dark:border-white/5 focus-visible:ring-1 focus-visible:ring-orange-500/50 focus-visible:border-orange-500/50 transition-all font-bold"
+                                        autoFocus
+                                    />
+                                    {courseCodeInput.trim() && (
+                                        <div className="text-xs text-muted-foreground ml-1 flex items-center gap-1">
+                                            Will be created as: <span className="font-bold text-orange-600 dark:text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">{courseCodeInput.toUpperCase().replace(/\s+/g, '')}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button
+                                variant="ghost"
+                                onClick={() => {
+                                    setAddCourseTrimester(null);
+                                    setCourseCodeInput("");
+                                }}
+                                className="hover:bg-black/5 dark:hover:bg-white/5"
+                            >
+                                Cancel
+                            </Button>
+                            <Button onClick={submitAddCourse} disabled={!courseCodeInput.trim()} className="bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20">
+                                Create Course
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Delete Confirmation Alert Dialog */}
+                <AlertDialog open={!!deleteName} onOpenChange={(open) => !open && setDeleteName(null)}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the trimester
+                                <strong> {deleteName ? getTrimesterName(deleteName) : ""}</strong> and all associated data.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel onClick={() => setDeleteName(null)}>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={confirmDelete}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                                Delete
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </motion.div>
         </motion.div>
     );
 }

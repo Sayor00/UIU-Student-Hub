@@ -235,3 +235,68 @@ export function calculateAcademicStats(trimesters: Trimester[], previousCGPA: nu
         trimesters: processedTrimesters
     };
 }
+
+/**
+ * Calculates the cumulative CGPA trend over time.
+ * Correctly handles retakes by applying the "Best Grade" policy chronologically.
+ */
+export function calculateTrimesterTrends(trimesters: Trimester[]): { trimesterCode: string; cgpa: number; gpa: number }[] {
+    // 1. Sort Chronologically
+    const sorted = [...trimesters].sort((a, b) => a.code.localeCompare(b.code));
+
+    // 2. State for cumulative tracking
+    const cumulativeBestGrades: Record<string, { grade: string; credit: number; point: number }> = {};
+    const gradePoints: Record<string, number> = {
+        "A": 4.00, "A-": 3.67, "B+": 3.33, "B": 3.00, "B-": 2.67,
+        "C+": 2.33, "C": 2.00, "C-": 1.67, "D+": 1.33, "D": 1.00,
+        "F": 0.00, "I": 0.00, "W": 0.00
+    };
+
+    const trends: { trimesterCode: string; cgpa: number; gpa: number }[] = [];
+
+    sorted.forEach(t => {
+        // Skip if not completed or empty
+        // Skip if not completed or empty
+        if (!t.isCompleted && (!t.courses || t.courses.length === 0 || t.courses.every(c => !c.grade || c.grade === "W" || c.grade === "I"))) {
+            return;
+        }
+
+        // Update Cumulative Best Grades with current trimester's courses
+        t.courses.forEach(c => {
+            const code = (c.code || c.name).toUpperCase().replace(/\s+/g, '');
+            if (!code || !c.grade || c.grade === "N/A" || c.grade === "" || c.grade === "W" || c.grade === "I") return;
+
+            const gp = gradePoints[c.grade] || 0;
+
+            // "Best Grade" Logic: 
+            // If new grade is better OR no previous grade exists, update it.
+            // Note: In strict chronological processing, we just update. 
+            // BUT wait, if I retake a course and get a WORSE grade, does it replace?
+            // "Best Grade" policy means we keep the best. 
+            // So we check if existing points are lower.
+
+            if (!cumulativeBestGrades[code] || gp >= cumulativeBestGrades[code].point) {
+                cumulativeBestGrades[code] = { grade: c.grade, credit: c.credit, point: gp };
+            }
+        });
+
+        // Calculate CGPA at this point in time
+        let totalPoints = 0;
+        let totalCredits = 0;
+        Object.values(cumulativeBestGrades).forEach(item => {
+            totalCredits += item.credit;
+            totalPoints += item.point * item.credit;
+        });
+
+        const currentCGPA = totalCredits > 0 ? totalPoints / totalCredits : 0;
+
+        // Push to trend
+        trends.push({
+            trimesterCode: t.code,
+            cgpa: currentCGPA,
+            gpa: t.gpa || 0
+        });
+    });
+
+    return trends;
+}

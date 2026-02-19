@@ -171,6 +171,8 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
                                 name="CGPA"
                                 strokeWidth={3}
                                 animationDuration={1500}
+                                dot={{ stroke: 'hsl(var(--primary))', fill: 'hsl(var(--background))', strokeWidth: 3, r: 6 }}
+                                activeDot={{ r: 8, strokeWidth: 3 }}
                                 style={{
                                     clipPath: visibleCGPA ? 'inset(0 0 0 0)' : 'inset(0 100% 0 0)',
                                     transition: 'clip-path 1500ms ease-in-out'
@@ -188,6 +190,8 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
                                 strokeWidth={2}
                                 strokeDasharray="4 4"
                                 animationDuration={1500}
+                                dot={{ stroke: '#3b82f6', fill: 'hsl(var(--background))', strokeWidth: 3, r: 5 }}
+                                activeDot={{ r: 7, strokeWidth: 3 }}
                                 style={{
                                     clipPath: visibleGPA ? 'inset(0 0 0 0)' : 'inset(0 100% 0 0)',
                                     transition: 'clip-path 1500ms ease-in-out'

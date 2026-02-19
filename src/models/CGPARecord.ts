@@ -79,6 +79,7 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
     results: [
       {
         trimesterName: { type: String },
+        trimesterCode: { type: String }, // Added trimesterCode
         gpa: { type: Number },
         cgpa: { type: Number },
         trimesterCredits: { type: Number },
