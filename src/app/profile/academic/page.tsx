@@ -17,6 +17,9 @@ import {
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useAcademicData } from "@/hooks/useAcademicData";
+import { getTrimesterName } from "@/lib/trimesterUtils";
+import CGPATrendChart from "@/components/academic/CGPATrendChart";
 
 interface AcademicSummary {
   currentCGPA: number;
@@ -87,31 +90,53 @@ function getGPABarColor(gpa: number): string {
 
 export default function AcademicPage() {
   const { data: session } = useSession();
-  const [loading, setLoading] = React.useState(true);
-  const [academic, setAcademic] = React.useState<AcademicSummary | null>(null);
+  const { trimesters, cgpa, totalCredits, loading, trends, latestRecord } = useAcademicData();
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
-    if (!session?.user) return;
-    (async () => {
-      try {
-        const res = await fetch("/api/profile");
-        const data = await res.json();
-        if (res.ok) setAcademic(data.academicSummary);
-      } catch {
-        toast.error("Failed to load academic data");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [session]);
+    setMounted(true);
+  }, []);
 
-  if (loading) {
+  if (!mounted || loading) {
     return (
       <div className="flex justify-center py-20">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  // Derived Statistics
+  const completedTrimesters = trimesters.filter(t => t.isCompleted || (t.courses && t.courses.some((c: any) => c.grade)));
+  const trimestersCount = completedTrimesters.length;
+
+  // Last Trimester Stats
+  const lastTrimester = trimestersCount > 0 ? completedTrimesters[completedTrimesters.length - 1] : null;
+  const lastGPA = lastTrimester?.gpa || 0;
+  const lastTrimesterName = lastTrimester ? getTrimesterName(lastTrimester.code) : "N/A";
+
+  // First Trimester
+  const firstTrimester = trimestersCount > 0 ? getTrimesterName(completedTrimesters[0].code) : null;
+
+  // Previous Credits (Transfer/Legacy)
+  const previousCredits = latestRecord?.previousCredits || 0;
+  const previousCGPA = latestRecord?.previousCGPA || 0;
+
+  // Formatting for the list view
+  const formattedResults = [...completedTrimesters].reverse().map(t => {
+    // Find trend object for this trimester to get exact CGPA at that point
+    // Or calculate if missing (fallback logic similar to useAcademicData)
+    const trend = trends.find((tr: any) => tr.trimesterCode === t.code);
+    const trendCGPA = trend ? trend.cgpa : 0; // Fallback if not found
+
+    return {
+      trimesterName: getTrimesterName(t.code),
+      gpa: t.gpa || 0,
+      cgpa: trendCGPA,
+      trimesterCredits: t.totalCredits || 0,
+      totalCredits: 0, // Not strictly needed for the list item UI as per code
+      earnedCredits: t.totalCredits || 0
+    };
+  });
 
   return (
     <div className="space-y-6">
@@ -129,7 +154,7 @@ export default function AcademicPage() {
         </Link>
       </div>
 
-      {!academic ? (
+      {trimestersCount === 0 && previousCredits === 0 ? (
         <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
           <CardContent className="py-12 text-center">
             <GraduationCap className="h-12 w-12 text-muted-foreground/30 mx-auto mb-4" />
@@ -152,43 +177,53 @@ export default function AcademicPage() {
             <StatCard
               icon={Award}
               label="Current CGPA"
-              value={academic.currentCGPA.toFixed(2)}
-              sublabel={`Last GPA: ${academic.lastGPA.toFixed(2)}`}
+              value={cgpa.toFixed(2)}
+              sublabel={`Last GPA: ${lastGPA.toFixed(2)}`}
             />
             <StatCard
               icon={BookOpen}
               label="Credits Earned"
-              value={academic.earnedCredits}
-              sublabel={`of ${academic.totalCredits} attempted`}
+              value={totalCredits}
+              sublabel={`Total Earned`}
             />
             <StatCard
               icon={BarChart3}
               label="Trimesters"
-              value={academic.trimestersCompleted}
-              sublabel={academic.firstTrimester ? `Since ${academic.firstTrimester}` : undefined}
+              value={trimestersCount}
+              sublabel={firstTrimester ? `Since ${firstTrimester}` : undefined}
             />
             <StatCard
               icon={TrendingUp}
               label="Last Trimester"
-              value={academic.lastGPA.toFixed(2)}
-              sublabel={academic.lastTrimester}
+              value={lastGPA.toFixed(2)}
+              sublabel={lastTrimesterName}
             />
           </div>
 
+          {/* Performance Chart */}
+          <CGPATrendChart
+            data={trends.map((t: any) => ({
+              name: t.trimesterCode || t.code || "N/A",
+              fullName: getTrimesterName(t.trimesterCode || t.code),
+              gpa: t.gpa,
+              cgpa: t.cgpa
+            }))}
+          />
+
           {/* Previous Credits Info */}
-          {academic.previousCredits > 0 && (
+          {previousCredits > 0 && (
             <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
               <CardContent className="py-4">
                 <p className="text-sm text-muted-foreground">
                   <span className="font-medium text-foreground">Previous record:</span>{" "}
-                  {academic.previousCredits} credits with {academic.previousCGPA.toFixed(2)} CGPA (before tracked trimesters)
+                  {previousCredits} credits with {previousCGPA.toFixed(2)} CGPA (before tracked trimesters)
                 </p>
               </CardContent>
             </Card>
           )}
 
-          {/* Trimester-wise Performance */}
-          {academic.results.length > 0 && (
+          {/* Trimester-wise Performance List */}
+          {formattedResults.length > 0 && (
             <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -198,7 +233,7 @@ export default function AcademicPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {academic.results.map((r, i) => (
+                  {formattedResults.map((r, i) => (
                     <motion.div
                       key={i}
                       initial={{ opacity: 0, x: -10 }}
@@ -233,12 +268,12 @@ export default function AcademicPage() {
                 {/* Summary row */}
                 <div className="mt-4 pt-3 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground">
                   <span>
-                    Total: {academic.results.length} trimester{academic.results.length !== 1 ? "s" : ""}
+                    Total: {formattedResults.length} trimester{formattedResults.length !== 1 ? "s" : ""}
                   </span>
                   <span>
                     Final CGPA:{" "}
-                    <span className={`font-bold text-sm ${getGPAColor(academic.currentCGPA)}`}>
-                      {academic.currentCGPA.toFixed(2)}
+                    <span className={`font-bold text-sm ${getGPAColor(cgpa)}`}>
+                      {cgpa.toFixed(2)}
                     </span>
                   </span>
                 </div>
