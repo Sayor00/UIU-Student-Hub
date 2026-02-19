@@ -54,6 +54,7 @@ export default function ResultTracker() {
         trimesters,
         cgpa,
         totalCredits,
+        earnedCredits,
         loading,
         deleteTrimester,
         addCourse,
@@ -226,7 +227,7 @@ export default function ResultTracker() {
             </div>
 
             <motion.div variants={itemVariants}>
-                <CGPAStats cgpa={cgpa} totalCredits={totalCredits} targetCGPA={3.8} />
+                <CGPAStats cgpa={cgpa} totalCredits={totalCredits} earnedCredits={earnedCredits} targetCGPA={3.8} />
             </motion.div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

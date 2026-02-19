@@ -2,15 +2,33 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Target, Trophy, GraduationCap } from "lucide-react";
+import { Trophy, GraduationCap } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { useMemo } from "react";
+import { parseStudentId } from "@/lib/trimesterUtils";
 
 interface CGPAStatsProps {
     cgpa: number;
-    totalCredits: number;
+    totalCredits: number;   // Credits attempted (used for CGPA calc)
+    earnedCredits: number;  // Credits earned (grade ≥ D)
     targetCGPA?: number;
 }
 
-export default function CGPAStats({ cgpa, totalCredits, targetCGPA }: CGPAStatsProps) {
+export default function CGPAStats({ cgpa, totalCredits, earnedCredits, targetCGPA }: CGPAStatsProps) {
+    const { data: session } = useSession();
+
+    // Auto-detect program total credits from student ID
+    const studentInfo = useMemo(() => {
+        const studentId = (session?.user as any)?.studentId;
+        return studentId ? parseStudentId(studentId) : null;
+    }, [session]);
+
+    const programTotalCredits = studentInfo?.totalCredits ?? 0;
+    const showDegreeProgress = programTotalCredits > 0;
+    const degreePercent = showDegreeProgress
+        ? Math.min((earnedCredits / programTotalCredits) * 100, 100)
+        : 0;
+
     return (
         <div className="grid gap-4 md:grid-cols-3">
             <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20 shadow-sm relative overflow-hidden">
@@ -37,11 +55,27 @@ export default function CGPAStats({ cgpa, totalCredits, targetCGPA }: CGPAStatsP
                     <GraduationCap className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{totalCredits} <span className="text-sm font-normal text-muted-foreground">/ 137</span></div>
-                    <Progress value={(totalCredits / 137) * 100} className="h-2 mt-2" />
-                    <p className="text-xs text-muted-foreground mt-2">
-                        {((totalCredits / 137) * 100).toFixed(1)}% of degree completed
-                    </p>
+                    <div className="text-2xl font-bold">
+                        {earnedCredits}
+                        {showDegreeProgress && (
+                            <span className="text-sm font-normal text-muted-foreground">
+                                {" "}/ {programTotalCredits}
+                            </span>
+                        )}
+                    </div>
+                    {showDegreeProgress && (
+                        <>
+                            <Progress value={degreePercent} className="h-2 mt-2" />
+                            <p className="text-xs text-muted-foreground mt-2">
+                                {degreePercent.toFixed(1)}% of degree completed
+                            </p>
+                        </>
+                    )}
+                    {totalCredits !== earnedCredits && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                            {totalCredits} credits attempted
+                        </p>
+                    )}
                 </CardContent>
             </Card>
 
@@ -66,7 +100,7 @@ export default function CGPAStats({ cgpa, totalCredits, targetCGPA }: CGPAStatsP
                     <CardContent>
                         <div className="text-2xl font-bold">{targetCGPA.toFixed(2)}</div>
                         <p className="text-xs text-muted-foreground">
-                            Need ~3.80 next 2 trimesters
+                            {studentInfo ? `${studentInfo.program} · ${studentInfo.department}` : "Set your student ID for personalized targets"}
                         </p>
                     </CardContent>
                 </Card>

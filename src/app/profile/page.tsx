@@ -13,6 +13,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Save,
+  GraduationCap,
+  Building2,
+  BookOpen,
+  Clock,
+  Target,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -28,6 +33,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { parseStudentId } from "@/lib/trimesterUtils";
+import { useAcademicContext } from "@/context/academic-context";
 
 interface UserProfile {
   _id: string;
@@ -46,6 +53,7 @@ export default function PersonalInfoPage() {
   const [editOpen, setEditOpen] = React.useState(false);
   const [editForm, setEditForm] = React.useState({ name: "", studentId: "" });
   const [saving, setSaving] = React.useState(false);
+  const academic = useAcademicContext();
 
   const fetchProfile = React.useCallback(async () => {
     try {
@@ -86,6 +94,12 @@ export default function PersonalInfoPage() {
     }
   };
 
+  // Parse student ID for rich info
+  const studentInfo = React.useMemo(
+    () => (user?.studentId ? parseStudentId(user.studentId) : null),
+    [user?.studentId]
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -101,8 +115,6 @@ export default function PersonalInfoPage() {
   const memberSince = new Date(user.createdAt).toLocaleDateString("en-US", {
     year: "numeric", month: "long", day: "numeric",
   });
-  const emailDomain = user.email.split("@")[1] || "";
-  const department = emailDomain.split(".")[0]?.toUpperCase() || "";
 
   return (
     <div className="space-y-6">
@@ -127,6 +139,11 @@ export default function PersonalInfoPage() {
               )}
             </h1>
             <p className="text-sm text-muted-foreground">{user.email}</p>
+            {studentInfo && (
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {studentInfo.programFullName} · {studentInfo.batch}
+              </p>
+            )}
           </div>
         </div>
         <Button
@@ -144,81 +161,183 @@ export default function PersonalInfoPage() {
 
       <Separator />
 
-      {/* Info Cards */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Email Address</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">{user.email}</span>
-              {user.emailVerified ? (
-                <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-xs ml-auto">
-                  <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
-                </Badge>
-              ) : (
-                <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 text-xs ml-auto">
-                  <AlertCircle className="h-3 w-3 mr-1" /> Unverified
-                </Badge>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Student ID Derived Info — only shown when student ID is set and parsed */}
+      {studentInfo && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+            <GraduationCap className="h-5 w-5 text-primary" />
+            Academic Profile
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Program</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{studentInfo.program}</p>
+                    <p className="text-xs text-muted-foreground">{studentInfo.programFullName}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Student ID</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Hash className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">
-                {user.studentId || <span className="text-muted-foreground italic">Not set</span>}
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Department</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{studentInfo.department}</p>
+                    <p className="text-xs text-muted-foreground">{studentInfo.school}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Member Since</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium">{memberSince}</span>
-            </div>
-          </CardContent>
-        </Card>
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Admission</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{studentInfo.admissionTrimester}</p>
+                    <p className="text-xs text-muted-foreground">{studentInfo.batch}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-        {department && department !== emailDomain.toUpperCase() && (
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Academic System</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{studentInfo.isTrimester ? "Trimester" : "Semester"}</p>
+                    <p className="text-xs text-muted-foreground">{studentInfo.duration}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Degree Requirement</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <Target className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">{studentInfo.totalCredits} Credits</p>
+                    <p className="text-xs text-muted-foreground">Required for graduation</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-primary flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {academic.trimesters.filter((t: any) => t.isCompleted).length} {studentInfo.isTrimester ? "trimesters" : "semesters"} completed
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {academic.earnedCredits}/{studentInfo.totalCredits} credits earned
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </motion.div>
+      )}
+
+      {/* Basic Info Cards */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: studentInfo ? 0.2 : 0.1 }}
+      >
+        <h2 className="text-lg font-semibold mb-3">Account Details</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
           <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Department</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Email Address</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">{user.email}</span>
+                {user.emailVerified ? (
+                  <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/20 text-xs ml-auto">
+                    <CheckCircle2 className="h-3 w-3 mr-1" /> Verified
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-yellow-500/10 text-yellow-600 border-yellow-500/20 text-xs ml-auto">
+                    <AlertCircle className="h-3 w-3 mr-1" /> Unverified
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Student ID</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Hash className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">
+                  {user.studentId || <span className="text-muted-foreground italic">Not set</span>}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Member Since</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium">{memberSince}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Account Role</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">{department}</span>
+                <span className="text-sm font-medium capitalize">{user.role}</span>
               </div>
             </CardContent>
           </Card>
-        )}
-
-        <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Account Role</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium capitalize">{user.role}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+        </div>
+      </motion.div>
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
@@ -244,6 +363,17 @@ export default function PersonalInfoPage() {
                 placeholder="e.g. 0112430141"
                 inputMode="numeric"
               />
+              {editForm.studentId.length >= 9 && (() => {
+                const preview = parseStudentId(editForm.studentId);
+                if (preview) {
+                  return (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      ✓ {preview.program} · {preview.admissionTrimester} · {preview.department}
+                    </p>
+                  );
+                }
+                return <p className="text-xs text-red-400 mt-1">Could not parse this student ID</p>;
+              })()}
             </div>
           </div>
           <div className="flex justify-end gap-2 pt-2">

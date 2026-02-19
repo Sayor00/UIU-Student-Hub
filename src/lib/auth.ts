@@ -60,15 +60,30 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
-        token.studentId = (user as any).studentId; // Add to token
+        token.studentId = (user as any).studentId;
       }
+
+      // Always refresh studentId from DB (it may have been updated via profile)
+      if (token.id) {
+        try {
+          await dbConnect();
+          const dbUser = await User.findById(token.id).select("studentId role").lean();
+          if (dbUser) {
+            token.studentId = (dbUser as any).studentId || token.studentId;
+            token.role = (dbUser as any).role || token.role;
+          }
+        } catch {
+          // Silently fail — use cached token values
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
-        (session.user as any).studentId = token.studentId; // Add to session
+        (session.user as any).studentId = token.studentId;
       }
       return session;
     },

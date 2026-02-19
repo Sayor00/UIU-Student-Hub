@@ -45,49 +45,109 @@ export function getTrimesterCode(name: string): string {
 }
 
 export interface StudentInfo {
-    program: string;
-    batch: string;
-    admissionTrimester: string; // e.g., "Fall 2024"
-    admissionTermCode: string; // e.g., "243"
-    programCode: string;
+    // Identity
+    studentId: string;
+    serial: string;
+
+    // Program
+    program: string;         // Short name e.g. "BSCSE"
+    programId: string;       // System id e.g. "bscse"
+    programFullName: string; // e.g. "BSc in Computer Science & Engineering"
+    programCode: string;     // 3-digit prefix e.g. "011"
+    department: string;      // e.g. "Computer Science & Engineering"
+    school: string;          // e.g. "School of Science & Engineering"
+    totalCredits: number;    // Required for graduation
+    duration: string;        // e.g. "4 years (12 trimesters)"
+
+    // Admission
+    admissionTrimester: string;   // e.g. "Fall 2024"
+    admissionTermCode: string;    // e.g. "243"
+    admissionYear: number;        // Full year e.g. 2024
+    admissionTerm: number;        // 1=Spring, 2=Summer, 3=Fall
+    batch: string;                // e.g. "Fall 2024 Intake"
+
+    // Academic system
+    isTrimester: boolean;    // true for most programs, false for B.Pharm (semester-based)
+
+    // Derived
+    estimatedTermsCompleted: number; // Approximate terms since admission
 }
 
 export function parseStudentId(id: string): StudentInfo | null {
-    // Format: 011 243 0141 (10 digits)
-    // 011: Program (BSCSE)
-    // 243: Admission (Year 24, Term 3=Fall)
-    // 0141: Serial
+    // Format: PPP YY T SSSS (9-10 digits)
+    // PPP: Program prefix (3 digits)
+    // YY:  Admission year (2 digits, e.g. 24 = 2024)
+    // T:   Admission term (1=Spring, 2=Summer, 3=Fall)
+    // SSSS: Serial number (3-4 digits)
 
-    if (!id || id.length < 9) return null; // Basic validation
+    if (!id || id.length < 9) return null;
 
     const programCode = id.substring(0, 3);
-    const admissionCode = id.substring(3, 6);
+    const admissionCode = id.substring(3, 6); // YYT
+    const serial = id.substring(6);
 
-    // Program Mapping (Expand as needed)
-    const programMap: Record<string, string> = {
-        "011": "BSCSE",
-        "111": "BBA",
-        "021": "BSEEE",
-        "012": "BSDS", // Hypothetical
+    // Look up program from UIU_PROGRAMS (imported from career-planner)
+    // We inline the prefix map here to avoid circular deps with career-planner
+    const PROGRAM_PREFIXES: Record<string, {
+        id: string; short: string; full: string; dept: string;
+        school: string; credits: number; duration: string; isTrimester: boolean;
+    }> = {
+        "011": { id: "bscse", short: "BSCSE", full: "BSc in Computer Science & Engineering", dept: "Computer Science & Engineering", school: "School of Science & Engineering", credits: 137, duration: "4 years (12 trimesters)", isTrimester: true },
+        "012": { id: "bsds", short: "BSDS", full: "BSc in Data Science", dept: "Computer Science & Engineering", school: "School of Science & Engineering", credits: 138, duration: "4 years (12 trimesters)", isTrimester: true },
+        "021": { id: "bseee", short: "BSEEE", full: "BSc in Electrical & Electronic Engineering", dept: "Electrical & Electronic Engineering", school: "School of Science & Engineering", credits: 140, duration: "4 years (12 trimesters)", isTrimester: true },
+        "031": { id: "bscivil", short: "BSc Civil", full: "BSc in Civil Engineering", dept: "Civil Engineering", school: "School of Science & Engineering", credits: 151.5, duration: "4 years (12 trimesters)", isTrimester: true },
+        "041": { id: "bpharm", short: "B.Pharm", full: "Bachelor of Pharmacy", dept: "Pharmacy", school: "School of Life Sciences", credits: 160, duration: "4 years (8 semesters)", isTrimester: false },
+        "051": { id: "bsbge", short: "BSBGE", full: "BSc in Biotechnology & Genetic Engineering", dept: "Biotechnology & Genetic Engineering", school: "School of Life Sciences", credits: 140, duration: "4 years (12 trimesters)", isTrimester: true },
+        "111": { id: "bba", short: "BBA", full: "Bachelor of Business Administration", dept: "School of Business & Economics", school: "School of Business & Economics", credits: 125, duration: "4 years (12 trimesters)", isTrimester: true },
+        "112": { id: "bba_ais", short: "BBA (AIS)", full: "BBA in Accounting & Information Systems", dept: "School of Business & Economics", school: "School of Business & Economics", credits: 125, duration: "4 years (12 trimesters)", isTrimester: true },
+        "121": { id: "bseco", short: "BSECO", full: "BSS in Economics", dept: "Economics", school: "School of Business & Economics", credits: 123, duration: "4 years (12 trimesters)", isTrimester: true },
+        "131": { id: "bsseds", short: "BSSEDS", full: "BSS in Education & Development Studies", dept: "Education & Development Studies", school: "School of Humanities & Social Sciences", credits: 123, duration: "4 years (12 trimesters)", isTrimester: true },
+        "132": { id: "ba_english", short: "BA English", full: "BA in English", dept: "English", school: "School of Humanities & Social Sciences", credits: 123, duration: "4 years (12 trimesters)", isTrimester: true },
+        "133": { id: "bssmsj", short: "BSSMSJ", full: "BSS in Media Studies & Journalism", dept: "Media Studies & Journalism", school: "School of Humanities & Social Sciences", credits: 130, duration: "4 years (12 trimesters)", isTrimester: true },
     };
-    const program = programMap[programCode] || `Program ${programCode}`;
 
-    // Admission Trimester
+    const prog = PROGRAM_PREFIXES[programCode];
+    if (!prog) return null;
+
+    // Parse admission code (YYT)
     const admissionTrimester = getTrimesterName(admissionCode);
-    if (admissionTrimester === admissionCode) {
-        // Fallback if parsing failed (e.g. invalid code)
-        return null;
-    }
+    if (admissionTrimester === admissionCode) return null; // Invalid
 
-    // Batch Calculation (Approximate: Admission Trimester is the Batch)
-    // Usually Batch is referred to by the Trimester Name, e.g. "Spring 2024 Batch"
+    const yearDigits = parseInt(admissionCode.substring(0, 2), 10);
+    const termDigit = parseInt(admissionCode.substring(2, 3), 10);
+    const admissionYear = 2000 + yearDigits;
+
+    // Estimate how many terms have passed since admission
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // 1-12
+    let currentTerm = 1; // Spring
+    if (currentMonth >= 5 && currentMonth <= 8) currentTerm = 2; // Summer
+    else if (currentMonth >= 9) currentTerm = 3; // Fall
+
+    const termsPerYear = prog.isTrimester ? 3 : 2;
+    const admTermIndex = (admissionYear - 2000) * termsPerYear + (prog.isTrimester ? termDigit : Math.ceil(termDigit * 2 / 3));
+    const curTermIndex = (currentYear - 2000) * termsPerYear + (prog.isTrimester ? currentTerm : Math.ceil(currentTerm * 2 / 3));
+    const estimatedTermsCompleted = Math.max(0, curTermIndex - admTermIndex);
 
     return {
-        program,
-        batch: `${admissionTrimester} Intake`,
+        studentId: id,
+        serial,
+        program: prog.short,
+        programId: prog.id,
+        programFullName: prog.full,
+        programCode,
+        department: prog.dept,
+        school: prog.school,
+        totalCredits: prog.credits,
+        duration: prog.duration,
         admissionTrimester,
         admissionTermCode: admissionCode,
-        programCode
+        admissionYear,
+        admissionTerm: termDigit,
+        batch: `${admissionTrimester} Intake`,
+        isTrimester: prog.isTrimester,
+        estimatedTermsCompleted,
     };
 }
 
