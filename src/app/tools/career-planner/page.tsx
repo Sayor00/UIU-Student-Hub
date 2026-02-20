@@ -43,7 +43,7 @@ export default function CareerPlannerPage() {
                 if (data?.preferences?.careerGoal) setCareerGoalId(data.preferences.careerGoal);
             })
             .catch(() => { });
-    }, [session]);
+    }, [session?.user?.email]);
 
     const handleSetCareerGoal = React.useCallback((goalId: string | null) => {
         setCareerGoalId(goalId);

@@ -55,7 +55,7 @@ export default function CareerPlanner() {
     // Load initial data
     useEffect(() => {
         fetchInitialData();
-    }, [session]);
+    }, [session?.user?.email]);
 
     // Fetch suggested courses when career changes
     useEffect(() => {

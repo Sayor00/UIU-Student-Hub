@@ -69,7 +69,7 @@ export default function PersonalInfoPage() {
 
   React.useEffect(() => {
     if (session?.user) fetchProfile();
-  }, [session, fetchProfile]);
+  }, [session?.user?.email, fetchProfile]);
 
   const handleSave = async () => {
     setSaving(true);

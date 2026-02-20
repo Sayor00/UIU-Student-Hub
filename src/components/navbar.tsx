@@ -41,7 +41,7 @@ const toolLinks = [
   { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign, description: "Estimate tuition fees" },
   { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, description: "Rate & review faculty" },
   { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, description: "Semester calendar & planner" },
-  { href: "/dashboard/academic", label: "Academic Planner", icon: TrendingUp, description: "Track CGPA & Plan Career" },
+  { href: "/tools/career-planner", label: "Career Planner", icon: TrendingUp, description: "Track CGPA & Plan Career" },
 ];
 
 export default function Navbar() {

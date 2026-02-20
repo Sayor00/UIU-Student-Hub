@@ -76,7 +76,7 @@ export default function ResultTracker() {
         if (session?.user) {
             fetchAcademicData();
         }
-    }, [session, fetchAcademicData]);
+    }, [session?.user?.email, fetchAcademicData]);
 
     // ─── Career Goal Integration (MongoDB-backed) ───
     const [careerGoalId, setCareerGoalId] = useState<string | null>(null);
@@ -88,7 +88,7 @@ export default function ResultTracker() {
                 if (data?.preferences?.careerGoal) setCareerGoalId(data.preferences.careerGoal);
             })
             .catch(() => { });
-    }, [session]);
+    }, [session?.user?.email]);
 
     const studentId = (session?.user as any)?.studentId ?? "";
     const studentInfo = useMemo(() => (studentId ? parseStudentId(studentId) : null), [studentId]);

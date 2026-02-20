@@ -74,7 +74,7 @@ export default function MyFacultiesPage() {
         setLoading(false);
       }
     })();
-  }, [session]);
+  }, [session?.user?.email]);
 
   if (loading) {
     return (

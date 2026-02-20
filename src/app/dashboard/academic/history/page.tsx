@@ -48,7 +48,7 @@ export default function AcademicHistoryPage() {
     // Fetch on load
     useEffect(() => {
         if (session) fetchAcademicData();
-    }, [session, fetchAcademicData]);
+    }, [session?.user?.email, fetchAcademicData]);
 
     // Add Course State (UI Only)
     const [addCourseTrimester, setAddCourseTrimester] = useState<string | null>(null);

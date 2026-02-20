@@ -58,7 +58,7 @@ export default function MyCalendarsPage() {
 
     React.useEffect(() => {
         if (session?.user) fetchCalendars();
-    }, [session, fetchCalendars]);
+    }, [session?.user?.email, fetchCalendars]);
 
     const handleDelete = async () => {
         if (!deleteId) return;

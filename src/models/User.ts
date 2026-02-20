@@ -4,6 +4,7 @@ export interface IRecentTool {
   href: string;
   label: string;
   visitedAt: Date;
+  usageCount?: number;
 }
 
 export interface IUserPreferences {
@@ -74,6 +75,7 @@ const UserSchema = new Schema<IUser>(
             href: String,
             label: String,
             visitedAt: { type: Date, default: Date.now },
+            usageCount: { type: Number, default: 1 },
           },
         ],
         default: [],

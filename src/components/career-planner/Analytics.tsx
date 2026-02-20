@@ -78,15 +78,16 @@ function GradeDonut({ grades }: { grades: Map<string, number> }) {
 // ── GPA Trend ──
 function GPATrend({ data }: { data: { name: string; gpa: number }[] }) {
     if (data.length < 2) return null;
+    const chartData = [...data].reverse();
     const w = 500, h = 120;
     const pad = { l: 40, r: 20, t: 15, b: 25 };
     const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
-    const min = Math.max(Math.min(...data.map(d => d.gpa)) - 0.3, 0);
-    const max = Math.min(Math.max(...data.map(d => d.gpa)) + 0.3, 4);
-    const x = (i: number) => pad.l + (i / (data.length - 1)) * cw;
+    const min = Math.max(Math.min(...chartData.map(d => d.gpa)) - 0.3, 0);
+    const max = Math.min(Math.max(...chartData.map(d => d.gpa)) + 0.3, 4);
+    const x = (i: number) => pad.l + (i / (chartData.length - 1)) * cw;
     const y = (v: number) => pad.t + ch - ((v - min) / (max - min)) * ch;
-    const path = data.map((d, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(d.gpa)}`).join(" ");
-    const trend = data[data.length - 1].gpa - data[0].gpa;
+    const path = chartData.map((d, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(d.gpa)}`).join(" ");
+    const trend = chartData[chartData.length - 1].gpa - chartData[0].gpa;
 
     return (
         <div>
@@ -104,8 +105,8 @@ function GPATrend({ data }: { data: { name: string; gpa: number }[] }) {
                     </g>
                 ))}
                 <path d={path} fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinejoin="round" />
-                <path d={`${path} L ${x(data.length - 1)} ${y(min)} L ${x(0)} ${y(min)} Z`} fill="hsl(var(--primary))" fillOpacity="0.05" />
-                {data.map((d, i) => (
+                <path d={`${path} L ${x(chartData.length - 1)} ${y(min)} L ${x(0)} ${y(min)} Z`} fill="hsl(var(--primary))" fillOpacity="0.05" />
+                {chartData.map((d, i) => (
                     <g key={i}>
                         <circle cx={x(i)} cy={y(d.gpa)} r="3" fill="hsl(var(--primary))" />
                         <text x={x(i)} y={y(d.gpa) - 8} textAnchor="middle" className="text-[7px] fill-foreground font-medium">{d.gpa.toFixed(2)}</text>
@@ -131,9 +132,9 @@ function DomainBars({ data }: { data: DomainStrength[] }) {
                             <span className="text-muted-foreground text-[10px]">({d.courseCount})</span>
                         </span>
                         <Badge variant="outline" className={`text-[10px] ${d.label === "Strong" ? "text-emerald-500 border-emerald-500/20" :
-                                d.label === "Good" ? "text-blue-500 border-blue-500/20" :
-                                    d.label === "Average" ? "text-amber-500 border-amber-500/20" :
-                                        "text-red-500 border-red-500/20"
+                            d.label === "Good" ? "text-blue-500 border-blue-500/20" :
+                                d.label === "Average" ? "text-amber-500 border-amber-500/20" :
+                                    "text-red-500 border-red-500/20"
                             }`}>{d.score.toFixed(2)} · {d.label}</Badge>
                     </div>
                     <div className="relative h-2 rounded-full bg-muted/40 overflow-hidden">

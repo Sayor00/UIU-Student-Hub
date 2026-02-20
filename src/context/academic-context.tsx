@@ -77,7 +77,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
             toast.error("Failed to load academic data");
             setData(prev => ({ ...prev, loading: false }));
         }
-    }, [session]);
+    }, [session?.user?.email]);
 
     // Initial Fetch when session is ready
     useEffect(() => {
@@ -95,7 +95,7 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
                 trends: []
             });
         }
-    }, [session, fetchAcademicData]);
+    }, [session?.user?.email, fetchAcademicData]);
 
     const saveData = async (updatedTrimesters: any[]) => {
         const prevCGPA = data.latestRecord?.previousCGPA || 0;

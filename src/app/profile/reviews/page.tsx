@@ -77,7 +77,7 @@ export default function MyReviewsPage() {
         setLoading(false);
       }
     })();
-  }, [session]);
+  }, [session?.user?.email]);
 
   if (loading) {
     return (

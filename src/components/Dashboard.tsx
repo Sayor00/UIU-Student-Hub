@@ -28,7 +28,6 @@ const allTools = [
     { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, color: "text-orange-500", bg: "bg-orange-500/10", desc: "Rate & discover" },
     { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, color: "text-violet-500", bg: "bg-violet-500/10", desc: "Events & deadlines" },
     { href: "/tools/career-planner", label: "Career Planner", icon: Compass, color: "text-rose-500", bg: "bg-rose-500/10", desc: "Plan your future" },
-    { href: "/tools/code-runner", label: "Code Runner", icon: Code2, color: "text-cyan-500", bg: "bg-cyan-500/10", desc: "Run code online" },
 ];
 
 const greetings = ["Ready to ace today?", "Let's make progress!", "Stay focused!", "Another day of growth!", "Keep pushing forward!"];
@@ -41,7 +40,7 @@ const categoryColors: Record<string, string> = {
 };
 
 interface RecentTool { href: string; label: string; visitedAt: string; }
-interface UpcomingEvent { _id?: string; title: string; startDate: string; date?: string; category: string; calendarTitle: string; }
+interface UpcomingEvent { _id?: string; title: string; startDate: string; date?: string; category: string; calendarTitle: string; calendarId: string; }
 
 function getTimeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -98,7 +97,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                     calMap[cal._id] = { title: cal.title };
                     for (const event of cal.events || []) {
                         if (new Date(event.startDate) >= today) {
-                            events.push({ ...event, calendarTitle: cal.title });
+                            events.push({ ...event, calendarTitle: cal.title, calendarId: cal._id });
                         }
                     }
                 }
@@ -109,7 +108,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                     for (const event of cal.events || []) {
                         const eventDate = new Date(event.date || event.startDate);
                         if (eventDate >= today) {
-                            events.push({ ...event, startDate: event.date || event.startDate, calendarTitle: cal.title });
+                            events.push({ ...event, startDate: event.date || event.startDate, calendarTitle: cal.title, calendarId: cal._id });
                         }
                     }
                 }
@@ -387,7 +386,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                 <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
                                         <Sparkles className="h-4 w-4 text-primary" />
-                                        <span className="text-sm font-semibold">Tools & Features</span>
+                                        <span className="text-sm font-semibold">Most Used Tools</span>
                                     </div>
                                     <Link href="/tools">
                                         <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">
@@ -396,19 +395,55 @@ export default function Dashboard({ userName }: { userName: string }) {
                                     </Link>
                                 </div>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                    {allTools.map(tool => (
-                                        <Link key={tool.href} href={tool.href}>
-                                            <div className="flex flex-col items-center gap-2 p-3 rounded-xl border bg-background/30 hover:bg-accent/40 hover:border-primary/20 transition-all group cursor-pointer text-center">
-                                                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tool.bg}`}>
-                                                    <tool.icon className={`h-5 w-5 ${tool.color}`} />
+                                    {(() => {
+                                        const displayedTools = [];
+                                        const seenHrefs = new Set<string>();
+
+                                        // 1. The most recently used tool goes first
+                                        if (recentTools.length > 0) {
+                                            const firstTool = getToolIcon(recentTools[0].href);
+                                            if (firstTool) {
+                                                displayedTools.push(firstTool);
+                                                seenHrefs.add(firstTool.href);
+                                            }
+                                        }
+
+                                        // 2. The rest sorted by highest usageCount
+                                        const sortedByUsage = [...recentTools].slice(1).sort((a: any, b: any) => {
+                                            return (b.usageCount || 0) - (a.usageCount || 0);
+                                        });
+
+                                        for (const rt of sortedByUsage) {
+                                            if (displayedTools.length >= 4) break;
+                                            const tool = getToolIcon(rt.href);
+                                            if (tool && !seenHrefs.has(rt.href)) {
+                                                displayedTools.push(tool);
+                                                seenHrefs.add(rt.href);
+                                            }
+                                        }
+
+                                        // 3. Fallback to default tools if fewer than 4 are tracked
+                                        for (const tool of allTools) {
+                                            if (displayedTools.length >= 4) break;
+                                            if (!seenHrefs.has(tool.href)) {
+                                                displayedTools.push(tool);
+                                                seenHrefs.add(tool.href);
+                                            }
+                                        }
+                                        return displayedTools.map(tool => (
+                                            <Link key={tool.href} href={tool.href}>
+                                                <div className="flex flex-col items-center gap-2 p-3 rounded-xl border bg-background/30 hover:bg-accent/40 hover:border-primary/20 transition-all group cursor-pointer text-center">
+                                                    <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tool.bg}`}>
+                                                        <tool.icon className={`h-5 w-5 ${tool.color}`} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs font-medium group-hover:text-primary transition-colors leading-tight">{tool.label}</p>
+                                                        <p className="text-[10px] text-muted-foreground mt-0.5">{tool.desc}</p>
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-xs font-medium group-hover:text-primary transition-colors leading-tight">{tool.label}</p>
-                                                    <p className="text-[10px] text-muted-foreground mt-0.5">{tool.desc}</p>
-                                                </div>
-                                            </div>
-                                        </Link>
-                                    ))}
+                                            </Link>
+                                        ));
+                                    })()}
                                 </div>
                             </CardContent>
                         </Card>
@@ -444,8 +479,9 @@ export default function Dashboard({ userName }: { userName: string }) {
                                         {upcomingEvents.map((event, i) => {
                                             const eventDate = new Date(event.startDate);
                                             const daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                            const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
                                             return (
-                                                <Link key={i} href="/tools/academic-calendar">
+                                                <Link key={i} href={`/tools/academic-calendar?calendar=${event.calendarId}&date=${dateStr}`}>
                                                     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-background/30 hover:bg-accent/30 transition-colors cursor-pointer">
                                                         <div className={`w-1 h-10 rounded-full shrink-0 ${categoryColors[event.category] || "bg-gray-500"}`} />
                                                         <div className="flex-1 min-w-0">
@@ -506,39 +542,6 @@ export default function Dashboard({ userName }: { userName: string }) {
                                                 <Compass className="h-3 w-3" /> View Full Roadmap <ArrowRight className="h-3 w-3" />
                                             </Button>
                                         </Link>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    )}
-
-                    {/* Recent Activity */}
-                    {recentTools.length > 0 && (
-                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
-                            <Card className="border-white/10 bg-background/50 backdrop-blur-xl">
-                                <CardContent className="p-5">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Clock className="h-4 w-4 text-primary" />
-                                        <span className="text-sm font-semibold">Recent Activity</span>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {recentTools.slice(0, 5).map(rt => {
-                                            const tool = getToolIcon(rt.href);
-                                            if (!tool) return null;
-                                            return (
-                                                <Link key={rt.href} href={rt.href}>
-                                                    <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent/30 transition-colors">
-                                                        <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${tool.bg}`}>
-                                                            <tool.icon className={`h-3.5 w-3.5 ${tool.color}`} />
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-xs font-medium truncate">{tool.label}</p>
-                                                        </div>
-                                                        <span className="text-[10px] text-muted-foreground shrink-0">{getTimeAgo(rt.visitedAt)}</span>
-                                                    </div>
-                                                </Link>
-                                            );
-                                        })}
                                     </div>
                                 </CardContent>
                             </Card>

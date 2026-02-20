@@ -30,7 +30,7 @@ export default function AcademicTranscript() {
                 }
             })
             .catch(err => console.error("Failed to fetch profile ID", err));
-    }, [session]);
+    }, [session?.user?.email]);
 
     const completedTrimesters = trimesters
         .filter(t => t.isCompleted || (t.courses && t.courses.some((c: any) => c.grade && c.grade !== "I" && c.grade !== "W")))

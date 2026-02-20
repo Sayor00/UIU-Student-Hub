@@ -22,7 +22,7 @@ export default function CGPAStats({ cgpa, totalCredits, earnedCredits, targetCGP
     const studentInfo = useMemo(() => {
         const studentId = (session?.user as any)?.studentId;
         return studentId ? parseStudentId(studentId) : null;
-    }, [session]);
+    }, [session?.user?.email]);
 
     const programTotalCredits = studentInfo?.totalCredits ?? 0;
     const showDegreeProgress = programTotalCredits > 0;
