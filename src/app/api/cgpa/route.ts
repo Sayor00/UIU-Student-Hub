@@ -15,12 +15,14 @@ export async function POST(req: NextRequest) {
     const data = await req.json();
     await dbConnect();
 
-    const record = await CGPARecord.create({
-      userId: (session.user as any).id,
-      ...data,
-    });
+    // UPSERT: Update if exists, Create if not
+    const record = await CGPARecord.findOneAndUpdate(
+      { userId: (session.user as any).id }, // Find by User ID
+      { $set: { ...data } },                // Update data
+      { new: true, upsert: true, setDefaultsOnInsert: true } // Options
+    );
 
-    return NextResponse.json({ record }, { status: 201 });
+    return NextResponse.json({ record }, { status: 200 });
   } catch (error) {
     console.error("Save CGPA error:", error);
     return NextResponse.json(
@@ -43,8 +45,8 @@ export async function GET(req: NextRequest) {
     const records = await CGPARecord.find({
       userId: (session.user as any).id,
     })
-      .sort({ createdAt: -1 })
-      .limit(20);
+      .sort({ updatedAt: -1 }) // Get the most recently active record
+      .limit(1); // We only rely on one record now
 
     return NextResponse.json({ records });
   } catch (error) {

@@ -24,6 +24,7 @@ import {
   Github,
   ExternalLink,
   BookOpen,
+  TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ const toolLinks = [
   { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign, description: "Estimate tuition fees" },
   { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, description: "Rate & review faculty" },
   { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, description: "Semester calendar & planner" },
+  { href: "/tools/career-planner", label: "Career Planner", icon: TrendingUp, description: "Track CGPA & Plan Career" },
 ];
 
 export default function Navbar() {
@@ -124,8 +126,8 @@ export default function Navbar() {
               <Button
                 variant={pathname === "/" ? "secondary" : "ghost"}
                 className={`gap-2 group/nav ${pathname === "/"
-                    ? "bg-primary/10 text-primary hover:bg-primary/15"
-                    : ""
+                  ? "bg-primary/10 text-primary hover:bg-primary/15"
+                  : ""
                   }`}
               >
                 <LayoutDashboard className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
@@ -150,8 +152,8 @@ export default function Navbar() {
                 <Button
                   variant={pathname.startsWith("/tools") ? "secondary" : "ghost"}
                   className={`gap-2 group/nav ${pathname.startsWith("/tools")
-                      ? "bg-primary/10 text-primary hover:bg-primary/15"
-                      : ""
+                    ? "bg-primary/10 text-primary hover:bg-primary/15"
+                    : ""
                     }`}
                 >
                   <Wrench className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
@@ -299,8 +301,8 @@ export default function Navbar() {
               <div className="flex flex-col items-center justify-center w-5 h-5 gap-[5px]">
                 <span
                   className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out origin-center ${mobileOpen
-                      ? "translate-y-[7px] rotate-45"
-                      : ""
+                    ? "translate-y-[7px] rotate-45"
+                    : ""
                     }`}
                 />
                 <span
@@ -309,8 +311,8 @@ export default function Navbar() {
                 />
                 <span
                   className={`block h-0.5 w-5 rounded-full bg-foreground transition-all duration-300 ease-in-out origin-center ${mobileOpen
-                      ? "-translate-y-[7px] -rotate-45"
-                      : ""
+                    ? "-translate-y-[7px] -rotate-45"
+                    : ""
                     }`}
                 />
               </div>
@@ -333,8 +335,8 @@ export default function Navbar() {
                 <Link href="/" onClick={() => setMobileOpen(false)}>
                   <div
                     className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${pathname === "/"
-                        ? "bg-primary/10 text-primary font-medium"
-                        : "hover:bg-muted/50 hover:translate-x-1"
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "hover:bg-muted/50 hover:translate-x-1"
                       }`}
                   >
                     <LayoutDashboard className="h-4 w-4" />
@@ -377,8 +379,8 @@ export default function Navbar() {
                       >
                         <div
                           className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-all duration-200 ${isActive
-                              ? "bg-primary/10 text-primary font-medium"
-                              : "hover:bg-muted/50 hover:translate-x-1"
+                            ? "bg-primary/10 text-primary font-medium"
+                            : "hover:bg-muted/50 hover:translate-x-1"
                             }`}
                         >
                           <link.icon className="h-4 w-4" />

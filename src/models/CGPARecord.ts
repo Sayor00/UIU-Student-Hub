@@ -4,14 +4,25 @@ export interface ICGPARecord extends Document {
   userId: mongoose.Types.ObjectId;
   previousCredits: number;
   previousCGPA: number;
+  earnedCredits: number; // Root-level: total earned credits (grades >= D)
   trimesters: {
     name: string;
+    code: string; // Added code
+    isCompleted?: boolean;
     courses: {
       name: string;
+      code?: string; // Added code
       credit: number;
-      grade: string;
+      grade?: string; // Made optional
       isRetake: boolean;
       previousGrade?: string;
+      assessments?: {
+        name: string;
+        totalMarks: number;
+        obtainedMarks: number;
+        weight: number;
+        isCT?: boolean;
+      }[];
     }[];
   }[];
   results: {
@@ -41,16 +52,31 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
       type: Number,
       default: 0,
     },
+    earnedCredits: {
+      type: Number,
+      default: 0,
+    },
     trimesters: [
       {
-        name: { type: String, required: true },
+        code: { type: String, required: true },
+        isCompleted: { type: Boolean, default: false },
         courses: [
           {
             name: { type: String },
+            code: { type: String },
             credit: { type: Number, required: true },
-            grade: { type: String, required: true },
+            grade: { type: String }, // Made optional
             isRetake: { type: Boolean, default: false },
             previousGrade: { type: String },
+            assessments: [
+              {
+                name: { type: String },
+                totalMarks: { type: Number },
+                obtainedMarks: { type: Number },
+                weight: { type: Number },
+                isCT: { type: Boolean, default: false }, // Added isCT
+              }
+            ],
           },
         ],
       },
@@ -58,6 +84,7 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
     results: [
       {
         trimesterName: { type: String },
+        trimesterCode: { type: String }, // Added trimesterCode
         gpa: { type: Number },
         cgpa: { type: Number },
         trimesterCredits: { type: Number },

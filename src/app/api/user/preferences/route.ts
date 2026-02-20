@@ -54,18 +54,31 @@ export async function PATCH(req: NextRequest) {
             updateFields["preferences.focusMode"] = data.focusMode;
         }
 
+        if (data.careerGoal !== undefined) {
+            updateFields["preferences.careerGoal"] = data.careerGoal || null;
+        }
+
+        if (data.targetCGPA !== undefined) {
+            updateFields["preferences.targetCGPA"] = data.targetCGPA || null;
+        }
+
         if (data.recentTool) {
             // Add or update a recent tool visit
             const user = await User.findById((session.user as any).id).select("preferences");
             if (user) {
                 let tools = user.preferences?.recentTools || [];
-                // Remove if already exists
-                tools = tools.filter((t: any) => t.href !== data.recentTool.href);
+                const existingIndex = tools.findIndex((t: any) => t.href === data.recentTool.href);
+                let usageCount = 1;
+                if (existingIndex !== -1) {
+                    usageCount = (tools[existingIndex].usageCount || 1) + 1;
+                    tools.splice(existingIndex, 1);
+                }
                 // Add to front
                 tools.unshift({
                     href: data.recentTool.href,
                     label: data.recentTool.label,
                     visitedAt: new Date(),
+                    usageCount: usageCount,
                 });
                 // Keep only 10
                 tools = tools.slice(0, 10);

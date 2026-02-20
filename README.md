@@ -188,9 +188,9 @@ A personalized dashboard for registered users with four sections:
 
 - **Dashboard Home:**
   - **Greeting** based on time of day
-  - **Quick Access** to recently used tools
-  - **Upcoming Events** list drawn from all your active calendars
-  - **Pinned Calendars** — quick links to your most vital schedules with unpin capability
+  - **Quick Access** to recently used tools (Automatically prioritized by most recently used and highest usage frequency)
+  - **Upcoming Events** list drawn from all your active calendars (Clicking events auto-focuses them in the calendar tool)
+  - **Pinned Calendars** — quick links to your most vital schedules with unpin capability (Direct calendar routing)
   - **Daily Focus** & **Study Tips**
 - **Profile Info** — avatar, name (editable), email, student ID, department, role
 - **Academic Stats** — overview of saved CGPA data, credits earned, and trimester performance
@@ -198,15 +198,19 @@ A personalized dashboard for registered users with four sections:
 
 ---
 
-### 🛡️ Admin Panel
+### 📈 Career Planner
 
-A full administrative dashboard for platform management.
+A comprehensive tool to track academic progress against specific career goals and domain requirements.
 
-- **Dashboard** — overview stats: total users, faculty members, total reviews, pending requests; recent users list
-- **Academic Calendar Management:**
-  - **Create/Edit Calendars** with rich inline event management
-  - **Manage Programs** — customizable list of academic programs for calendar tagging
-  - **Publish/Draft** status toggling
+- **Progress Tracking** — map completed courses against degree requirements
+- **Career Goals** — select a target career (e.g., Software Engineering, Data Science) to see required courses
+- **Smart Analytics**
+  - **Performance by Domain** — breakdown of grades across different CS domains
+  - **GPA Trend** — chronological LineChart visualization of term-by-term performance
+  - **Grade Distribution** — visual breakdown of all earned grades
+  - **Career Fit** — percentage-based match against various career tracks
+- **Risk Analysis** — identifies specific low-grade courses that are dragging down CGPA
+- **Graduation Scenarios** — calculates final CGPA outcomes based on maintaining specific GPAs for remaining credits
 - **User Management:**
   - Searchable, paginated user list
   - Role management (promote/demote admins)

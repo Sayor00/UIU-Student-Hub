@@ -70,6 +70,16 @@ const tools = [
     color: "text-violet-500",
     bg: "bg-violet-500/10",
   },
+  {
+    href: "/tools/career-planner",
+    label: "Career Planner",
+    icon: Wrench,
+    description:
+      "Plan your academic career — track degree progress, discover career paths, get smart course recommendations, and project your CGPA.",
+    tags: ["Career", "Degree", "Planner", "Advisor"],
+    color: "text-rose-500",
+    bg: "bg-rose-500/10",
+  },
 ];
 
 export default function ToolsPage() {

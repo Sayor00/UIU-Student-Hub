@@ -392,7 +392,7 @@ export default function FacultyDetailPage() {
     } catch {
       setHasReviewed(false);
     }
-  }, [session, facultyId]);
+  }, [session?.user?.email, facultyId]);
 
   React.useEffect(() => { checkHasReviewed(); }, [checkHasReviewed]);
 
@@ -411,7 +411,7 @@ export default function FacultyDetailPage() {
         }
       }
     } catch { /* empty */ }
-  }, [session, editingReview]);
+  }, [session?.user?.email, editingReview]);
 
   React.useEffect(() => {
     if (addReviewOpen) fetchPastUsernames();

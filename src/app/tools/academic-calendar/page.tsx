@@ -297,6 +297,27 @@ export default function AcademicCalendarPage() {
         }
     }, []);
 
+    // Handle URL parameters for direct linking
+    React.useEffect(() => {
+        if (typeof window !== "undefined") {
+            const params = new URLSearchParams(window.location.search);
+            const dateParam = params.get("date");
+            if (dateParam) {
+                const d = new Date(dateParam);
+                if (!isNaN(d.getTime())) {
+                    setSelectedDate(d);
+                    setCurrentMonth(d.getMonth());
+                    setCurrentYear(d.getFullYear());
+
+                    // Small delay to ensure render then scroll
+                    setTimeout(() => {
+                        calendarRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }, 100);
+                }
+            }
+        }
+    }, []);
+
     // Fetch data
     React.useEffect(() => {
         const fetchData = async () => {
@@ -309,13 +330,35 @@ export default function AcademicCalendarPage() {
                 const pubData = await pubRes.json();
                 setPublicCalendars(pubData.calendars || []);
 
-                if (pubData.calendars?.length > 0) {
-                    setActiveCalendar(pubData.calendars[0]);
+                let userData: any = { calendars: [] };
+                if (userRes) {
+                    userData = await userRes.json();
+                    setUserCalendars(userData.calendars || []);
                 }
 
-                if (userRes) {
-                    const userData = await userRes.json();
-                    setUserCalendars(userData.calendars || []);
+                let foundActive = false;
+                if (typeof window !== "undefined") {
+                    const params = new URLSearchParams(window.location.search);
+                    const calendarParam = params.get("calendar");
+                    if (calendarParam) {
+                        const pubCal = pubData.calendars?.find((c: any) => c._id === calendarParam);
+                        if (pubCal) {
+                            setActiveCalendar(pubCal);
+                            setCalendarType("academic");
+                            foundActive = true;
+                        } else if (userData.calendars?.length > 0) {
+                            const userCal = userData.calendars.find((c: any) => c._id === calendarParam);
+                            if (userCal) {
+                                setActiveUserCalendar(userCal);
+                                setCalendarType("personal");
+                                foundActive = true;
+                            }
+                        }
+                    }
+                }
+
+                if (!foundActive && pubData.calendars?.length > 0) {
+                    setActiveCalendar(pubData.calendars[0]);
                 }
             } catch {
                 toast.error("Failed to load calendars");
@@ -434,18 +477,7 @@ export default function AcademicCalendarPage() {
         }, 100);
     };
 
-    // Track tool usage
-    React.useEffect(() => {
-        if (isSignedIn) {
-            fetch("/api/user/preferences", {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    recentTool: { href: "/tools/academic-calendar", label: "Academic Calendar" },
-                }),
-            }).catch(() => { });
-        }
-    }, [isSignedIn]);
+
 
     // Get events for current view
     const getEventsForDate = React.useCallback(

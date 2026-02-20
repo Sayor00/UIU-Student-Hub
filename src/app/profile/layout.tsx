@@ -32,16 +32,13 @@ export default function ProfileLayout({
   const router = useRouter();
   const pathname = usePathname();
 
-  if (status === "loading") {
-    return (
-      <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
+  React.useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/login");
+    }
+  }, [status, router]);
 
-  if (!session?.user) {
-    router.push("/auth/login");
+  if (status === "loading" || status === "unauthenticated") {
     return (
       <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -69,8 +66,8 @@ export default function ProfileLayout({
                     <Button
                       variant={isActive ? "secondary" : "ghost"}
                       className={`w-full justify-start gap-2 whitespace-nowrap ${isActive
-                          ? "bg-primary/20 text-primary hover:bg-primary/25 font-medium"
-                          : ""
+                        ? "bg-primary/20 text-primary hover:bg-primary/25 font-medium"
+                        : ""
                         }`}
                       size="sm"
                     >

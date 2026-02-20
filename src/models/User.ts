@@ -4,12 +4,15 @@ export interface IRecentTool {
   href: string;
   label: string;
   visitedAt: Date;
+  usageCount?: number;
 }
 
 export interface IUserPreferences {
   pinnedCalendarIds: string[];
   recentTools: IRecentTool[];
   focusMode: boolean;
+  careerGoal?: string; // ID of CareerPath
+  targetCGPA?: number;
 }
 
 export interface IUser extends Document {
@@ -72,11 +75,14 @@ const UserSchema = new Schema<IUser>(
             href: String,
             label: String,
             visitedAt: { type: Date, default: Date.now },
+            usageCount: { type: Number, default: 1 },
           },
         ],
         default: [],
       },
       focusMode: { type: Boolean, default: false },
+      careerGoal: { type: String },
+      targetCGPA: { type: Number },
     },
   },
   {

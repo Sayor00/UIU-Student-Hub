@@ -360,15 +360,8 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     
     // Check if any course has no available sections
     if (courseSections.some(sections => sections.length === 0)) {
-      console.log('Some courses have no available sections that meet time constraints');
       return []; // No valid combinations possible
     }
-    
-    console.log('Starting combination generation for courses:', selectedCourseKeys);
-    console.log('Preferred faculties:', courseSelection.prioritizedFaculties);
-    console.log('Available sections per course:', courseSections.map((sections, i) => 
-      `${selectedCourseKeys[i]}: ${sections.length} sections`
-    ));
 
     // Step 2: Generate all valid combinations (no conflicts, meets constraints)
     const allValidCombinations: Course[][] = [];
