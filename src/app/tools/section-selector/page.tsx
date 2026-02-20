@@ -50,8 +50,8 @@ interface Course {
 }
 
 const parsePdfText = (text: string): Course[] => {
-  console.log("Starting to parse PDF text...");
-  console.log("First 500 characters:", text.substring(0, 500));
+
+
   const courses: Course[] = [];
   
   const cleanedText = text.replace(/(\d{1,2}:\d{2}:[AP]M)\s-\s(\d{1,2}:\d{2}:[AP]M)/g, '$1-$2');
@@ -68,20 +68,20 @@ const parsePdfText = (text: string): Course[] => {
   if (startIndex !== -1) {
     headerEndMarker = "Credit";
     isFormat253 = false;
-    console.log("Detected Format 252 (with serial numbers)");
+
   } else {
     // Try Format 2 (253) header
     startIndex = cleanedText.indexOf("Cr.");
     if (startIndex !== -1) {
       headerEndMarker = "Cr.";
       isFormat253 = true;
-      console.log("Detected Format 253 (without serial numbers)");
+
     }
   }
   
   if (startIndex === -1) {
     console.error("Could not find the header in the PDF text.");
-    console.log("Full text preview:", cleanedText.substring(0, 1000));
+
     toast.error("Parsing Error: Could not find the data table header in the PDF. The PDF format might be unsupported.");
     return [];
   }
@@ -95,7 +95,7 @@ const parsePdfText = (text: string): Course[] => {
     ? courseDataText.split(/(?=(?:BSCSE|BSDS)\s+[A-Z]{2,4}\s+\d{4})/).filter(block => block.trim() !== "")
     : courseDataText.split(/(?=\d+\s+(?:BSCSE|BSDS))/).filter(block => block.trim() !== "");
 
-  console.log(`Found ${courseBlocks.length} potential course blocks.`);
+
 
   courseBlocks.forEach((block) => {
     try {
@@ -240,7 +240,7 @@ const parsePdfText = (text: string): Course[] => {
       toast.error("Parsing Failed: Could not extract any course data, though blocks were found. The PDF structure might have changed.");
   }
 
-  console.log("Finished parsing PDF text. Found courses:", courses.length);
+
   return courses;
 };
 

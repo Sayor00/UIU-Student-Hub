@@ -45,7 +45,7 @@ export const DEFAULT_ASSESSMENTS: Assessment[] = [
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// ... existing code ...
+
 
 const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment, toggleCT, deleteAssessment, moveAssessment, isBest }: {
     item: Assessment;
@@ -58,7 +58,6 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
     moveAssessment: (index: number, dir: number) => void;
     isBest: boolean;
 }) => {
-    // 1. Re-integrate useSortable hook
     const {
         attributes,
         listeners,
@@ -74,8 +73,8 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
 
     return (
         <motion.div
-            ref={setNodeRef} // 2. Attach ref
-            style={style}    // 3. Attach style
+            ref={setNodeRef}
+            style={style}
             layout
             initial={{ opacity: 0, y: 10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -280,8 +279,7 @@ const CourseGradePlanner = memo(({
     const [ctCount, setCtCount] = useState(3);
     const [loading, setLoading] = useState(true);
 
-    // Initial Load Logic (Simplified for brevity, assuming parent handles data if controlled)
-    // ... (Keep existing fetchAssessments and useEffect logic if needed, but for 'standalone' controlled mode, we trust props)
+    // Initial Load Logic
     useEffect(() => {
         // If not controlled and we have props, we might fetch. 
         // For this revamp, we assume the parent (Page) handles fetching if standalone=true
