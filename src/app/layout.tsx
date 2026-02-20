@@ -7,6 +7,9 @@ import { Toaster } from "@/components/toaster";
 import Navbar from "@/components/navbar";
 import { AcademicProvider } from "@/context/academic-context";
 
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -15,15 +18,17 @@ export const metadata: Metadata = {
     "A collection of useful tools for United International University students. CGPA Calculator, and more.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await getServerSession(authOptions);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className} suppressHydrationWarning>
-        <AuthProvider>
+        <AuthProvider session={session}>
           <ThemeProvider
             attribute="class"
             defaultTheme="system"

@@ -15,9 +15,12 @@ interface CGPASimulatorProps {
     currentCGPA: number;
     totalCreditsCompleted: number;
     totalTrimesters: number;
+    careerTargetCGPA?: number;
+    careerGoalTitle?: string;
+    programTotalCredits?: number;
 }
 
-export default function CGPASimulator({ currentCGPA, totalCreditsCompleted, totalTrimesters }: CGPASimulatorProps) {
+export default function CGPASimulator({ currentCGPA, totalCreditsCompleted, totalTrimesters, careerTargetCGPA, careerGoalTitle, programTotalCredits }: CGPASimulatorProps) {
     // Mode 1: Simulation (Dynamic List)
     // Initialize with 3 empty slots relative to current progress
     const [simulationTrimesters, setSimulationTrimesters] = useState<{ credit: number; gpa: number }[]>([
@@ -27,12 +30,21 @@ export default function CGPASimulator({ currentCGPA, totalCreditsCompleted, tota
     ]);
     const [simulationResult, setSimulationResult] = useState(currentCGPA);
 
-    // Mode 2: Target Planner
-    const [targetCGPA, setTargetCGPA] = useState<string>("");
-    const [planCredits, setPlanCredits] = useState<string>("40");
+    // Mode 2: Target Planner — pre-fill from career goal if available
+    const autoRemainingCredits = programTotalCredits ? Math.max(programTotalCredits - totalCreditsCompleted, 0) : 0;
+    const [targetCGPA, setTargetCGPA] = useState<string>(careerTargetCGPA?.toFixed(2) ?? "");
+    const [planCredits, setPlanCredits] = useState<string>(autoRemainingCredits > 0 ? String(autoRemainingCredits) : "40");
     const [requiredGPA, setRequiredGPA] = useState<number | null>(null);
     const [planStrategy, setPlanStrategy] = useState<string[]>([]);
     const [difficulty, setDifficulty] = useState<"easy" | "moderate" | "hard" | "impossible">("easy");
+
+    // Sync career target when it arrives asynchronously
+    useEffect(() => {
+        if (careerTargetCGPA && !targetCGPA) setTargetCGPA(careerTargetCGPA.toFixed(2));
+    }, [careerTargetCGPA]);
+    useEffect(() => {
+        if (autoRemainingCredits > 0) setPlanCredits(String(autoRemainingCredits));
+    }, [autoRemainingCredits]);
 
     // --- Effects ---
     useEffect(() => {
@@ -254,7 +266,9 @@ export default function CGPASimulator({ currentCGPA, totalCreditsCompleted, tota
                                             value={planCredits}
                                             onChange={(e) => setPlanCredits(e.target.value)}
                                         />
-                                        <p className="text-xs text-muted-foreground">BSCSE Total: 137 Cr.</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {programTotalCredits ? `Program Total: ${programTotalCredits} Cr. · ${autoRemainingCredits} remaining` : "BSCSE Total: 137 Cr."}
+                                        </p>
                                     </div>
                                     <Button onClick={calculateTarget} size="lg" className="w-full bg-primary/90 hover:bg-primary">
                                         <Zap className="h-5 w-5 mr-2" /> Generate Strategy
@@ -303,6 +317,6 @@ export default function CGPASimulator({ currentCGPA, totalCreditsCompleted, tota
                     </TabsContent>
                 </Tabs>
             </CardContent>
-        </Card>
+        </Card >
     );
 }

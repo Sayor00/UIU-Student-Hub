@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { History, ArrowUpRight, Trash2, BookOpen, AlertCircle } from "lucide-react";
+import { History, ArrowUpRight, Trash2, BookOpen, AlertCircle, Target, Compass, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import CGPAStats from "./CGPAStats";
 import { toast } from "sonner";
@@ -44,6 +44,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { calculateAcademicStats, getTrimesterName, parseStudentId } from "@/lib/trimesterUtils";
 import { useAcademicData } from "@/hooks/useAcademicData";
+import {
+    getCareerTracks,
+    buildCareerRoadmap,
+    getProgram,
+    gradeToPoint,
+    isPassingGrade,
+    autoSuggestCareers,
+} from "@/lib/career-planner/helpers";
+
 
 export default function ResultTracker() {
     const router = useRouter();
@@ -68,6 +77,63 @@ export default function ResultTracker() {
             fetchAcademicData();
         }
     }, [session, fetchAcademicData]);
+
+    // ─── Career Goal Integration (MongoDB-backed) ───
+    const [careerGoalId, setCareerGoalId] = useState<string | null>(null);
+    useEffect(() => {
+        if (!session?.user) return;
+        fetch("/api/user/preferences")
+            .then(r => r.json())
+            .then(data => {
+                if (data?.preferences?.careerGoal) setCareerGoalId(data.preferences.careerGoal);
+            })
+            .catch(() => { });
+    }, [session]);
+
+    const studentId = (session?.user as any)?.studentId ?? "";
+    const studentInfo = useMemo(() => (studentId ? parseStudentId(studentId) : null), [studentId]);
+
+    // Build completed courses for career planner
+    const completedCourses = useMemo(() => {
+        if (!trimesters?.length) return [];
+        const map = new Map<string, { code: string; grade: string; point: number }>();
+        for (const tri of trimesters) {
+            for (const course of tri.courses ?? []) {
+                if (!course.code || !isPassingGrade(course.grade)) continue;
+                const point = gradeToPoint(course.grade);
+                const existing = map.get(course.code);
+                if (!existing || point > existing.point) {
+                    map.set(course.code, { code: course.code, grade: course.grade, point });
+                }
+            }
+        }
+        return Array.from(map.values());
+    }, [trimesters]);
+
+    // Career goal data
+    const careerData = useMemo(() => {
+        if (!careerGoalId || !studentInfo?.programId) return null;
+        const program = getProgram(studentInfo.programId);
+        if (!program) return null;
+
+        const tracks = getCareerTracks(studentInfo.programId);
+        const track = tracks.find(t => t.id === careerGoalId);
+        if (!track) return null;
+
+        const roadmap = buildCareerRoadmap(program, completedCourses, studentInfo.programId, careerGoalId, cgpa, earnedCredits);
+        const suggestions = autoSuggestCareers(program, completedCourses, studentInfo.programId);
+        const matchInfo = suggestions.find(s => s.track.id === careerGoalId);
+
+        return {
+            track,
+            roadmap,
+            targetCGPA: roadmap?.targetCGPA ?? undefined,
+            readiness: roadmap?.overallReadiness ?? 0,
+            keyDone: matchInfo?.keyCoursesCompleted.length ?? 0,
+            keyTotal: track.keyCourseCodes.length,
+            matchPercent: matchInfo?.matchPercent ?? 0,
+        };
+    }, [careerGoalId, studentInfo, completedCourses, cgpa, earnedCredits]);
 
     // Delete State
     const [deleteName, setDeleteName] = useState<string | null>(null);
@@ -198,41 +264,76 @@ export default function ResultTracker() {
             initial="hidden"
             animate="visible"
         >
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-6">
-                <motion.div variants={itemVariants}>
-                    <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                        Academic Profile
-                    </h2>
-                    <p className="text-muted-foreground mt-1">
-                        Track, analyze, and simulate your academic journey.
-                    </p>
-                </motion.div>
-                <motion.div variants={itemVariants}>
-                    {session?.user && (session.user as any).studentId && (
-                        <div className="flex items-center gap-3 bg-muted/30 px-4 py-2 rounded-full border border-black/5 dark:border-white/5 backdrop-blur-sm">
-                            {(() => {
-                                const sId = (session.user as any).studentId;
-                                const info = parseStudentId(sId);
-                                if (!info) return <span className="text-sm font-mono opacity-70">{sId}</span>;
-                                return (
-                                    <>
-                                        <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">{info.program}</Badge>
-                                        <span className="text-sm font-medium text-muted-foreground">{info.admissionTrimester} Intake</span>
-                                    </>
-                                )
-                            })()}
-                        </div>
-                    )}
-                </motion.div>
-            </div>
+
 
             <motion.div variants={itemVariants}>
-                <CGPAStats cgpa={cgpa} totalCredits={totalCredits} earnedCredits={earnedCredits} targetCGPA={3.8} />
+                <CGPAStats
+                    cgpa={cgpa}
+                    totalCredits={totalCredits}
+                    earnedCredits={earnedCredits}
+                    targetCGPA={careerData?.targetCGPA}
+                    careerGoalTitle={careerData?.track.title}
+                />
+            </motion.div>
+
+            {/* Career Goal Insight Card */}
+            <motion.div variants={itemVariants}>
+                {careerData ? (
+                    <Link href="/tools/career-planner" className="block">
+                        <Card className="border-primary/10 hover:border-primary/30 transition-colors cursor-pointer group">
+                            <div className="flex items-center gap-4 p-4">
+                                <div className="text-2xl">{careerData.track.icon}</div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-semibold text-sm">{careerData.track.title}</span>
+                                        <Badge variant="outline" className="text-[10px] text-primary border-primary/20">Career Goal</Badge>
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                                        <span>{careerData.readiness}% ready</span>
+                                        <span>·</span>
+                                        <span>{careerData.keyDone}/{careerData.keyTotal} key courses</span>
+                                        <span>·</span>
+                                        <span>{careerData.matchPercent}% match</span>
+                                        {careerData.targetCGPA && cgpa < careerData.targetCGPA && (
+                                            <>
+                                                <span>·</span>
+                                                <span className="text-amber-500">Need {careerData.targetCGPA.toFixed(2)} CGPA</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                    View Roadmap <ArrowRight className="h-3 w-3" />
+                                </div>
+                            </div>
+                        </Card>
+                    </Link>
+                ) : (
+                    <Link href="/tools/career-planner" className="block">
+                        <Card className="border-dashed border-2 hover:border-primary/30 transition-colors cursor-pointer group">
+                            <div className="flex items-center gap-4 p-4">
+                                <Compass className="h-5 w-5 text-muted-foreground/40" />
+                                <div className="flex-1">
+                                    <p className="text-sm text-muted-foreground">
+                                        Set a career goal to get personalized targets, study tips, and a full roadmap
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-1 text-xs text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                    Career Planner <ArrowRight className="h-3 w-3" />
+                                </div>
+                            </div>
+                        </Card>
+                    </Link>
+                )}
             </motion.div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <motion.div variants={itemVariants} className="lg:col-span-2">
-                    <CGPATrendChart data={chartData} />
+                    <CGPATrendChart
+                        data={chartData}
+                        targetCGPA={careerData?.targetCGPA}
+                        targetLabel={careerData?.track.title ? `Target (${careerData.track.title})` : undefined}
+                    />
                 </motion.div>
                 <div className="lg:col-span-1 h-full">
                     <GradeDistributionAnalysis stats={stats} />
@@ -242,6 +343,9 @@ export default function ResultTracker() {
                         currentCGPA={cgpa}
                         totalCreditsCompleted={totalCredits}
                         totalTrimesters={trimesters.length}
+                        careerTargetCGPA={careerData?.targetCGPA}
+                        careerGoalTitle={careerData?.track.title}
+                        programTotalCredits={studentInfo?.totalCredits}
                     />
                 </motion.div>
             </div>

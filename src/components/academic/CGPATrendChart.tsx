@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart, Legend } from "recharts";
+import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, Area, AreaChart, Legend, ReferenceLine } from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp } from "lucide-react";
 
 interface CGPATrendChartProps {
     data: { name: string; gpa: number; cgpa: number }[];
+    targetCGPA?: number;
+    targetLabel?: string;
 }
 
-export default function CGPATrendChart({ data }: CGPATrendChartProps) {
+export default function CGPATrendChart({ data, targetCGPA, targetLabel }: CGPATrendChartProps) {
     // State for logical rendering (affects Y-axis/Hide) and visual visibility (affects opacity)
     const [renderCGPA, setRenderCGPA] = useState(true);
     const [renderGPA, setRenderGPA] = useState(true);
@@ -54,7 +56,7 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
         const vals = [];
         if (renderCGPA) vals.push(d.cgpa);
         if (renderGPA) vals.push(d.gpa);
-        // If neither is rendered, we return empty to avoid min/max errors, handled below
+        if (targetCGPA) vals.push(targetCGPA);
         return vals;
     });
 
@@ -96,6 +98,12 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
                             <div className={`w-2 h-2 rounded-full ${visibleGPA ? "bg-blue-500" : "bg-muted-foreground"}`} />
                             GPA
                         </button>
+                        {targetCGPA && (
+                            <span className="text-[10px] px-2 py-1 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                {targetLabel || "Target"}
+                            </span>
+                        )}
                     </div>
                 </div>
             </CardHeader>
@@ -197,6 +205,21 @@ export default function CGPATrendChart({ data }: CGPATrendChartProps) {
                                     transition: 'clip-path 1500ms ease-in-out'
                                 }}
                             />
+                            {targetCGPA && (
+                                <ReferenceLine
+                                    y={targetCGPA}
+                                    stroke="#10b981"
+                                    strokeDasharray="6 4"
+                                    strokeWidth={2}
+                                    label={{
+                                        value: `Target ${targetCGPA.toFixed(2)}`,
+                                        position: "insideTopRight",
+                                        fill: "#10b981",
+                                        fontSize: 11,
+                                        fontWeight: 600,
+                                    }}
+                                />
+                            )}
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>

@@ -54,6 +54,14 @@ export async function PATCH(req: NextRequest) {
             updateFields["preferences.focusMode"] = data.focusMode;
         }
 
+        if (data.careerGoal !== undefined) {
+            updateFields["preferences.careerGoal"] = data.careerGoal || null;
+        }
+
+        if (data.targetCGPA !== undefined) {
+            updateFields["preferences.targetCGPA"] = data.targetCGPA || null;
+        }
+
         if (data.recentTool) {
             // Add or update a recent tool visit
             const user = await User.findById((session.user as any).id).select("preferences");

@@ -180,21 +180,13 @@ export const BSCSE_GED_OPTIONS: ProgramCourse[] = [
 ];
 
 
-// ─── Other programs: representative course stubs ────────────────────
-// Course data for other programs will be populated when their official
-// course plan pages are verified. For now, only totalCredits are verified.
-
-const BSDS_COURSES: ProgramCourse[] = [];
-const BSEEE_COURSES: ProgramCourse[] = [];
-const CIVIL_COURSES: ProgramCourse[] = [];
-const BPHARM_COURSES: ProgramCourse[] = [];
-const BBA_COURSES: ProgramCourse[] = [];
-const BBA_AIS_COURSES: ProgramCourse[] = [];
-const BSECO_COURSES: ProgramCourse[] = [];
-const BA_ENGLISH_COURSES: ProgramCourse[] = [];
-const BSSMSJ_COURSES: ProgramCourse[] = [];
-const BSSEDS_COURSES: ProgramCourse[] = [];
-const BSBGE_COURSES: ProgramCourse[] = [];
+// ─── Other programs: course data from official UIU sources ──────────
+// Source: Official UIU department websites (course planning pages)
+import {
+    BSEEE_COURSES, BSDS_COURSES, CIVIL_COURSES, BPHARM_COURSES,
+    BBA_COURSES, BBA_AIS_COURSES, BSECO_COURSES, BA_ENGLISH_COURSES,
+    BSSMSJ_COURSES, BSSEDS_COURSES, BSBGE_COURSES,
+} from "./program-courses";
 
 
 // ─── Program Registry ──────────────────────────────────────────
