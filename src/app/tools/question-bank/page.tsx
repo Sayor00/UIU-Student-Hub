@@ -201,9 +201,9 @@ export default function QuestionBankPage() {
         setSubmitting(true);
         try {
             if (submitAction === "add_files" && submitFiles.length > 0) {
-                let filesToSubmit = submitFiles.map(sf => sf.file);
+                let filesToSubmit = submitFiles.map((sf) => sf.file);
 
-                if (mergeToPdf) {
+                if (mergeToPdf || (filesToSubmit.length === 1 && filesToSubmit[0].type.startsWith("image/"))) {
                     const mergeableFiles = filesToSubmit.filter(f => f.type.startsWith("image/") || f.type === "application/pdf");
                     const otherFiles = filesToSubmit.filter(f => !(f.type.startsWith("image/") || f.type === "application/pdf"));
                     if (mergeableFiles.length > 0) {

@@ -257,7 +257,7 @@ export default function AdminQuestionBankPage() {
         try {
             let filesToUpload = uploadFiles.map((uf) => uf.file);
 
-            if (mergeToPdf) {
+            if (mergeToPdf || (filesToUpload.length === 1 && filesToUpload[0].type.startsWith("image/"))) {
                 const mergeableFiles = filesToUpload.filter(f => f.type.startsWith("image/") || f.type === "application/pdf");
                 const otherFiles = filesToUpload.filter(f => !(f.type.startsWith("image/") || f.type === "application/pdf"));
                 if (mergeableFiles.length > 0) {
