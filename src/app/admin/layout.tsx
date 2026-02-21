@@ -15,12 +15,14 @@ import {
   CalendarDays,
   Loader2,
   ShieldAlert,
+  FileQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/academic-calendars", label: "Academic Calendars", icon: CalendarDays },
+  { href: "/admin/question-bank", label: "Question Bank", icon: FileQuestion },
   { href: "/admin/faculty-requests", label: "Faculty Requests", icon: ClipboardList },
   { href: "/admin/faculty", label: "Faculty", icon: GraduationCap },
   { href: "/admin/reviews", label: "Reviews", icon: MessageSquare },

@@ -5,6 +5,7 @@ import User from "@/models/User";
 import Faculty from "@/models/Faculty";
 import Review from "@/models/Review";
 import FacultyRequest from "@/models/FacultyRequest";
+import QBSubmission from "@/models/QuestionBankSubmission";
 
 // GET admin dashboard stats
 export async function GET() {
@@ -22,12 +23,14 @@ export async function GET() {
       totalFaculty,
       totalReviews,
       pendingRequests,
+      pendingQBSubmissions,
     ] = await Promise.all([
       User.countDocuments(),
       User.countDocuments({ emailVerified: true }),
       Faculty.countDocuments({ isApproved: true }),
       Review.countDocuments(),
       FacultyRequest.countDocuments({ status: "pending" }),
+      QBSubmission.countDocuments({ status: "pending" }),
     ]);
 
     const recentUsers = await User.find()
@@ -49,6 +52,7 @@ export async function GET() {
         totalFaculty,
         totalReviews,
         pendingRequests,
+        pendingQBSubmissions,
       },
       recentUsers,
       recentRequests,

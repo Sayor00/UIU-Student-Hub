@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Users, GraduationCap, MessageSquare, ClipboardList, TrendingUp } from "lucide-react";
+import { Loader2, Users, GraduationCap, MessageSquare, ClipboardList, TrendingUp, FileQuestion } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AdminDashboard() {
@@ -12,7 +12,7 @@ export default function AdminDashboard() {
     fetch("/api/admin/stats")
       .then((r) => r.json())
       .then((d) => setStats(d))
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -54,6 +54,13 @@ export default function AdminDashboard() {
       sub: "need review",
       highlight: stats.stats.pendingRequests > 0,
     },
+    {
+      label: "QB Submissions",
+      value: stats.stats.pendingQBSubmissions || 0,
+      icon: FileQuestion,
+      sub: "pending review",
+      highlight: (stats.stats.pendingQBSubmissions || 0) > 0,
+    },
   ];
 
   return (
@@ -75,9 +82,8 @@ export default function AdminDashboard() {
                 {stat.label}
               </CardTitle>
               <stat.icon
-                className={`h-4 w-4 ${
-                  stat.highlight ? "text-orange-500" : "text-muted-foreground"
-                }`}
+                className={`h-4 w-4 ${stat.highlight ? "text-orange-500" : "text-muted-foreground"
+                  }`}
               />
             </CardHeader>
             <CardContent>
@@ -119,11 +125,10 @@ export default function AdminDashboard() {
                       </span>
                     )}
                     <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        user.emailVerified
+                      className={`text-xs px-2 py-0.5 rounded-full ${user.emailVerified
                           ? "bg-green-500/10 text-green-600"
                           : "bg-yellow-500/10 text-yellow-600"
-                      }`}
+                        }`}
                     >
                       {user.emailVerified ? "Verified" : "Unverified"}
                     </span>

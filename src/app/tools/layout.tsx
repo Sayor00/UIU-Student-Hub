@@ -13,6 +13,7 @@ const allTools = [
     { href: "/tools/course-advising", label: "Course Advising" },
     { href: "/tools/routine-builder", label: "Routine Builder" },
     { href: "/tools/career-planner", label: "Career Planner" },
+    { href: "/tools/question-bank", label: "Question Bank" },
 ];
 
 export default function ToolsLayout({
