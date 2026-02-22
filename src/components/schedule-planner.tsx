@@ -18,6 +18,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverAnchor } from "@/components/ui/popover";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Settings2, Trash2 } from "lucide-react";
 
 interface Course {
   program: string;
@@ -59,6 +61,13 @@ interface GeneratedSchedule {
   totalDays: number;
   dailySchedule: { [day: string]: Course[] };
 }
+
+interface ScheduleFilters {
+  [courseKey: string]: {
+    faculty?: string;
+    time?: string;
+  };
+}
 // Convert time string to minutes for comparison
 const timeToMinutes = (timeStr: string): number => {
   if (!timeStr || timeStr === "Any") return -1;
@@ -90,14 +99,84 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     selectedCourses: [],
     prioritizedFaculties: [],
   });
-  const [generatedSchedules, setGeneratedSchedules] = useState<GeneratedSchedule[]>([]);
   const [allSchedules, setAllSchedules] = useState<GeneratedSchedule[]>([]);
+  const [scheduleFilters, setScheduleFilters] = useState<ScheduleFilters>({});
   const [displayedCount, setDisplayedCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Search states
   const [courseSearchTerm, setCourseSearchTerm] = useState("");
   const [facultySearchTerm, setFacultySearchTerm] = useState("");
+
+  const filteredSchedules = useMemo(() => {
+    return allSchedules.filter(schedule => {
+      // Check if this schedule satisfies all course-specific filters
+      for (const [courseKey, filters] of Object.entries(scheduleFilters)) {
+        // Find the specific course in this schedule
+        const course = schedule.courses.find(c => `${c.courseCode} - ${c.title}` === courseKey);
+        if (!course) continue; // Should always exist, but safe check
+
+        // Faculty filter
+        if (filters.faculty) {
+          const facultyStr = course.facultyName === "TBA" ? "TBA" : `${course.facultyName} (${course.facultyInitial})`;
+          if (facultyStr !== filters.faculty) return false;
+        }
+
+        // Time filter
+        if (filters.time) {
+          if (!course.time1 || course.time1 !== filters.time) return false;
+        }
+      }
+      return true;
+    });
+  }, [allSchedules, scheduleFilters]);
+
+  const generatedSchedules = filteredSchedules.slice(0, displayedCount);
+
+  // Derive available faculties and times for each selected course across all generated schedules
+  const availableFilters = useMemo(() => {
+    const filters: {
+      [courseKey: string]: {
+        faculties: Set<string>;
+        times: Set<string>;
+      }
+    } = {};
+
+    courseSelection.selectedCourses.forEach(courseKey => {
+      filters[courseKey] = { faculties: new Set(), times: new Set() };
+    });
+
+    allSchedules.forEach(schedule => {
+      schedule.courses.forEach(course => {
+        const courseKey = `${course.courseCode} - ${course.title}`;
+        if (filters[courseKey]) {
+          const facultyStr = course.facultyName === "TBA" ? "TBA" : `${course.facultyName} (${course.facultyInitial})`;
+          filters[courseKey].faculties.add(facultyStr);
+          if (course.time1) {
+            filters[courseKey].times.add(course.time1);
+          }
+        }
+      });
+    });
+
+    // Convert Sets to sorted arrays
+    const sortedFilters: {
+      [courseKey: string]: {
+        faculties: string[];
+        times: string[];
+      }
+    } = {};
+
+    Object.entries(filters).forEach(([courseKey, data]) => {
+      sortedFilters[courseKey] = {
+        faculties: Array.from(data.faculties).sort(),
+        times: Array.from(data.times).sort((a, b) => timeToMinutes(a) - timeToMinutes(b))
+      };
+    });
+
+    return sortedFilters;
+  }, [allSchedules, courseSelection.selectedCourses]);
+
   const [isCourseSearchFocused, setIsCourseSearchFocused] = useState(false);
   const [isFacultySearchFocused, setIsFacultySearchFocused] = useState(false);
 
@@ -747,8 +826,8 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
 
       // Store all schedules and reset pagination
       setAllSchedules(allSchedules);
+      setScheduleFilters({}); // Reset any previous schedule filters on new generation
       setDisplayedCount(10);
-      setGeneratedSchedules(allSchedules.slice(0, 10));
 
       // The combinations are already optimally sorted by the advanced algorithm
       console.log('\n🏆 === FINAL SCHEDULE RANKING ===');
@@ -768,16 +847,14 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
 
   // Function to show more schedules
   const showMoreSchedules = () => {
-    const newDisplayedCount = displayedCount + 10;
-    setDisplayedCount(newDisplayedCount);
-    setGeneratedSchedules(allSchedules.slice(0, newDisplayedCount));
+    setDisplayedCount(prev => prev + 10);
   };
 
   // Reset when program changes
   useEffect(() => {
     setCourseSelection({ selectedCourses: [], prioritizedFaculties: [] });
-    setGeneratedSchedules([]);
     setAllSchedules([]);
+    setScheduleFilters({});
     setDisplayedCount(10);
     setCourseSearchTerm("");
     setFacultySearchTerm("");
@@ -1100,15 +1177,143 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
         </Button>
       </div>
 
+      {/* Schedule Filters (per course) */}
+      {allSchedules.length > 0 && (
+        <div className="bg-background/40 backdrop-blur-md rounded-xl border border-border/50 shadow-sm mt-8 mb-8 overflow-hidden">
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="filters" className="border-none">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline hover:bg-muted/30 transition-colors [&[data-state=open]>div>svg]:text-primary">
+                <div className="flex items-center gap-3 text-left">
+                  <div className="bg-primary/10 p-2 rounded-md border border-primary/20">
+                    <Settings2 className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base text-foreground">Fine-Tune Results</h3>
+                    <p className="text-sm text-muted-foreground font-normal">
+                      Filter the {allSchedules.length} generated schedules by picking a specific faculty or time for any course.
+                    </p>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="px-6 pb-6 pt-2">
+                <div className="flex flex-col gap-0 border border-border/50 rounded-lg overflow-hidden bg-card/40 backdrop-blur-sm">
+                  {/* Table Header Row */}
+                  <div className="hidden md:grid grid-cols-12 gap-4 p-3 bg-muted/40 border-b border-border/50 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <div className="col-span-4">Course</div>
+                    <div className="col-span-4">Faculty Preference</div>
+                    <div className="col-span-4">Time Preference</div>
+                  </div>
+
+                  {/* Course Rows */}
+                  {courseSelection.selectedCourses.map((courseKey, idx) => (
+                    <div
+                      key={courseKey}
+                      className={`grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 p-4 md:p-3 items-center ${idx !== courseSelection.selectedCourses.length - 1 ? 'border-b border-border/50' : ''
+                        } hover:bg-muted/30 transition-colors`}
+                    >
+                      {/* Course Identity */}
+                      <div className="col-span-1 md:col-span-4 flex flex-col md:pr-4">
+                        <div className="font-semibold text-sm text-foreground">
+                          {courseKey.split(' - ')[0]}
+                        </div>
+                        <div className="text-xs text-muted-foreground line-clamp-1" title={courseKey.split(' - ')[1]}>
+                          {courseKey.split(' - ')[1]}
+                        </div>
+                      </div>
+
+                      {/* Faculty Filter */}
+                      <div className="col-span-1 md:col-span-4">
+                        <div className="md:hidden text-xs font-medium text-muted-foreground mb-1.5 flex items-center justify-between">
+                          <span>Faculty Preference</span>
+                        </div>
+                        <Select
+                          value={scheduleFilters[courseKey]?.faculty || "Any"}
+                          onValueChange={(val) => {
+                            setScheduleFilters(prev => ({
+                              ...prev,
+                              [courseKey]: { ...prev[courseKey], faculty: val === "Any" ? undefined : val }
+                            }));
+                            setDisplayedCount(10);
+                          }}
+                        >
+                          <SelectTrigger className={`h-9 text-sm border-border/50 text-foreground ${scheduleFilters[courseKey]?.faculty ? 'border-primary ring-1 ring-primary/30 bg-primary/10' : 'bg-background/40 hover:bg-muted/40'}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover border-border text-popover-foreground">
+                            <SelectItem value="Any" className="font-medium focus:bg-muted">Any Faculty</SelectItem>
+                            {availableFilters[courseKey]?.faculties.map(f => (
+                              <SelectItem key={f} value={f} className="text-sm focus:bg-muted">{f}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Time Filter */}
+                      <div className="col-span-1 md:col-span-4">
+                        <div className="md:hidden text-xs font-medium text-muted-foreground mb-1.5 flex items-center justify-between">
+                          <span>Time Preference</span>
+                        </div>
+                        <Select
+                          value={scheduleFilters[courseKey]?.time || "Any"}
+                          onValueChange={(val) => {
+                            setScheduleFilters(prev => ({
+                              ...prev,
+                              [courseKey]: { ...prev[courseKey], time: val === "Any" ? undefined : val }
+                            }));
+                            setDisplayedCount(10);
+                          }}
+                        >
+                          <SelectTrigger className={`h-9 text-sm border-border/50 text-foreground ${scheduleFilters[courseKey]?.time ? 'border-primary ring-1 ring-primary/30 bg-primary/10' : 'bg-background/40 hover:bg-muted/40'}`}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="bg-popover border-border text-popover-foreground">
+                            <SelectItem value="Any" className="font-medium focus:bg-muted">Any Time</SelectItem>
+                            {availableFilters[courseKey]?.times.map(t => (
+                              <SelectItem key={t} value={t} className="text-sm focus:bg-muted">{t}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Clear Filters Action */}
+                <div className="mt-4 flex justify-end">
+                  <div className="flex gap-4 items-center border-t border-border/50 pt-4 w-full">
+                    <span className="text-xs text-muted-foreground flex-1">
+                      {Object.keys(scheduleFilters).filter(k => scheduleFilters[k].faculty || scheduleFilters[k].time).length > 0
+                        ? `Filtering schedules down to ${filteredSchedules.length} options.`
+                        : "No active filters. Displaying all valid combinations."}
+                    </span>
+                    {(Object.keys(scheduleFilters).some(key => scheduleFilters[key].faculty || scheduleFilters[key].time)) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setScheduleFilters({}); setDisplayedCount(10); }}
+                        className="text-xs text-destructive hover:text-destructive hover:bg-destructive/10 h-8 px-3 transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                        Clear All Filters
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </div>
+      )}
+
       {/* Generated Schedules */}
-      {generatedSchedules.length > 0 && (
+      {filteredSchedules.length > 0 && (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <h3 className="text-base sm:text-lg font-semibold">
-              Generated Schedules ({generatedSchedules.length} of {allSchedules.length} shown)
+              Generated Schedules ({generatedSchedules.length} of {filteredSchedules.length} shown)
             </h3>
             <div className="flex gap-2 items-center w-full sm:w-auto">
-              {allSchedules.length > generatedSchedules.length && (
+              {filteredSchedules.length > generatedSchedules.length && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1118,6 +1323,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                   Show More (+10)
                 </Button>
               )}
+
               <p className="text-xs sm:text-sm text-muted-foreground">
                 Total: {allSchedules.length}
               </p>
