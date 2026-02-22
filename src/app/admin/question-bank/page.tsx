@@ -14,12 +14,18 @@ import { CSS } from "@dnd-kit/utilities";
 import {
     FolderOpen, FolderClosed, FolderPlus, FileText, Image as ImageIcon,
     Loader2, Pencil, Trash2, UploadCloud, GripVertical,
-    ChevronRight, ChevronDown, Plus, X, Check, Clock,
+    ChevronRight, ChevronLeft, ChevronDown, Plus, X, Check, Clock,
     XCircle, Eye, AlertCircle, FileQuestion, RefreshCw,
-    ExternalLink, Home, ArrowLeft,
+    Home, ArrowLeft, ExternalLink,
     LayoutGrid, List, FolderTree, Grid3X3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import dynamic from "next/dynamic";
+
+const SyncfusionViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.SyncfusionViewer), {
+    ssr: false,
+    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading PDF engine...</div>
+});
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -140,6 +146,7 @@ export default function AdminQuestionBankPage() {
 
     // Navigation
     const [currentFolderId, setCurrentFolderId] = React.useState<string | null>(null);
+    const [viewingFile, setViewingFile] = React.useState<{ folder: QBFolder; fileIdx: number } | null>(null);
 
     // ──── OPTIMISTIC SORTABLE STATE ────
     // These hold the *displayed* order and update instantly on drag.
@@ -210,9 +217,10 @@ export default function AdminQuestionBankPage() {
 
     React.useEffect(() => { fetchData(); }, [fetchData]);
 
-    const goToFolder = (id: string) => setCurrentFolderId(id);
-    const goHome = () => setCurrentFolderId(null);
+    const goToFolder = (id: string) => { setCurrentFolderId(id); setViewingFile(null); };
+    const goHome = () => { setCurrentFolderId(null); setViewingFile(null); };
     const goBack = () => {
+        if (viewingFile) { setViewingFile(null); return; }
         if (currentFolder?.parentId) setCurrentFolderId(currentFolder.parentId);
         else goHome();
     };
@@ -368,8 +376,16 @@ export default function AdminQuestionBankPage() {
         );
     }
 
+    if (viewingFile) {
+        return (
+            <div className="h-[calc(100vh-4rem)] -mt-4 -mb-8 -mx-4 sm:-mx-8">
+                <AdminFileViewer folder={viewingFile.folder} initialIdx={viewingFile.fileIdx} onBack={goBack} />
+            </div>
+        );
+    }
+
     return (
-        <div className="space-y-8 max-w-[1600px] mx-auto">
+        <div className="space-y-8 max-w-[1600px] mx-auto pb-12">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
@@ -470,6 +486,13 @@ export default function AdminQuestionBankPage() {
                                 }}
                                 onCreateFolder={(parentId) => { setCreateParentId(parentId); setCreateName(""); setCreateDialogOpen(true); }}
                                 onUploadFile={(targetId) => { setUploadTargetId(targetId); setUploadFiles([]); setUploadDialogOpen(true); }}
+                                onFileClick={(folderId, fileId) => {
+                                    const folder = tree.find(f => f._id === folderId) || currentFolder;
+                                    if (folder) {
+                                        const idx = folder.files.findIndex(f => f._id === fileId);
+                                        if (idx !== -1) setViewingFile({ folder, fileIdx: idx });
+                                    }
+                                }}
                             />
                         ) : (
                             <>
@@ -497,7 +520,15 @@ export default function AdminQuestionBankPage() {
                                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleFileDragEnd}>
                                             <SortableContext items={sortedFileIds} strategy={viewMode === "list" ? verticalListSortingStrategy : rectSortingStrategy}>
                                                 <FileGridView files={displayFiles} viewMode={viewMode}
-                                                    onDelete={(fileId, name) => { setDeleteTarget({ id: currentFolderId!, name, fileId }); setDeleteDialogOpen(true); }} />
+                                                    onDelete={(fileId, name) => { setDeleteTarget({ id: currentFolderId!, name, fileId }); setDeleteDialogOpen(true); }}
+                                                    onFileClick={(fileId) => {
+                                                        const folder = currentFolder;
+                                                        if (folder) {
+                                                            const idx = folder.files.findIndex(f => f._id === fileId);
+                                                            if (idx !== -1) setViewingFile({ folder, fileIdx: idx });
+                                                        }
+                                                    }}
+                                                />
                                             </SortableContext>
                                         </DndContext>
                                     </>
@@ -756,9 +787,10 @@ function FolderGridView({ folders, viewMode, onFolderClick, onRename, onDelete }
 /* ═══════════════════════════════════════════════════
    FILE GRID VIEW — renders sortable files
    ═══════════════════════════════════════════════════ */
-function FileGridView({ files, viewMode, onDelete }: {
+function FileGridView({ files, viewMode, onDelete, onFileClick }: {
     files: QBFile[]; viewMode: ViewMode;
     onDelete: (fileId: string, name: string) => void;
+    onFileClick?: (fileId: string) => void;
 }) {
     const gridClass = viewMode === "icon" ? "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-3" : "space-y-1";
 
@@ -773,12 +805,13 @@ function FileGridView({ files, viewMode, onDelete }: {
                                     <button {...attributes} {...listeners} className="absolute top-2 left-2 cursor-grab active:cursor-grabbing text-muted-foreground/20 hover:text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity touch-none">
                                         <GripVertical className="h-4 w-4" />
                                     </button>
-                                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/30 overflow-hidden">
-                                        {file.resourceType === "image" ? <img src={file.cloudinaryUrl} alt={file.name} className="w-full h-full object-cover rounded-2xl" /> : <FileText className="h-8 w-8 text-red-500/60" />}
-                                    </div>
-                                    <p className="text-sm text-center truncate w-full px-1">{file.name}</p>
+                                    <button className="flex flex-col items-center gap-2" onClick={() => onFileClick?.(file._id)}>
+                                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/30 overflow-hidden">
+                                            {file.resourceType === "image" ? <img src={file.cloudinaryUrl} alt={file.name} className="w-full h-full object-cover rounded-2xl" /> : <FileText className="h-8 w-8 text-red-500/60" />}
+                                        </div>
+                                        <p className="text-sm text-center truncate w-full px-1 hover:text-primary transition-colors">{file.name}</p>
+                                    </button>
                                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <a href={file.cloudinaryUrl} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" className="h-7 w-7"><ExternalLink className="h-3.5 w-3.5" /></Button></a>
                                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => onDelete(file._id, file.name)}><Trash2 className="h-3.5 w-3.5" /></Button>
                                     </div>
                                 </div>
@@ -789,13 +822,10 @@ function FileGridView({ files, viewMode, onDelete }: {
                             <div className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent/20 transition-colors group border border-transparent hover:border-border/50">
                                 <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground touch-none shrink-0"><GripVertical className="h-4 w-4" /></button>
                                 {file.resourceType === "image" ? <ImageIcon className="h-5 w-5 text-blue-500 shrink-0" /> : <FileText className="h-5 w-5 text-red-500 shrink-0" />}
-                                <span className="text-base truncate flex-1">{file.name}</span>
+                                <button className="text-base truncate flex-1 text-left hover:text-primary transition-colors" onClick={() => onFileClick?.(file._id)}>{file.name}</button>
                                 <span className="text-xs text-muted-foreground/60 shrink-0">{formatSize(file.bytes)}</span>
                                 <Badge variant="secondary" className="text-[11px] h-5 px-2 uppercase shrink-0">{file.format}</Badge>
                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                    <a href={file.cloudinaryUrl} target="_blank" rel="noopener noreferrer">
-                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="View"><ExternalLink className="h-4 w-4" /></Button>
-                                    </a>
                                     <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => onDelete(file._id, file.name)}><Trash2 className="h-4 w-4" /></Button>
                                 </div>
                             </div>
@@ -807,8 +837,71 @@ function FileGridView({ files, viewMode, onDelete }: {
     );
 }
 
+/* ═══════════════════════════════════════════════
+   ADMIN FILE VIEWER
+   ═══════════════════════════════════════════════ */
+function AdminFileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; initialIdx: number; onBack: () => void }) {
+    const sortedFiles = React.useMemo(() => [...folder.files].sort((a, b) => a.order - b.order), [folder.files]);
+    const [currentIdx, setCurrentIdx] = React.useState(initialIdx);
+    const file = sortedFiles[currentIdx];
+    if (!file) return null;
+
+    const headerLeft = (
+        <>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs shrink-0" onClick={onBack}>
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </Button>
+            <div className="w-px h-5 bg-border hidden sm:block" />
+            <p className="text-sm font-medium truncate max-w-[150px] sm:max-w-xs">{file.name}</p>
+            <Badge variant="secondary" className="text-[10px] shrink-0 uppercase hidden sm:flex">{file.format}</Badge>
+        </>
+    );
+
+    const headerRight = (
+        <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx <= 0} onClick={() => setCurrentIdx((i) => i - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-xs text-muted-foreground min-w-[3rem] text-center whitespace-nowrap px-1">
+                File {currentIdx + 1} of {sortedFiles.length}
+            </span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx >= sortedFiles.length - 1} onClick={() => setCurrentIdx((i) => i + 1)}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+    );
+
+    return (
+        <div className="flex flex-col overflow-hidden bg-background h-full">
+            {file.format !== "pdf" && (
+                <div className="shrink-0 border-b bg-background/90 backdrop-blur-xl">
+                    <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {headerLeft}
+                        </div>
+                        {headerRight}
+                    </div>
+                </div>
+            )}
+            <div className="flex-1 min-h-0 w-full relative">
+                {file.format === "pdf" ? (
+                    <div className="w-full h-full p-2">
+                        <SyncfusionViewer url={file.cloudinaryUrl} headerLeft={headerLeft} headerRight={headerRight} />
+                    </div>
+                ) : file.resourceType === "image" ? (
+                    <div className="w-full h-full overflow-auto flex justify-center bg-muted/5 p-4">
+                        <img src={file.cloudinaryUrl} alt={file.name} className="max-w-full h-auto rounded shadow-sm object-contain" draggable={false} />
+                    </div>
+                ) : (
+                    <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+                        <FileText className="h-16 w-16 mx-auto mb-4 opacity-50 text-primary" />
+                        <p className="font-semibold">{file.name}</p>
+                        <a href={file.cloudinaryUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm mt-2 block">Download File</a>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
 /* ═══ ADMIN TREE VIEW (with drag reordering & inline creation) ═══ */
-function AdminTreeView({ nodes, depth, sensors, onFolderClick, onRename, onDelete, onDeleteFile, onReorderFolders, onReorderFiles, onCreateFolder, onUploadFile }: {
+function AdminTreeView({ nodes, depth, sensors, onFolderClick, onRename, onDelete, onDeleteFile, onReorderFolders, onReorderFiles, onCreateFolder, onUploadFile, onFileClick }: {
     nodes: QBFolder[]; depth: number;
     sensors: ReturnType<typeof useSensors>;
     onFolderClick: (id: string) => void;
@@ -819,6 +912,7 @@ function AdminTreeView({ nodes, depth, sensors, onFolderClick, onRename, onDelet
     onReorderFiles: (folderId: string, orderedFileIds: string[]) => void;
     onCreateFolder: (parentId: string) => void;
     onUploadFile: (targetId: string) => void;
+    onFileClick?: (folderId: string, fileId: string) => void;
 }) {
     const [folderIds, setFolderIds] = React.useState(nodes.map((f) => f._id));
     React.useEffect(() => { setFolderIds(nodes.map((f) => f._id)); }, [nodes]);

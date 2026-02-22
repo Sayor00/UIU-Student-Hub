@@ -3,6 +3,13 @@
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
+import dynamic from "next/dynamic";
+
+const SyncfusionViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.SyncfusionViewer), {
+    ssr: false,
+    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading PDF engine...</div>
+});
+
 import {
     DndContext, closestCenter, KeyboardSensor, PointerSensor,
     TouchSensor, useSensor, useSensors, DragEndEvent,
@@ -768,36 +775,41 @@ function FileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; initialI
         setIsFullscreen(!isFullscreen);
     };
 
+    const headerLeft = (
+        <>
+            <Button variant="ghost" size="sm" className="gap-1.5 text-xs shrink-0" onClick={onBack}>
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </Button>
+            <div className="w-px h-5 bg-border hidden sm:block" />
+            <p className="text-sm font-medium truncate max-w-[150px] sm:max-w-xs">{file.name}</p>
+            <Badge variant="secondary" className="text-[10px] shrink-0 uppercase hidden sm:flex">{file.format}</Badge>
+        </>
+    );
+
+    const headerRight = (
+        <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx <= 0} onClick={() => setCurrentIdx((i) => i - 1)}><ChevronLeft className="h-4 w-4" /></Button>
+            <span className="text-xs text-muted-foreground min-w-[3rem] text-center whitespace-nowrap px-1">
+                File {currentIdx + 1} of {sortedFiles.length}
+            </span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx >= sortedFiles.length - 1} onClick={() => setCurrentIdx((i) => i + 1)}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+    );
+
     return (
-        <div ref={viewerRef} className={`min-h-[calc(100vh-4rem)] ${isFullscreen ? "fixed inset-0 z-50 bg-background overflow-y-auto" : ""}`}>
-            <div className="sticky top-16 z-30 border-b bg-background/90 backdrop-blur-xl">
-                <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                        <Button variant="ghost" size="sm" className="gap-1.5 text-xs shrink-0" onClick={onBack}>
-                            <ArrowLeft className="h-3.5 w-3.5" /> Back
-                        </Button>
-                        <div className="w-px h-5 bg-border" />
-                        <p className="text-sm font-medium truncate">{file.name}</p>
-                        <Badge variant="secondary" className="text-[10px] shrink-0 uppercase">{file.format}</Badge>
-                    </div>
-                    <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx <= 0} onClick={() => setCurrentIdx((i) => i - 1)}><ChevronLeft className="h-4 w-4" /></Button>
-                        <span className="text-xs text-muted-foreground min-w-[3rem] text-center">{currentIdx + 1} / {sortedFiles.length}</span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" disabled={currentIdx >= sortedFiles.length - 1} onClick={() => setCurrentIdx((i) => i + 1)}><ChevronRight className="h-4 w-4" /></Button>
-                        <div className="w-px h-5 bg-border mx-1" />
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(Math.max(50, zoom - 25))}><ZoomOut className="h-4 w-4" /></Button>
-                        <span className="text-xs text-muted-foreground min-w-[2.5rem] text-center">{zoom}%</span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setZoom(Math.min(200, zoom + 25))}><ZoomIn className="h-4 w-4" /></Button>
-                        <div className="w-px h-5 bg-border mx-1" />
-                        <Button variant={highlightMode ? "secondary" : "ghost"} size="icon" className={`h-8 w-8 ${highlightMode ? "bg-yellow-500/20 text-yellow-600" : ""}`} onClick={() => setHighlightMode(!highlightMode)} title="Highlight"><Highlighter className="h-4 w-4" /></Button>
-                        <Button variant={invertMode ? "secondary" : "ghost"} size="icon" className={`h-8 w-8 ${invertMode ? "bg-primary/20" : ""}`} onClick={() => setInvertMode(!invertMode)} title="Invert">{invertMode ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleFullscreen}>{isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}</Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => window.open(file.cloudinaryUrl, "_blank")} title="Download"><Download className="h-4 w-4" /></Button>
+        <div ref={viewerRef} className={`flex flex-col overflow-hidden bg-background ${isFullscreen ? "fixed inset-0 z-50" : "fixed inset-x-0 bottom-0 top-16 z-40"}`}>
+            {file.format !== "pdf" && (
+                <div className="shrink-0 border-b bg-background/90 backdrop-blur-xl">
+                    <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {headerLeft}
+                        </div>
+                        {headerRight}
                     </div>
                 </div>
-            </div>
+            )}
             {sortedFiles.length > 1 && (
-                <div className="container mx-auto px-4 py-2">
+                <div className="shrink-0 container mx-auto px-4 py-2 border-b bg-muted/5">
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                         {sortedFiles.map((f, i) => (
                             <button key={f._id} onClick={() => setCurrentIdx(i)} className={`shrink-0 p-1 rounded-lg border-2 transition-all ${currentIdx === i ? "border-primary bg-primary/5" : "border-transparent hover:border-border bg-muted/20"}`}>
@@ -809,10 +821,8 @@ function FileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; initialI
                     </div>
                 </div>
             )}
-            <div className="container mx-auto px-4 py-3">
-                <div className={`rounded-xl border overflow-hidden ${highlightMode ? "selection:bg-yellow-300/60 selection:text-black" : ""} ${invertMode ? "invert hue-rotate-180" : ""}`} style={{ cursor: highlightMode ? "text" : "default" }}>
-                    <FileRenderer file={file} zoom={zoom} />
-                </div>
+            <div className="flex-1 min-h-0 w-full relative">
+                <FileRenderer file={file} zoom={zoom} headerLeft={headerLeft} headerRight={headerRight} />
             </div>
         </div>
     );
@@ -821,19 +831,18 @@ function FileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; initialI
 /* ═══════════════════════════════════════════════
    FILE RENDERER
    ═══════════════════════════════════════════════ */
-function FileRenderer({ file, zoom }: { file: QBFile; zoom: number }) {
+function FileRenderer({ file, zoom, headerLeft, headerRight }: { file: QBFile; zoom: number; headerLeft?: React.ReactNode; headerRight?: React.ReactNode }) {
     if (file.resourceType === "image") {
         return (
-            <div className="flex justify-center bg-muted/5 p-4">
-                <img src={file.cloudinaryUrl} alt={file.name} className="max-w-full h-auto rounded shadow-sm" style={{ width: `${zoom}%` }} draggable={false} />
+            <div className="w-full h-full overflow-auto flex justify-center bg-muted/5 p-4">
+                <img src={file.cloudinaryUrl} alt={file.name} className="max-w-full h-auto rounded shadow-sm object-contain" style={{ width: `${zoom}%` }} draggable={false} />
             </div>
         );
     }
     if (file.format === "pdf") {
-        const viewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(file.cloudinaryUrl)}&embedded=true`;
         return (
-            <div className="w-full bg-muted/5">
-                <iframe src={viewUrl} className="w-full border-0" style={{ height: "85vh", minHeight: "600px", transform: `scale(${zoom / 100})`, transformOrigin: "top center" }} title={file.name} />
+            <div className="w-full h-full p-2">
+                <SyncfusionViewer url={file.cloudinaryUrl} headerLeft={headerLeft} headerRight={headerRight} />
             </div>
         );
     }

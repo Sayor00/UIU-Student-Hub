@@ -41,7 +41,13 @@ export async function PATCH(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const data = await req.json();
+        let data: any = {};
+        try {
+            data = await req.json();
+        } catch (e) {
+            // Body might be empty or malformed
+            data = {};
+        }
         await dbConnect();
 
         const updateFields: any = {};
