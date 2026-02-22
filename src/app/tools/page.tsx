@@ -12,6 +12,7 @@ import {
   Wrench,
   ArrowRight,
   BookOpen,
+  FileQuestion,
 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
@@ -79,6 +80,16 @@ const tools = [
     tags: ["Career", "Degree", "Planner", "Advisor"],
     color: "text-rose-500",
     bg: "bg-rose-500/10",
+  },
+  {
+    href: "/tools/question-bank",
+    label: "Question Bank",
+    icon: FileQuestion,
+    description:
+      "Browse past papers, questions, and study materials organized in folders. Upload and suggest content for the community.",
+    tags: ["Questions", "Exams", "Papers", "Study"],
+    color: "text-cyan-500",
+    bg: "bg-cyan-500/10",
   },
 ];
 

@@ -109,7 +109,7 @@ A smart class schedule planner that directly parses UIU's official class routine
 
 ---
 
-### � Academic Calendar
+### 📅 Academic Calendar
 
 A centralized hub for tracking academic timelines, exam schedules, and personal deadlines.
 
@@ -128,7 +128,23 @@ A centralized hub for tracking academic timelines, exam schedules, and personal 
 
 ---
 
-### �💰 Fee Calculator
+### 📂 Question Bank & Interactive PDF Viewer
+
+A robust, community-driven repository for past exam questions and academic materials.
+
+- **Hierarchical Directory** — deeply nested folder structure organized by Program, Course, Year, and Exam Type
+- **Advanced View Modes** — toggle between Tile, List, Icon, and Tree view layouts with smooth Framer Motion animations
+- **Drag & Drop Uploads** — intuitive file upload queue with SortableJS reordering
+- **Smart Merging Engine** — client-side image-to-PDF merging (`jsPDF`) and existing PDF combining (`pdf-lib`) directly in the browser before upload to save bandwidth
+- **Native PDF Viewer Integration**
+  - **Syncfusion Rendering Engine** — fully offline, high-performance WebAssembly (`pdfium.wasm`) powered PDF viewer
+  - **Client-Side OCR** — integrated `Tesseract.js` automatically scans image-based PDFs on-the-fly, generating invisible selectable/highlightable text layers over scanned documents
+  - **Annotation Suite** — full support for highlighting, pan/zoom, page navigation, and document printing natively in the browser
+- **Community Contributions** — robust moderation queue where student uploads map directly to Admin approval workflows
+
+---
+
+### 💰 Fee Calculator
 
 Comprehensive fee estimation covering all UIU programs with three calculation modes.
 
@@ -278,8 +294,11 @@ Secure, email-verified authentication restricted to UIU students.
 | Technology                | Version | Purpose                            |
 | ------------------------- | ------- | ---------------------------------- |
 | **pdf2json**              | 4.0     | Server-side PDF text extraction    |
-| **jsPDF**                 | 4.1     | Client-side PDF generation         |
+| **jsPDF**                 | 4.1     | Client-side image-to-PDF generation|
+| **pdf-lib**               | 1.17    | Client-side native PDF merging     |
 | **html2canvas**           | 1.4     | DOM-to-canvas rendering            |
+| **Syncfusion PDF Viewer** | 32.x    | WebAssembly PDF rendering engine   |
+| **Tesseract.js**          | 5.1     | Client-side optical character recognition |
 | **xlsx (SheetJS)**        | 0.18    | Excel export                       |
 | **ics**                   | 3.8     | Calendar (.ics) event generation   |
 | **Nodemailer**            | 7.0     | Email sending (Gmail SMTP)         |
@@ -664,4 +683,3 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ---
 
 <p align="center">Built with ❤️ for UIU Students</p>
-

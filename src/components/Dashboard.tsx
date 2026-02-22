@@ -8,7 +8,7 @@ import {
     Calculator, GraduationCap, ArrowRight, Sparkles,
     BarChart3, CalendarDays, DollarSign, Star, BookOpen,
     Clock, Pin, Target, Loader2, X, TrendingUp, TrendingDown,
-    Compass, ChevronRight, Activity, Code2, Briefcase,
+    Compass, ChevronRight, Activity, Code2, Briefcase, FileQuestion,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -28,6 +28,7 @@ const allTools = [
     { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, color: "text-orange-500", bg: "bg-orange-500/10", desc: "Rate & discover" },
     { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, color: "text-violet-500", bg: "bg-violet-500/10", desc: "Events & deadlines" },
     { href: "/tools/career-planner", label: "Career Planner", icon: Compass, color: "text-rose-500", bg: "bg-rose-500/10", desc: "Plan your future" },
+    { href: "/tools/question-bank", label: "Question Bank", icon: FileQuestion, color: "text-cyan-500", bg: "bg-cyan-500/10", desc: "Past papers & Q&A" },
 ];
 
 const greetings = ["Ready to ace today?", "Let's make progress!", "Stay focused!", "Another day of growth!", "Keep pushing forward!"];
