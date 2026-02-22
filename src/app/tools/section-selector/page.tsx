@@ -271,6 +271,19 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
   const processJsonData = (data: any): Course[] => {
     const courses: Course[] = [];
 
+    // Helper to format 'HH:MM' or 'HH:MM:SS' into 'h:mm AM/PM'
+    const formatTime12Hour = (timeStr: string) => {
+      if (!timeStr) return "";
+      const [hoursStr, minutesStr] = timeStr.split(":");
+      const hours = parseInt(hoursStr, 10);
+      const minutes = parseInt(minutesStr, 10);
+
+      const period = hours >= 12 ? 'PM' : 'AM';
+      const hours12 = hours % 12 || 12; // Convert 0 to 12
+
+      return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+    };
+
     // Process each program (BSCSE, BSDS, etc.)
     Object.keys(data).forEach((programName) => {
       const programData = data[programName];
@@ -288,11 +301,11 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
 
               if (schedule.length > 0) {
                 day1 = schedule[0].day.substring(0, 3); // e.g., "Saturday" -> "Sat"
-                time1 = `${schedule[0].start_time}-${schedule[0].end_time}`;
+                time1 = `${formatTime12Hour(schedule[0].start_time)}-${formatTime12Hour(schedule[0].end_time)}`;
               }
               if (schedule.length > 1) {
                 day2 = schedule[1].day.substring(0, 3);
-                time2 = `${schedule[1].start_time}-${schedule[1].end_time}`;
+                time2 = `${formatTime12Hour(schedule[1].start_time)}-${formatTime12Hour(schedule[1].end_time)}`;
               }
 
               courses.push({

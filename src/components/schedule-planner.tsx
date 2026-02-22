@@ -59,6 +59,24 @@ interface GeneratedSchedule {
   totalDays: number;
   dailySchedule: { [day: string]: Course[] };
 }
+// Convert time string to minutes for comparison
+const timeToMinutes = (timeStr: string): number => {
+  if (!timeStr || timeStr === "Any") return -1;
+  const parts = timeStr.trim().split(/\s*([AP]M)/i);
+  const time = parts[0];
+  const period = (parts[1] || "").toUpperCase();
+
+  const [hours, minutes] = time.split(':').map(Number);
+
+  let adjustedHours = hours;
+  if (period === 'PM' && hours !== 12) {
+    adjustedHours = hours + 12;
+  } else if (period === 'AM' && hours === 12) {
+    adjustedHours = 0;
+  }
+
+  return (adjustedHours || 0) * 60 + (minutes || 0);
+};
 
 const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProps) => {
   const [program, setProgram] = useState<string>("BSCSE");
@@ -103,11 +121,17 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     const times = new Set<string>();
     programCourses.forEach(course => {
       if (course.time1) {
-        const startTime = course.time1.split(' - ')[0];
-        times.add(startTime);
+        const parts = course.time1.split(/\s*-\s*/);
+        const startTime = parts[0];
+        if (startTime && startTime.trim() !== "") times.add(startTime.trim());
+      }
+      if (course.time2) {
+        const parts = course.time2.split(/\s*-\s*/);
+        const startTime = parts[0];
+        if (startTime && startTime.trim() !== "") times.add(startTime.trim());
       }
     });
-    return Array.from(times).sort();
+    return Array.from(times).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
   };
 
   // Extract unique end times
@@ -115,11 +139,17 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     const times = new Set<string>();
     programCourses.forEach(course => {
       if (course.time1) {
-        const endTime = course.time1.split(' - ')[1] || course.time1.split(' - ')[0];
-        times.add(endTime);
+        const parts = course.time1.split(/\s*-\s*/);
+        const endTime = parts.length > 1 ? parts[1] : parts[0];
+        if (endTime && endTime.trim() !== "") times.add(endTime.trim());
+      }
+      if (course.time2) {
+        const parts = course.time2.split(/\s*-\s*/);
+        const endTime = parts.length > 1 ? parts[1] : parts[0];
+        if (endTime && endTime.trim() !== "") times.add(endTime.trim());
       }
     });
-    return Array.from(times).sort();
+    return Array.from(times).sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
   };
 
   // Get unique courses for selection with search functionality
@@ -287,19 +317,14 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     );
   };
 
-  // Convert time string to minutes for comparison
-  const timeToMinutes = (timeStr: string): number => {
-    const [time, period] = timeStr.split(/\s*([AP]M)/);
-    const [hours, minutes] = time.split(':').map(Number);
-    const adjustedHours = period === 'PM' && hours !== 12 ? hours + 12 : period === 'AM' && hours === 12 ? 0 : hours;
-    return adjustedHours * 60 + minutes;
-  };
 
   // Check if a course meets time constraints
   const meetsTimeConstraints = (course: Course): boolean => {
     if (!course.time1) return false;
 
-    const [startTime, endTime] = course.time1.split(' - ');
+    const parts = course.time1.split(/\s*-\s*/);
+    const startTime = parts[0];
+    const endTime = parts.length > 1 ? parts[1] : parts[0];
 
     // Check start time constraint
     if (timePreferences.startTimeLimit !== "Any") {
@@ -331,8 +356,13 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
     if (!course1.time1 || !course2.time1) return false;
 
     try {
-      const [start1Str, end1Str] = course1.time1.split(' - ');
-      const [start2Str, end2Str] = course2.time1.split(' - ');
+      const parts1 = course1.time1.split(/\s*-\s*/);
+      const parts2 = course2.time1.split(/\s*-\s*/);
+
+      const start1Str = parts1[0];
+      const end1Str = parts1.length > 1 ? parts1[1] : parts1[0];
+      const start2Str = parts2[0];
+      const end2Str = parts2.length > 1 ? parts2[1] : parts2[0];
 
       const start1 = timeToMinutes(start1Str.trim());
       const end1 = timeToMinutes(end1Str.trim());
