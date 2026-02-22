@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -76,12 +76,24 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   const [allSchedules, setAllSchedules] = useState<GeneratedSchedule[]>([]);
   const [displayedCount, setDisplayedCount] = useState(10);
   const [isGenerating, setIsGenerating] = useState(false);
-  
+
   // Search states
   const [courseSearchTerm, setCourseSearchTerm] = useState("");
   const [facultySearchTerm, setFacultySearchTerm] = useState("");
   const [isCourseSearchFocused, setIsCourseSearchFocused] = useState(false);
   const [isFacultySearchFocused, setIsFacultySearchFocused] = useState(false);
+
+  const availablePrograms = useMemo(() => {
+    const programs = new Set(courses.map(c => c.program).filter(Boolean));
+    return Array.from(programs).sort();
+  }, [courses]);
+
+  // Set default program if current program is invalid or empty
+  useEffect(() => {
+    if (availablePrograms.length > 0 && !availablePrograms.includes(program)) {
+      setProgram(availablePrograms[0]);
+    }
+  }, [availablePrograms, program]);
 
   // Filter courses by program
   const programCourses = courses.filter(course => course.program === program);
@@ -125,39 +137,39 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   // Filter courses by search term with enhanced matching (same logic as Card Selector)
   const getFilteredCourses = () => {
     const uniqueCourses = getUniqueCourses();
-    
+
     if (!courseSearchTerm) return uniqueCourses;
-    
+
     return uniqueCourses.filter(course => {
       const searchLower = courseSearchTerm.toLowerCase().trim();
       const titleLower = course.title.toLowerCase();
       const codeLower = course.courseCode.toLowerCase();
-      
+
       // Basic matching - most important, check first
       if (titleLower.includes(searchLower) || codeLower.includes(searchLower)) {
         return true;
       }
-      
+
       // Dynamic uppercase letter extraction - extract all capital letters from title
       const upperCaseLetters = course.title.match(/[A-Z]/g);
       if (upperCaseLetters && upperCaseLetters.length >= 2) {
         const acronymFromUppercase = upperCaseLetters.join('').toLowerCase();
-        
+
         // Exact match with full uppercase acronym
         if (acronymFromUppercase === searchLower) {
           return true;
         }
-        
+
         // Check if search term matches start of uppercase acronym
         if (searchLower.length >= 2 && acronymFromUppercase.startsWith(searchLower)) {
           return true;
         }
-        
+
         // Check if search term is contained within uppercase acronym
         if (searchLower.length >= 2 && acronymFromUppercase.includes(searchLower)) {
           return true;
         }
-        
+
         // Check partial uppercase acronyms (first N letters)
         for (let i = 2; i <= Math.min(upperCaseLetters.length, searchLower.length + 1); i++) {
           const partialUppercaseAcronym = upperCaseLetters.slice(0, i).join('').toLowerCase();
@@ -166,32 +178,32 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
           }
         }
       }
-      
+
       // Dynamic acronym from first letters of significant words
       const stopWords = ['and', 'of', 'the', 'for', 'in', 'on', 'to', 'a', 'an', 'with', 'by', 'from', 'at', 'as', 'is', 'are', 'was', 'were', 'i', 'ii', 'iii', 'iv', 'v', 'using', 'lab', 'laboratory', 'introduction', 'basic', 'advanced', 'theory', 'practical'];
-      const titleWords = course.title.split(/\s+/).filter(word => 
+      const titleWords = course.title.split(/\s+/).filter(word =>
         word.length > 1 && !stopWords.includes(word.toLowerCase())
       );
-      
+
       if (titleWords.length >= 2) {
         // Full acronym from first letters of all significant words
         const firstLetterAcronym = titleWords.map(word => word[0]).join('').toLowerCase();
-        
+
         // Exact match with full first-letter acronym
         if (firstLetterAcronym === searchLower) {
           return true;
         }
-        
+
         // Check if search matches start of first-letter acronym
         if (searchLower.length >= 2 && firstLetterAcronym.startsWith(searchLower)) {
           return true;
         }
-        
+
         // Check if search is contained in first-letter acronym
         if (searchLower.length >= 2 && firstLetterAcronym.includes(searchLower)) {
           return true;
         }
-        
+
         // Dynamic partial acronyms - check all possible combinations
         for (let i = 2; i <= Math.min(titleWords.length, searchLower.length + 2); i++) {
           const partialAcronym = titleWords.slice(0, i).map(word => word[0]).join('').toLowerCase();
@@ -199,7 +211,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
             return true;
           }
         }
-        
+
         // Check sliding window acronyms (e.g., for "DS" in "Data Structures and Algorithms")
         for (let start = 0; start <= titleWords.length - 2; start++) {
           for (let length = 2; length <= Math.min(4, titleWords.length - start); length++) {
@@ -211,40 +223,40 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
           }
         }
       }
-      
+
       // Check for word-level matches (partial word matching)
       if (titleWords.length > 0) {
         // Check if search term matches the start of any significant word
-        const matchesWordStart = titleWords.some(word => 
+        const matchesWordStart = titleWords.some(word =>
           word.toLowerCase().startsWith(searchLower) && searchLower.length >= 2
         );
         if (matchesWordStart) {
           return true;
         }
       }
-      
+
       // Check common course number patterns (Roman numerals)
       const romanToNumber: { [key: string]: string } = {
         'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5', 'vi': '6'
       };
-      
+
       for (const [roman, number] of Object.entries(romanToNumber)) {
         if ((titleLower.includes(roman) && searchLower === number) ||
-            (titleLower.includes(number) && searchLower === roman)) {
+          (titleLower.includes(number) && searchLower === roman)) {
           return true;
         }
       }
-      
+
       // Match individual words in title (for multi-word searches)
       if (searchLower.includes(' ')) {
         const searchWords = searchLower.split(/\s+/).filter(word => word.length > 1);
-        if (searchWords.every(searchWord => 
+        if (searchWords.every(searchWord =>
           titleWords.some(titleWord => titleWord.toLowerCase().includes(searchWord))
         )) {
           return true;
         }
       }
-      
+
       return false;
     });
   };
@@ -252,7 +264,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   // Get faculties for selected courses with search functionality
   const getAvailableFaculties = () => {
     if (courseSelection.selectedCourses.length === 0) return [];
-    
+
     const faculties = new Set<string>();
     programCourses.forEach(course => {
       const courseKey = `${course.courseCode} - ${course.title}`;
@@ -260,16 +272,16 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
         faculties.add(`${course.facultyName} (${course.facultyInitial})`);
       }
     });
-    
+
     return Array.from(faculties);
   };
 
   // Filter faculties by search term
   const getFilteredFaculties = () => {
     const availableFaculties = getAvailableFaculties();
-    
+
     if (!facultySearchTerm) return availableFaculties;
-    
+
     return availableFaculties.filter(faculty =>
       faculty.toLowerCase().includes(facultySearchTerm.toLowerCase())
     );
@@ -286,23 +298,23 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   // Check if a course meets time constraints
   const meetsTimeConstraints = (course: Course): boolean => {
     if (!course.time1) return false;
-    
+
     const [startTime, endTime] = course.time1.split(' - ');
-    
+
     // Check start time constraint
     if (timePreferences.startTimeLimit !== "Any") {
       const courseStartMinutes = timeToMinutes(startTime);
       const limitStartMinutes = timeToMinutes(timePreferences.startTimeLimit);
       if (courseStartMinutes < limitStartMinutes) return false;
     }
-    
+
     // Check end time constraint
     if (timePreferences.endTimeLimit !== "Any") {
       const courseEndMinutes = timeToMinutes(endTime);
       const limitEndMinutes = timeToMinutes(timePreferences.endTimeLimit);
       if (courseEndMinutes > limitEndMinutes) return false;
     }
-    
+
     return true;
   };
 
@@ -310,23 +322,23 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   const hasTimeConflict = (course1: Course, course2: Course): boolean => {
     const days1 = [course1.day1, course1.day2].filter(Boolean);
     const days2 = [course2.day1, course2.day2].filter(Boolean);
-    
+
     // Check if they share any common days
     const hasCommonDay = days1.some(day1 => days2.includes(day1));
     if (!hasCommonDay) return false;
-    
+
     // If they share days, check time overlap
     if (!course1.time1 || !course2.time1) return false;
-    
+
     try {
       const [start1Str, end1Str] = course1.time1.split(' - ');
       const [start2Str, end2Str] = course2.time1.split(' - ');
-      
+
       const start1 = timeToMinutes(start1Str.trim());
       const end1 = timeToMinutes(end1Str.trim());
       const start2 = timeToMinutes(start2Str.trim());
       const end2 = timeToMinutes(end2Str.trim());
-      
+
       // Times conflict if they overlap (not just touching)
       // Two time slots conflict if one starts before the other ends and vice versa
       return !(end1 <= start2 || end2 <= start1);
@@ -340,24 +352,24 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
   const generateCombinations = (selectedCourseKeys: string[]): Course[][] => {
     // Step 1: Get all available sections for each selected course that meet time constraints and quality standards
     const courseSections: Course[][] = selectedCourseKeys.map(courseKey => {
-      const allSections = programCourses.filter(course => 
+      const allSections = programCourses.filter(course =>
         `${course.courseCode} - ${course.title}` === courseKey &&
         meetsTimeConstraints(course)
       );
-      
+
       // Prioritize sections with proper faculty and time information
-      const validSections = allSections.filter(course => 
-        course.facultyName !== "TBA" && 
-        course.facultyInitial !== "TBA" && 
-        course.time1 && 
+      const validSections = allSections.filter(course =>
+        course.facultyName !== "TBA" &&
+        course.facultyInitial !== "TBA" &&
+        course.time1 &&
         course.time1 !== "TBA"
       );
-      
+
       // If we have valid sections, use them; otherwise fall back to all sections
       // This ensures we don't exclude courses entirely but prefer quality data
       return validSections.length > 0 ? validSections : allSections;
     });
-    
+
     // Check if any course has no available sections
     if (courseSections.some(sections => sections.length === 0)) {
       return []; // No valid combinations possible
@@ -365,14 +377,14 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
 
     // Step 2: Generate all valid combinations (no conflicts, meets constraints)
     const allValidCombinations: Course[][] = [];
-    
+
     const generateCartesian = (index: number, current: Course[]) => {
       if (index === courseSections.length) {
         // Ensure we have exactly one course from each selected course
         if (current.length !== selectedCourseKeys.length) {
           return;
         }
-        
+
         // Check if this combination has no time conflicts
         let hasConflict = false;
         for (let i = 0; i < current.length; i++) {
@@ -384,7 +396,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
           }
           if (hasConflict) break;
         }
-        
+
         if (!hasConflict) {
           // Check class days per week constraint
           if (timePreferences.classDaysPerWeek !== "Any") {
@@ -393,13 +405,13 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               if (course.day1) allDays.add(course.day1);
               if (course.day2) allDays.add(course.day2);
             });
-            
+
             const requiredDays = parseInt(timePreferences.classDaysPerWeek);
             if (allDays.size !== requiredDays) {
               return;
             }
           }
-          
+
           // Check classes per day constraint
           if (timePreferences.classesPerDay !== "Any") {
             const dailyCount: { [day: string]: number } = {};
@@ -407,29 +419,29 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               if (course.day1) dailyCount[course.day1] = (dailyCount[course.day1] || 0) + 1;
               if (course.day2) dailyCount[course.day2] = (dailyCount[course.day2] || 0) + 1;
             });
-            
+
             const maxClassesPerDay = parseInt(timePreferences.classesPerDay);
             if (Object.values(dailyCount).some(count => count > maxClassesPerDay)) {
               return;
             }
           }
-          
+
           // This is a valid combination that meets all course and time constraints
           allValidCombinations.push([...current]);
         }
         return;
       }
-      
+
       // Try each available section for the current course
       for (const course of courseSections[index]) {
         generateCartesian(index + 1, [...current, course]);
       }
     };
-    
+
     generateCartesian(0, []);
-    
+
     console.log(`Generated ${allValidCombinations.length} valid combinations (before faculty prioritization)`);
-    
+
     // Step 3: If no preferred faculties, return all valid combinations sorted by schedule efficiency
     if (courseSelection.prioritizedFaculties.length === 0) {
       console.log('No faculty preferences - sorting by schedule efficiency only');
@@ -438,7 +450,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
         const aDays = new Set([...a.map(c => c.day1), ...a.map(c => c.day2)].filter(Boolean)).size;
         const bDays = new Set([...b.map(c => c.day1), ...b.map(c => c.day2)].filter(Boolean)).size;
         if (aDays !== bDays) return aDays - bDays;
-        
+
         // Prefer earlier start times
         const aEarliestTime = Math.min(...a.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[0]) : Infinity));
         const bEarliestTime = Math.min(...b.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[0]) : Infinity));
@@ -448,7 +460,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
 
     console.log('=== ADVANCED FACULTY PRIORITIZATION ===');
     console.log(`Preferred faculties: ${courseSelection.prioritizedFaculties.length}`);
-    
+
     // Group combinations by faculty metrics for intelligent prioritization
     const facultyAnalysis: {
       combination: Course[],
@@ -459,34 +471,34 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
       tbaCount: number,
       missingTimeCount: number
     }[] = [];
-    
+
     allValidCombinations.forEach(combination => {
       const combinationFaculties = combination.map(course => `${course.facultyName} (${course.facultyInitial})`);
-      const matchedFaculties = courseSelection.prioritizedFaculties.filter(prefFaculty => 
+      const matchedFaculties = courseSelection.prioritizedFaculties.filter(prefFaculty =>
         combinationFaculties.includes(prefFaculty)
       );
-      const unmatchedFaculties = courseSelection.prioritizedFaculties.filter(prefFaculty => 
+      const unmatchedFaculties = courseSelection.prioritizedFaculties.filter(prefFaculty =>
         !combinationFaculties.includes(prefFaculty)
       );
-      
+
       // Count unique preferred faculties in this combination
       const uniquePreferredFaculties = new Set(matchedFaculties);
-      
+
       // Count total assignments to preferred faculties (same faculty can teach multiple courses)
-      const totalMatches = combinationFaculties.filter(faculty => 
+      const totalMatches = combinationFaculties.filter(faculty =>
         courseSelection.prioritizedFaculties.includes(faculty)
       ).length;
-      
+
       // Count TBA faculties (penalty metric)
-      const tbaCount = combination.filter(course => 
+      const tbaCount = combination.filter(course =>
         course.facultyName === "TBA" || course.facultyInitial === "TBA"
       ).length;
-      
+
       // Count missing time information (penalty metric)
-      const missingTimeCount = combination.filter(course => 
+      const missingTimeCount = combination.filter(course =>
         !course.time1 || course.time1 === "TBA"
       ).length;
-      
+
       facultyAnalysis.push({
         combination,
         uniqueFacultiesCount: uniquePreferredFaculties.size,
@@ -497,7 +509,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
         missingTimeCount
       });
     });
-    
+
     // Step 5: Multi-tier sorting with sophisticated faculty logic
     facultyAnalysis.sort((a, b) => {
       // TIER 1: Prioritize by number of UNIQUE preferred faculties included
@@ -505,60 +517,60 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
       if (a.uniqueFacultiesCount !== b.uniqueFacultiesCount) {
         return b.uniqueFacultiesCount - a.uniqueFacultiesCount;
       }
-      
+
       // TIER 2: Among schedules with same unique faculty count, prefer more total assignments
       // This rewards schedules where preferred faculties teach multiple courses
       if (a.totalFacultyMatches !== b.totalFacultyMatches) {
         return b.totalFacultyMatches - a.totalFacultyMatches;
       }
-      
+
       // TIER 3: Avoid TBA faculties (data quality priority)
       if (a.tbaCount !== b.tbaCount) {
         return a.tbaCount - b.tbaCount; // Fewer TBA is better
       }
-      
+
       // TIER 4: Avoid missing time information (data quality priority)
       if (a.missingTimeCount !== b.missingTimeCount) {
         return a.missingTimeCount - b.missingTimeCount; // Fewer missing times is better
       }
-      
+
       // TIER 5: Prefer fewer total class days (more compact schedule)
       const aDays = new Set([...a.combination.map(c => c.day1), ...a.combination.map(c => c.day2)].filter(Boolean)).size;
       const bDays = new Set([...b.combination.map(c => c.day1), ...b.combination.map(c => c.day2)].filter(Boolean)).size;
       if (aDays !== bDays) {
         return aDays - bDays;
       }
-      
+
       // TIER 6: Prefer earlier start times
       const aEarliestTime = Math.min(...a.combination.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[0]) : Infinity));
       const bEarliestTime = Math.min(...b.combination.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[0]) : Infinity));
       if (aEarliestTime !== bEarliestTime) {
         return aEarliestTime - bEarliestTime;
       }
-      
+
       // TIER 7: Prefer later end times (less rushed schedule)
       const aLatestTime = Math.max(...a.combination.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[1]) : 0));
       const bLatestTime = Math.max(...b.combination.map(c => c.time1 ? timeToMinutes(c.time1.split(' - ')[1]) : 0));
       if (aLatestTime !== bLatestTime) {
         return bLatestTime - aLatestTime;
       }
-      
+
       // TIER 8: Prefer higher total credit hours (more academic value)
       const aTotalCredits = a.combination.reduce((sum, course) => sum + parseInt(course.credit || '0'), 0);
       const bTotalCredits = b.combination.reduce((sum, course) => sum + parseInt(course.credit || '0'), 0);
       if (aTotalCredits !== bTotalCredits) {
         return bTotalCredits - aTotalCredits;
       }
-      
+
       // TIER 9: Alphabetical by first course code (consistent ordering)
       const aFirstCourse = a.combination[0]?.courseCode || '';
       const bFirstCourse = b.combination[0]?.courseCode || '';
       return aFirstCourse.localeCompare(bFirstCourse);
     });
-    
+
     // Step 6: Detailed analysis and logging
     const resultsByTier: { [tier: string]: typeof facultyAnalysis } = {};
-    
+
     facultyAnalysis.forEach(analysis => {
       const tierKey = `${analysis.uniqueFacultiesCount}-unique_${analysis.totalFacultyMatches}-total`;
       if (!resultsByTier[tierKey]) {
@@ -566,97 +578,97 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
       }
       resultsByTier[tierKey].push(analysis);
     });
-    
+
     // Log comprehensive results
     const sortedTiers = Object.keys(resultsByTier).sort((a, b) => {
       const [aUnique, aTotal] = a.split('_').map(part => parseInt(part.split('-')[0]));
       const [bUnique, bTotal] = b.split('_').map(part => parseInt(part.split('-')[0]));
-      
+
       if (aUnique !== bUnique) return bUnique - aUnique;
       return bTotal - aTotal;
     });
-    
+
     console.log('=== FACULTY PRIORITIZATION RESULTS ===');
     sortedTiers.forEach(tierKey => {
       const [uniquePart, totalPart] = tierKey.split('_');
       const uniqueCount = parseInt(uniquePart.split('-')[0]);
       const totalCount = parseInt(totalPart.split('-')[0]);
       const tierCombinations = resultsByTier[tierKey];
-      
+
       console.log(`\n📊 TIER: ${uniqueCount}/${courseSelection.prioritizedFaculties.length} unique faculties, ${totalCount} total assignments`);
       console.log(`   📈 ${tierCombinations.length} combinations in this tier`);
-      
+
       // Show top 3 examples from this tier
       tierCombinations.slice(0, 3).forEach((analysis, index) => {
         const courses = analysis.combination.map(c => `${c.courseCode}(${c.section})`).join(', ');
         const faculties = analysis.matchedFaculties.map(f => f.split('(')[0].trim()).join(', ');
         const missing = analysis.unmatchedFaculties.map(f => f.split('(')[0].trim()).join(', ');
-        const dataQuality = analysis.tbaCount === 0 && analysis.missingTimeCount === 0 ? '✅ Complete' : 
-                          `⚠️ ${analysis.tbaCount} TBA, ${analysis.missingTimeCount} missing times`;
-        
+        const dataQuality = analysis.tbaCount === 0 && analysis.missingTimeCount === 0 ? '✅ Complete' :
+          `⚠️ ${analysis.tbaCount} TBA, ${analysis.missingTimeCount} missing times`;
+
         console.log(`   ${index + 1}. Courses: ${courses}`);
         console.log(`      ✅ Matched: ${faculties || 'None'}`);
         console.log(`      ❌ Missing: ${missing || 'None'}`);
         console.log(`      📊 Data: ${dataQuality}`);
       });
     });
-    
+
     // Step 7: Return prioritized combinations
     const finalResults = facultyAnalysis.map(analysis => analysis.combination);
-    
+
     console.log(`\n🎯 FINAL: ${finalResults.length} combinations optimally sorted`);
     console.log('Priority order: 1) Max unique faculties 2) Max total assignments 3) Avoid TBA faculties 4) Complete time data 5) Fewer days 6) Earlier start 7) Later end 8) Higher credits 9) Alphabetical');
-    
+
     return finalResults;
   };
 
   // Generate possible schedules
   const generateSchedules = () => {
     setIsGenerating(true);
-    
+
     setTimeout(() => {
       console.log('=== SCHEDULE GENERATION STARTED ===');
       console.log('Selected courses:', courseSelection.selectedCourses);
       console.log('Time preferences:', timePreferences);
       console.log('Preferred faculties:', courseSelection.prioritizedFaculties);
-      
+
       const combinations = generateCombinations(courseSelection.selectedCourses);
       console.log(`Found ${combinations.length} valid combinations after full analysis`);
-      
+
       // Process ALL combinations, not just the first 10
       const allSchedules: GeneratedSchedule[] = combinations.map((combination, index) => {
         // Validate that we have exactly one course from each selected course
         const courseKeys = combination.map(course => `${course.courseCode} - ${course.title}`);
-        const missingCourses = courseSelection.selectedCourses.filter(selectedCourse => 
+        const missingCourses = courseSelection.selectedCourses.filter(selectedCourse =>
           !courseKeys.includes(selectedCourse)
         );
-        
+
         if (missingCourses.length > 0) {
           console.warn('Schedule missing courses:', missingCourses);
         }
-        
+
         if (combination.length !== courseSelection.selectedCourses.length) {
           console.warn('Schedule has wrong number of courses:', combination.length, 'expected:', courseSelection.selectedCourses.length);
         }
-        
+
         // Calculate daily schedule
         const dailySchedule: { [day: string]: Course[] } = {};
         const allDays = new Set<string>();
-        
+
         combination.forEach(course => {
           // For courses with both day1 and day2, we'll show them as a single entry with combined days
           const courseDays = [course.day1, course.day2].filter(Boolean);
           courseDays.forEach(day => {
             allDays.add(day);
           });
-          
+
           // Add course to the first day only to avoid duplicates in the table
           if (course.day1) {
             if (!dailySchedule[course.day1]) dailySchedule[course.day1] = [];
             dailySchedule[course.day1].push(course);
           }
         });
-        
+
         // Sort courses by time for each day
         Object.keys(dailySchedule).forEach(day => {
           dailySchedule[day].sort((a, b) => {
@@ -664,22 +676,22 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
             return timeToMinutes(a.time1.split(' - ')[0]) - timeToMinutes(b.time1.split(' - ')[0]);
           });
         });
-        
+
         // Calculate comprehensive faculty statistics
         const scheduleFaculties = combination.map(course => `${course.facultyName} (${course.facultyInitial})`);
-        const matchedFaculties = courseSelection.prioritizedFaculties.filter(faculty => 
+        const matchedFaculties = courseSelection.prioritizedFaculties.filter(faculty =>
           scheduleFaculties.includes(faculty)
         );
-        const missingFaculties = courseSelection.prioritizedFaculties.filter(faculty => 
+        const missingFaculties = courseSelection.prioritizedFaculties.filter(faculty =>
           !scheduleFaculties.includes(faculty)
         ).map(faculty => faculty.split('(')[0].trim());
-        
+
         // Calculate unique vs total matches
         const uniqueMatchedFaculties = new Set(matchedFaculties);
-        const totalFacultyAssignments = scheduleFaculties.filter(faculty => 
+        const totalFacultyAssignments = scheduleFaculties.filter(faculty =>
           courseSelection.prioritizedFaculties.includes(faculty)
         ).length;
-        
+
         const schedule = {
           id: `schedule-${index + 1}`,
           courses: combination,
@@ -687,7 +699,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
           totalDays: allDays.size,
           dailySchedule
         };
-        
+
         // Only log first 10 in detail to avoid console spam
         if (index < 10) {
           console.log(`=== SCHEDULE ${index + 1} ===`);
@@ -699,15 +711,15 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
           console.log(`   • Missing: ${missingFaculties.join(', ') || 'None'}`);
           console.log('📅 Schedule:', `${allDays.size} days per week`);
         }
-        
+
         return schedule;
       });
-      
+
       // Store all schedules and reset pagination
       setAllSchedules(allSchedules);
       setDisplayedCount(10);
       setGeneratedSchedules(allSchedules.slice(0, 10));
-      
+
       // The combinations are already optimally sorted by the advanced algorithm
       console.log('\n🏆 === FINAL SCHEDULE RANKING ===');
       console.log(`📊 Generated ${allSchedules.length} total schedules ranked by:`);
@@ -719,7 +731,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
       console.log('   6️⃣ Higher total credit hours (academic value)');
       console.log('   7️⃣ Alphabetical consistency (reproducible results)');
       console.log(`\n💡 Showing first 10 schedules. Use "Show More" to see additional options!`);
-      
+
       setIsGenerating(false);
     }, 1000);
   };
@@ -759,8 +771,11 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                 <SelectValue placeholder="Select program" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="BSCSE">BSCSE - Computer Science & Engineering</SelectItem>
-                <SelectItem value="BSDS">BSDS - Data Science</SelectItem>
+                {availablePrograms.map((p) => (
+                  <SelectItem key={p} value={p}>
+                    {p}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
@@ -888,7 +903,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                   ))}
                 </div>
               )}
-              
+
               {/* Search Input */}
               <Popover open={(isCourseSearchFocused || !!courseSearchTerm) && (getFilteredCourses().length > 0 || !!courseSearchTerm)}>
                 <PopoverAnchor asChild>
@@ -979,7 +994,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                   ))}
                 </div>
               )}
-              
+
               {/* Faculty Search Input */}
               <Popover open={courseSelection.selectedCourses.length > 0 && (isFacultySearchFocused || !!facultySearchTerm) && (getFilteredFaculties().length > 0 || !!facultySearchTerm)}>
                 <PopoverAnchor asChild>
@@ -1045,7 +1060,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
 
       {/* Generate Button */}
       <div className="flex justify-center">
-        <Button 
+        <Button
           onClick={generateSchedules}
           disabled={courseSelection.selectedCourses.length === 0 || isGenerating}
           size="lg"
@@ -1064,8 +1079,8 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
             </h3>
             <div className="flex gap-2 items-center w-full sm:w-auto">
               {allSchedules.length > generatedSchedules.length && (
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   size="sm"
                   onClick={showMoreSchedules}
                   className="text-xs sm:text-sm flex-1 sm:flex-none"
@@ -1078,7 +1093,7 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               </p>
             </div>
           </div>
-          
+
           {generatedSchedules.map((schedule, index) => (
             <Card key={schedule.id}>
               <CardHeader className="px-4 sm:px-6">
@@ -1199,12 +1214,12 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
               </CardContent>
             </Card>
           ))}
-          
+
           {/* Show More Button at the bottom */}
           {allSchedules.length > generatedSchedules.length && (
             <div className="text-center">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 onClick={showMoreSchedules}
                 className="w-full max-w-md"
               >

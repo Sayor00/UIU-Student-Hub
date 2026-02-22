@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { CalendarDays } from "lucide-react";
@@ -537,7 +537,6 @@ interface SectionPlan {
 }
 
 const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBack: () => void }) => {
-  const [filteredCourses, setFilteredCourses] = useState<Course[]>(initialCourses);
   const [sectionPlans, setSectionPlans] = useState<SectionPlan[]>([
     { id: '1', name: 'Section Plan 1', courses: [] }
   ]);
@@ -545,6 +544,12 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   const [viewMode, setViewMode] = useState<'card' | 'table' | 'planner'>('card');
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set(sectionPlans.map(p => p.id)));
   const [sectionPlansVisible, setSectionPlansVisible] = useState(false);
+  const [bulkProgramFilter, setBulkProgramFilter] = useState<string>("All");
+
+  const availablePrograms = useMemo(() => {
+    const programs = new Set(initialCourses.map(c => c.program).filter(Boolean));
+    return Array.from(programs).sort();
+  }, [initialCourses]);
 
   // Refs for scrolling to specific plans
   const planRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
@@ -595,11 +600,20 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   };
 
   const handleSearch = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const rawTerm = event.target.value;
-    setSearchTerm(rawTerm);
-    const term = rawTerm.toLowerCase().trim();
+    setSearchTerm(event.target.value);
+  };
 
-    const filtered = initialCourses.filter((course) => {
+  const filteredCourses = useMemo(() => {
+    const term = searchTerm.toLowerCase().trim();
+
+    return initialCourses.filter((course) => {
+      // Program filter check first
+      if (bulkProgramFilter !== "All" && course.program !== bulkProgramFilter) {
+        return false;
+      }
+
+      if (!term) return true; // If no search term but program matched (or all programs), return true
+
       const titleLower = course.title.toLowerCase();
       const codeLower = course.courseCode.toLowerCase();
       const facultyLower = course.facultyName.toLowerCase();
@@ -668,8 +682,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
 
       return false;
     });
-    setFilteredCourses(filtered);
-  };
+  }, [initialCourses, searchTerm, bulkProgramFilter]);
 
   const handleSelectCourse = (course: Course, planId?: string) => {
     // If planId is not provided, check if course exists in any plan and remove it from ALL plans
@@ -1206,13 +1219,26 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Input
-                  type="text"
-                  placeholder="Search by course, title, faculty, or section"
-                  value={searchTerm}
-                  onChange={handleSearch}
-                  className="mb-4 text-sm"
-                />
+                <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                  <Input
+                    type="text"
+                    placeholder="Search by course, title, faculty, or section"
+                    value={searchTerm}
+                    onChange={handleSearch}
+                    className="text-sm flex-grow"
+                  />
+                  <Select value={bulkProgramFilter} onValueChange={setBulkProgramFilter}>
+                    <SelectTrigger className="w-full sm:w-[250px] text-sm">
+                      <SelectValue placeholder="Filter by program" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="All">All Programs</SelectItem>
+                      {availablePrograms.map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="overflow-x-auto max-h-[60vh] w-full border rounded-md">
                   <table className="w-full border-collapse min-w-[800px]">
                     <thead>
