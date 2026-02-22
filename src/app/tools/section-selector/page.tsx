@@ -53,16 +53,16 @@ const parsePdfText = (text: string): Course[] => {
 
 
   const courses: Course[] = [];
-  
+
   const cleanedText = text.replace(/(\d{1,2}:\d{2}:[AP]M)\s-\s(\d{1,2}:\d{2}:[AP]M)/g, '$1-$2');
-  
+
   // Detect PDF format by looking for table headers
   // Format 1 (252): "Credit" header
   // Format 2 (253): "Cr." header
   let isFormat253 = false;
   let headerEndMarker = "";
   let startIndex = -1;
-  
+
   // Try Format 1 (252) header
   startIndex = cleanedText.indexOf("Credit");
   if (startIndex !== -1) {
@@ -78,14 +78,14 @@ const parsePdfText = (text: string): Course[] => {
 
     }
   }
-  
+
   if (startIndex === -1) {
     console.error("Could not find the header in the PDF text.");
 
     toast.error("Parsing Error: Could not find the data table header in the PDF. The PDF format might be unsupported.");
     return [];
   }
-  
+
   const courseDataText = cleanedText.substring(startIndex + headerEndMarker.length).trim();
 
   // Split courses based on format
@@ -113,7 +113,7 @@ const parsePdfText = (text: string): Course[] => {
       // 1. Extract SL (if Format 252), Program, and Course Code
       let program = "";
       let courseCode = "";
-      
+
       if (isFormat253) {
         // Format 253: No serial number, starts with "BSCSE CSE 2218" or "BSDS CSE 2218"
         const initialMatch = remainingBlock.match(/^(BSCSE|BSDS)\s+([A-Z]{2,4}\s+\d{4}[A-Z]?)/);
@@ -237,7 +237,7 @@ const parsePdfText = (text: string): Course[] => {
   });
 
   if (courses.length === 0 && courseBlocks.length > 0) {
-      toast.error("Parsing Failed: Could not extract any course data, though blocks were found. The PDF structure might have changed.");
+    toast.error("Parsing Failed: Could not extract any course data, though blocks were found. The PDF structure might have changed.");
   }
 
 
@@ -247,6 +247,57 @@ const parsePdfText = (text: string): Course[] => {
 const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) => void }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  const processJsonData = (data: any): Course[] => {
+    const courses: Course[] = [];
+
+    // Process each program (BSCSE, BSDS, etc.)
+    Object.keys(data).forEach((programName) => {
+      const programData = data[programName];
+      if (programData && programData.status === "success" && programData.data && programData.data.courses) {
+
+        programData.data.courses.forEach((courseObj: any) => {
+          const formalCode = courseObj.formal_code || courseObj.course_code;
+          const courseTitle = courseObj.course_name || "";
+
+          if (courseObj.sections && Array.isArray(courseObj.sections)) {
+            courseObj.sections.forEach((sec: any) => {
+              const schedule = sec.schedule || [];
+              let time1 = "", time2 = "";
+              let day1 = "", day2 = "";
+
+              if (schedule.length > 0) {
+                day1 = schedule[0].day.substring(0, 3); // e.g., "Saturday" -> "Sat"
+                time1 = `${schedule[0].start_time}-${schedule[0].end_time}`;
+              }
+              if (schedule.length > 1) {
+                day2 = schedule[1].day.substring(0, 3);
+                time2 = `${schedule[1].start_time}-${schedule[1].end_time}`;
+              }
+
+              courses.push({
+                program: programName,
+                courseCode: formalCode,
+                title: courseTitle,
+                section: sec.section_name || "TBA",
+                room1: sec.room_details || "TBA",
+                room2: sec.room_details || "TBA",
+                day1,
+                day2,
+                time1,
+                time2,
+                facultyName: sec.faculty_name || "TBA",
+                facultyInitial: sec.faculty_code || "TBA",
+                credit: String(courseObj.credits || sec.credits || "0")
+              });
+            });
+          }
+        });
+      }
+    });
+
+    return courses;
+  };
 
   const handleFileChange = async (file: File | null) => {
     if (!file) return;
@@ -289,30 +340,30 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
 
   const handlePreUploadedLoad = async () => {
     setIsLoading(true);
-    toast.info("Loading pre-uploaded course data...");
+    toast.info("Loading latest course data from UCAM...");
     try {
-      const response = await fetch("/api/demo-pdf", {
+      const response = await fetch("/courses.json", {
         method: "GET",
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to load pre-uploaded data.");
+        throw new Error("Failed to load course data.");
       }
 
       const data = await response.json();
-      if (data.text) {
-        const parsedCourses = parsePdfText(data.text);
+      const parsedCourses = processJsonData(data);
+      if (parsedCourses.length > 0) {
         onPdfProcessed(parsedCourses);
+        toast.success(`Loaded ${parsedCourses.length} course sections directly from UCAM!`);
       } else {
-        throw new Error("The pre-uploaded PDF could not be read or is empty.");
+        throw new Error("No courses found in the data.");
       }
     } catch (error) {
-      console.error("Error loading pre-uploaded PDF:", error);
+      console.error("Error loading course data:", error);
       if (error instanceof Error) {
         toast.error(error.message);
       } else {
-        toast.error("An unexpected error occurred while loading pre-uploaded data.");
+        toast.error("An unexpected error occurred while loading data minimize your worries.");
       }
       onPdfProcessed([]); // Send empty array on error
     } finally {
@@ -352,7 +403,7 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
 
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6">
-      <Card 
+      <Card
         className={`w-full max-w-lg border-2 border-dashed transition-colors ${isDragging ? 'border-primary bg-muted/50' : 'border-border'}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -367,18 +418,18 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
             {/* Pre-uploaded Section */}
             <div className="space-y-3 p-4 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-950/20 dark:to-amber-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
               <div className="flex items-center justify-center space-x-2">
-                <span className="text-xl">📄</span>
-                <h3 className="font-semibold text-orange-700 dark:text-orange-300">Use Pre-uploaded PDF</h3>
+                <span className="text-xl">🚀</span>
+                <h3 className="font-semibold text-orange-700 dark:text-orange-300">Use Live UCAM Data</h3>
               </div>
-              <Button 
+              <Button
                 size="lg"
                 onClick={handlePreUploadedLoad}
                 className="w-full font-semibold py-3 px-6 shadow-lg hover:shadow-xl transition-all duration-200"
               >
-                Start with Pre-uploaded Data
+                Start with Latest Course Data
               </Button>
               <p className="text-sm text-orange-600 dark:text-orange-400">
-                Using CLASS-ROUTINE-253.pdf - No upload required
+                100% accurate formal data drawn straight from the cloud! No upload required.
               </p>
             </div>
 
@@ -399,11 +450,11 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
                 <h3 className="font-semibold text-green-700 dark:text-green-300">Upload Your Own PDF</h3>
               </div>
               <div>
-                <Input 
+                <Input
                   id="file-upload"
-                  type="file" 
-                  className="hidden" 
-                  onChange={(e) => handleFileChange(e.target.files ? e.target.files[0] : null)} 
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => handleFileChange(e.target.files ? e.target.files[0] : null)}
                   accept=".pdf"
                 />
                 <label htmlFor="file-upload" className="cursor-pointer block">
@@ -438,10 +489,10 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   const [viewMode, setViewMode] = useState<'card' | 'table' | 'planner'>('card');
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set(sectionPlans.map(p => p.id)));
   const [sectionPlansVisible, setSectionPlansVisible] = useState(false);
-  
+
   // Refs for scrolling to specific plans
   const planRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
-  
+
   // Computed: all selected courses across all plans
   const selectedCourses = sectionPlans.flatMap(plan => plan.courses);
 
@@ -461,23 +512,23 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   const handleNavigateToPlan = (planId: string) => {
     // First, make sure Section Plans is visible
     setSectionPlansVisible(true);
-    
+
     // Then, make sure the specific plan is expanded
     setExpandedPlans(prev => {
       const newSet = new Set(prev);
       newSet.add(planId);
       return newSet;
     });
-    
+
     // Wait for state updates to render, then scroll
     setTimeout(() => {
       const planElement = planRefs.current.get(planId);
       if (planElement) {
-        planElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
+        planElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center'
         });
-        
+
         // Highlight the plan briefly
         planElement.classList.add('ring-4', 'ring-red-500');
         setTimeout(() => {
@@ -491,44 +542,44 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     const rawTerm = event.target.value;
     setSearchTerm(rawTerm);
     const term = rawTerm.toLowerCase().trim();
-    
+
     const filtered = initialCourses.filter((course) => {
       const titleLower = course.title.toLowerCase();
       const codeLower = course.courseCode.toLowerCase();
       const facultyLower = course.facultyName.toLowerCase();
       const sectionLower = course.section.toLowerCase();
       const initialLower = course.facultyInitial.toLowerCase();
-      
+
       // Basic matching
-      if (titleLower.includes(term) || codeLower.includes(term) || 
-          facultyLower.includes(term) || initialLower.includes(term) || 
-          sectionLower.includes(term)) {
+      if (titleLower.includes(term) || codeLower.includes(term) ||
+        facultyLower.includes(term) || initialLower.includes(term) ||
+        sectionLower.includes(term)) {
         return true;
       }
-      
+
       // Dynamic uppercase letter extraction
       const upperCaseLetters = course.title.match(/[A-Z]/g);
       if (upperCaseLetters && upperCaseLetters.length >= 2) {
         const acronymFromUppercase = upperCaseLetters.join('').toLowerCase();
-        if (acronymFromUppercase === term || acronymFromUppercase.includes(term) || 
-            (term.length >= 2 && acronymFromUppercase.startsWith(term))) {
+        if (acronymFromUppercase === term || acronymFromUppercase.includes(term) ||
+          (term.length >= 2 && acronymFromUppercase.startsWith(term))) {
           return true;
         }
       }
-      
+
       // Dynamic acronym from title, skipping common stop words
       const stopWords = ['and', 'of', 'the', 'for', 'if', 'required', 'a', 'an', 'in', 'on', 'to', 'using', 'lab', 'laboratory', 'introduction', 'basic', 'advanced', 'theory', 'practical'];
-      const titleWords = course.title.split(/\s+/).filter(w => 
+      const titleWords = course.title.split(/\s+/).filter(w =>
         w.length > 1 && !stopWords.includes(w.toLowerCase())
       );
-      
+
       if (titleWords.length >= 2) {
         // Full acronym from first letters
         const acronym = titleWords.map(w => w[0]).join('').toLowerCase();
         if (acronym === term || acronym.includes(term) || term.includes(acronym)) {
           return true;
         }
-        
+
         // Partial acronyms
         for (let i = 2; i <= Math.min(titleWords.length, term.length + 2); i++) {
           const partialAcronym = titleWords.slice(0, i).map(w => w[0]).join('').toLowerCase();
@@ -536,7 +587,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
             return true;
           }
         }
-        
+
         // Sliding window acronyms
         for (let start = 0; start <= titleWords.length - 2; start++) {
           for (let length = 2; length <= Math.min(4, titleWords.length - start); length++) {
@@ -548,10 +599,10 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
           }
         }
       }
-      
+
       // Check if search term matches the start of any significant word
       if (titleWords.length > 0) {
-        const matchesWordStart = titleWords.some(word => 
+        const matchesWordStart = titleWords.some(word =>
           word.toLowerCase().startsWith(term) && term.length >= 2
         );
         if (matchesWordStart) {
@@ -567,10 +618,10 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   const handleSelectCourse = (course: Course, planId?: string) => {
     // If planId is not provided, check if course exists in any plan and remove it from ALL plans
     if (!planId) {
-      const plansWithCourse = sectionPlans.filter(plan => 
+      const plansWithCourse = sectionPlans.filter(plan =>
         plan.courses.some(c => c.courseCode === course.courseCode && c.section === course.section)
       );
-      
+
       if (plansWithCourse.length > 0) {
         // Remove from all plans that have this course
         setSectionPlans(prev => prev.map(plan => ({
@@ -580,91 +631,91 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
         toast.info(`Removed ${course.courseCode} ${course.section} from all plans`);
         return;
       }
-      
+
       // If not in any plan and no planId specified, add to first plan
       planId = sectionPlans[0].id;
     }
-    
+
     // Determine target plan
     const targetPlanId = planId;
     const targetPlan = sectionPlans.find(p => p.id === targetPlanId);
-    
+
     if (!targetPlan) return;
-    
+
     // Check if target plan already has this exact course (same course code AND section)
     const exactCourseInTargetPlan = targetPlan.courses.find(
       c => c.courseCode === course.courseCode && c.section === course.section
     );
-    
+
     if (exactCourseInTargetPlan) {
       // This exact course is already in the target plan, so remove it
       const planName = targetPlan.name;
-      setSectionPlans(prev => prev.map(plan => 
-        plan.id === targetPlanId 
+      setSectionPlans(prev => prev.map(plan =>
+        plan.id === targetPlanId
           ? { ...plan, courses: plan.courses.filter(c => !(c.courseCode === course.courseCode && c.section === course.section)) }
           : plan
       ));
       toast.info(`Removed ${course.courseCode} ${course.section} from ${planName}`);
       return;
     }
-    
+
     // Check if target plan already has this course with a different section
     const existingCourseInPlan = targetPlan.courses.find(c => c.courseCode === course.courseCode);
-    
+
     if (existingCourseInPlan) {
       // Don't allow adding the same course (different section) to the same plan
       toast.error(`${course.courseCode} is already in ${targetPlan.name}. Use move/swap to exchange sections.`);
       return;
     }
-    
+
     // Add to target plan
     const planName = targetPlan.name;
-    setSectionPlans(prev => prev.map(plan => 
-      plan.id === targetPlanId 
+    setSectionPlans(prev => prev.map(plan =>
+      plan.id === targetPlanId
         ? { ...plan, courses: [...plan.courses, course] }
         : plan
     ));
-    
+
     toast.success(`Added ${course.courseCode} ${course.section} to ${planName}`);
   };
 
   const handleMoveCourse = (course: Course, fromPlanId: string, toPlanId: string) => {
     setSectionPlans(prev => {
       const newPlans = prev.map(plan => ({ ...plan, courses: [...plan.courses] }));
-      
+
       // Find the source and target plans
       const fromPlan = newPlans.find(p => p.id === fromPlanId);
       const toPlan = newPlans.find(p => p.id === toPlanId);
-      
+
       if (!fromPlan || !toPlan) return prev;
-      
+
       // Find the course in the source plan
       const courseIndex = fromPlan.courses.findIndex(
         c => c.courseCode === course.courseCode && c.section === course.section
       );
-      
+
       if (courseIndex === -1) return prev;
-      
+
       // Check if target plan has the same course (same course code, any section)
       const existingCourseIndex = toPlan.courses.findIndex(
         c => c.courseCode === course.courseCode
       );
-      
+
       if (existingCourseIndex !== -1) {
         // SWAP: Exchange the courses
         const existingCourse = toPlan.courses[existingCourseIndex];
         const movingCourse = fromPlan.courses[courseIndex];
-        
+
         // Get plan names for toast
         const fromPlanName = prev.find(p => p.id === fromPlanId)?.name || 'Plan';
         const toPlanName = prev.find(p => p.id === toPlanId)?.name || 'Plan';
-        
+
         // Replace in target plan
         toPlan.courses[existingCourseIndex] = movingCourse;
-        
+
         // Replace in source plan
         fromPlan.courses[courseIndex] = existingCourse;
-        
+
         toast.success(`Swapped ${course.courseCode} sections between plans`, {
           description: `${fromPlanName}: Section ${existingCourse.section} ↔ ${toPlanName}: Section ${movingCourse.section}`
         });
@@ -672,20 +723,20 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
         // MOVE: Just move the course
         const [movedCourse] = fromPlan.courses.splice(courseIndex, 1);
         toPlan.courses.push(movedCourse);
-        
+
         const fromPlanName = prev.find(p => p.id === fromPlanId)?.name || 'Plan';
         const toPlanName = prev.find(p => p.id === toPlanId)?.name || 'Plan';
-        
+
         toast.success(`Moved ${course.courseCode} from ${fromPlanName} to ${toPlanName}`);
       }
-      
+
       return newPlans;
     });
   };
 
   const handleRemoveCourse = (course: Course, planId: string) => {
-    setSectionPlans(prev => prev.map(plan => 
-      plan.id === planId 
+    setSectionPlans(prev => prev.map(plan =>
+      plan.id === planId
         ? { ...plan, courses: plan.courses.filter(c => !(c.courseCode === course.courseCode && c.section === course.section)) }
         : plan
     ));
@@ -693,10 +744,10 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
 
   const handleAddNewPlan = () => {
     const newId = (Math.max(...sectionPlans.map(p => parseInt(p.id)), 0) + 1).toString();
-    setSectionPlans(prev => [...prev, { 
-      id: newId, 
-      name: `Section Plan ${newId}`, 
-      courses: [] 
+    setSectionPlans(prev => [...prev, {
+      id: newId,
+      name: `Section Plan ${newId}`,
+      courses: []
     }]);
     // Expand the newly created plan
     setExpandedPlans(prev => new Set([...prev, newId]));
@@ -707,22 +758,22 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     // Find a unique name by checking existing plan names
     let finalName = scheduleName;
     let counter = 1;
-    
+
     // Extract the base name and number if it exists
     const baseNameMatch = scheduleName.match(/^(.*?)(\d+)$/);
     const baseName = baseNameMatch ? baseNameMatch[1].trim() : scheduleName;
-    
+
     // Check if name exists and increment until we find a unique one
     while (sectionPlans.some(plan => plan.name === finalName)) {
       counter++;
       finalName = `${baseName} ${counter}`;
     }
-    
+
     const newId = (Math.max(...sectionPlans.map(p => parseInt(p.id)), 0) + 1).toString();
-    setSectionPlans(prev => [...prev, { 
-      id: newId, 
-      name: finalName, 
-      courses: courses 
+    setSectionPlans(prev => [...prev, {
+      id: newId,
+      name: finalName,
+      courses: courses
     }]);
     // Expand the newly created plan
     setExpandedPlans(prev => new Set([...prev, newId]));
@@ -746,7 +797,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   };
 
   const handleRenamePlan = (planId: string, newName: string) => {
-    setSectionPlans(prev => prev.map(plan => 
+    setSectionPlans(prev => prev.map(plan =>
       plan.id === planId ? { ...plan, name: newName } : plan
     ));
   };
@@ -763,28 +814,28 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
   const hasConflictInPlan = (course: Course, plan: SectionPlan): boolean => {
     const parseTime = (timeStr: string): { start: number; end: number } | null => {
       if (!timeStr) return null;
-      
+
       // Updated regex to handle formats like "11:11:AM - 12:30:PM" (no space before AM/PM)
       const match = timeStr.match(/(\d+):(\d+)\s*:?\s*([AP]M)?\s*-\s*(\d+):(\d+)\s*:?\s*([AP]M)?/i);
-      
+
       if (!match) return null;
-      
+
       let startHour = parseInt(match[1]);
       const startMin = parseInt(match[2]);
       const startPeriod = match[3]?.toUpperCase();
       let endHour = parseInt(match[4]);
       const endMin = parseInt(match[5]);
       const endPeriod = match[6]?.toUpperCase();
-      
+
       // If no period specified for start, inherit from end
       const effectiveStartPeriod = startPeriod || endPeriod;
       const effectiveEndPeriod = endPeriod || startPeriod;
-      
+
       if (effectiveStartPeriod === 'PM' && startHour !== 12) startHour += 12;
       if (effectiveStartPeriod === 'AM' && startHour === 12) startHour = 0;
       if (effectiveEndPeriod === 'PM' && endHour !== 12) endHour += 12;
       if (effectiveEndPeriod === 'AM' && endHour === 12) endHour = 0;
-      
+
       return {
         start: startHour * 60 + startMin,
         end: endHour * 60 + endMin
@@ -802,8 +853,8 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     const courseTimes = [course.time1, course.time2].filter(Boolean);
 
     return plan.courses.some(existingCourse => {
-      if (existingCourse.courseCode === course.courseCode && 
-          existingCourse.section === course.section) {
+      if (existingCourse.courseCode === course.courseCode &&
+        existingCourse.section === course.section) {
         return false;
       }
 
@@ -813,7 +864,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
       const hasCommonDay = courseDays.some(day => existingDays.includes(day));
       if (!hasCommonDay) return false;
 
-      return courseTimes.some(time => 
+      return courseTimes.some(time =>
         existingTimes.some(existingTime => timesOverlap(time, existingTime))
       );
     });
@@ -824,7 +875,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4">
         <Button onClick={onBack} size="sm" className="w-full sm:w-auto">Back to Upload</Button>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <Button 
+          <Button
             variant={viewMode === 'card' ? 'default' : 'outline'}
             onClick={() => setViewMode('card')}
             size="sm"
@@ -832,7 +883,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
           >
             Card Selector
           </Button>
-          <Button 
+          <Button
             variant={viewMode === 'table' ? 'default' : 'outline'}
             onClick={() => setViewMode('table')}
             size="sm"
@@ -840,7 +891,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
           >
             Bulk Selector
           </Button>
-          <Button 
+          <Button
             variant={viewMode === 'planner' ? 'default' : 'outline'}
             onClick={() => setViewMode('planner')}
             size="sm"
@@ -895,84 +946,84 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
             </div>
           </div>
 
-            {/* Section Plans */}
-            {sectionPlansVisible && sectionPlans.map((plan) => (
-              <Card 
-                key={plan.id} 
-                id={`plan-card-${plan.id}`}
-                className="transition-all duration-300"
-                ref={(el) => {
-                  if (el) {
-                    planRefs.current.set(plan.id, el);
-                  } else {
-                    planRefs.current.delete(plan.id);
-                  }
-                }}
-              >
-                <CardHeader className="px-4 sm:px-6">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => togglePlanExpanded(plan.id)}
-                        className="p-1 h-auto"
-                      >
-                        {expandedPlans.has(plan.id) ? '▼' : '▶'}
-                      </Button>
-                      <Input
-                        value={plan.name}
-                        onChange={(e) => handleRenamePlan(plan.id, e.target.value)}
-                        className="text-base sm:text-lg font-semibold max-w-xs"
-                      />
-                      <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                        ({plan.courses.length} course{plan.courses.length !== 1 ? 's' : ''})
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                      {plan.courses.length > 0 && (
-                        <Select value="" onValueChange={(value) => {
-                          if (value === 'pdf') exportPlanAsPDF(plan);
-                          else if (value === 'png') exportPlanAsPNG(plan);
-                          else if (value === 'excel') exportPlanAsExcel(plan);
-                          else if (value === 'calendar') exportPlanAsCalendar(plan);
-                        }}>
-                          <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[120px]">
-                            <SelectValue placeholder="Export as..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="pdf">📄 PDF</SelectItem>
-                            <SelectItem value="png">🖼️ PNG</SelectItem>
-                            <SelectItem value="excel">📊 Excel</SelectItem>
-                            <SelectItem value="calendar">📅 Calendar</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                      {sectionPlans.length > 1 && (
-                        <Button 
-                          onClick={() => handleDeletePlan(plan.id)} 
-                          size="sm" 
-                          variant="destructive"
-                          className="text-xs w-full sm:w-auto"
-                        >
-                          Delete Plan
-                        </Button>
-                      )}
-                    </div>
+          {/* Section Plans */}
+          {sectionPlansVisible && sectionPlans.map((plan) => (
+            <Card
+              key={plan.id}
+              id={`plan-card-${plan.id}`}
+              className="transition-all duration-300"
+              ref={(el) => {
+                if (el) {
+                  planRefs.current.set(plan.id, el);
+                } else {
+                  planRefs.current.delete(plan.id);
+                }
+              }}
+            >
+              <CardHeader className="px-4 sm:px-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                  <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => togglePlanExpanded(plan.id)}
+                      className="p-1 h-auto"
+                    >
+                      {expandedPlans.has(plan.id) ? '▼' : '▶'}
+                    </Button>
+                    <Input
+                      value={plan.name}
+                      onChange={(e) => handleRenamePlan(plan.id, e.target.value)}
+                      className="text-base sm:text-lg font-semibold max-w-xs"
+                    />
+                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                      ({plan.courses.length} course{plan.courses.length !== 1 ? 's' : ''})
+                    </span>
                   </div>
-                  <CardDescription>
-                    {plan.courses.length === 0 
-                      ? 'No sections selected in this plan.' 
-                      : 'Selected sections for this plan.'}
-                  </CardDescription>
-                </CardHeader>
-                {expandedPlans.has(plan.id) && (
-                  <CardContent className="px-4 sm:px-6">
-                    {plan.courses.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Start selecting courses from the options below.
-                      </p>
-                    ) : (
+                  <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                    {plan.courses.length > 0 && (
+                      <Select value="" onValueChange={(value) => {
+                        if (value === 'pdf') exportPlanAsPDF(plan);
+                        else if (value === 'png') exportPlanAsPNG(plan);
+                        else if (value === 'excel') exportPlanAsExcel(plan);
+                        else if (value === 'calendar') exportPlanAsCalendar(plan);
+                      }}>
+                        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[120px]">
+                          <SelectValue placeholder="Export as..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pdf">📄 PDF</SelectItem>
+                          <SelectItem value="png">🖼️ PNG</SelectItem>
+                          <SelectItem value="excel">📊 Excel</SelectItem>
+                          <SelectItem value="calendar">📅 Calendar</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    )}
+                    {sectionPlans.length > 1 && (
+                      <Button
+                        onClick={() => handleDeletePlan(plan.id)}
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs w-full sm:w-auto"
+                      >
+                        Delete Plan
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <CardDescription>
+                  {plan.courses.length === 0
+                    ? 'No sections selected in this plan.'
+                    : 'Selected sections for this plan.'}
+                </CardDescription>
+              </CardHeader>
+              {expandedPlans.has(plan.id) && (
+                <CardContent className="px-4 sm:px-6">
+                  {plan.courses.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Start selecting courses from the options below.
+                    </p>
+                  ) : (
                     <div className="overflow-x-auto max-h-[40vh] w-full border rounded-md" id={`plan-table-${plan.id}`}>
                       <table className="w-full border-collapse min-w-[900px]">
                         <thead>
@@ -992,98 +1043,98 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                           {plan.courses.map((course, index) => {
                             const hasConflict = hasConflictInPlan(course, plan);
                             return (
-                            <tr
-                              key={`${plan.id}-${course.courseCode}-${course.section}-${index}`}
-                              className={`border-b hover:bg-muted/50 ${hasConflict ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
-                            >
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                {hasConflict && <span className="text-red-600 mr-1">⚠️</span>}
-                                {course.courseCode}
-                              </td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.title}</td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.section}</td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                {course.facultyName === "TBA"
-                                  ? "TBA"
-                                  : `${course.facultyName} (${course.facultyInitial})`}
-                              </td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.credit}</td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
-                                {course.day1}{course.day2 ? ` - ${course.day2}` : ''}
-                              </td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
-                                {course.time1}
-                                {course.time2 && course.time2 !== course.time1 && (
-                                  <div>{course.time2}</div>
-                                )}
-                              </td>
-                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                {course.room1}{course.room2 && course.room2 !== course.room1 ? ` - ${course.room2}` : ''}
-                              </td>
-                              <td className="px-2 py-1">
-                                <div className="flex gap-1 whitespace-nowrap">
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline" 
-                                    onClick={() => handleRemoveCourse(course, plan.id)} 
-                                    className="text-xs"
-                                  >
-                                    Remove
-                                  </Button>
-                                  {sectionPlans.length > 1 && (
-                                    <Select 
-                                      value=""
-                                      onValueChange={(toPlanId) => handleMoveCourse(course, plan.id, toPlanId)}
-                                    >
-                                      <SelectTrigger className="h-8 text-xs w-[100px]">
-                                        <SelectValue placeholder="Move to..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {sectionPlans
-                                          .filter(p => p.id !== plan.id)
-                                          .map(p => {
-                                            const wouldConflict = hasConflictInPlan(course, p);
-                                            const alreadyHasCourse = p.courses.some(c => 
-                                              c.courseCode === course.courseCode && c.section === course.section
-                                            );
-                                            
-                                            return (
-                                              <SelectItem 
-                                                key={p.id} 
-                                                value={p.id} 
-                                                className={`text-xs ${wouldConflict ? 'text-red-600 dark:text-red-400' : ''}`}
-                                                disabled={alreadyHasCourse}
-                                              >
-                                                {wouldConflict && '⚠️ '}
-                                                {p.name}
-                                                {alreadyHasCourse ? ' (Has this)' : wouldConflict ? ' (Will conflict)' : ''}
-                                              </SelectItem>
-                                            );
-                                          })}
-                                      </SelectContent>
-                                    </Select>
+                              <tr
+                                key={`${plan.id}-${course.courseCode}-${course.section}-${index}`}
+                                className={`border-b hover:bg-muted/50 ${hasConflict ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
+                              >
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                  {hasConflict && <span className="text-red-600 mr-1">⚠️</span>}
+                                  {course.courseCode}
+                                </td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.title}</td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.section}</td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                  {course.facultyName === "TBA"
+                                    ? "TBA"
+                                    : `${course.facultyName} (${course.facultyInitial})`}
+                                </td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.credit}</td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
+                                  {course.day1}{course.day2 ? ` - ${course.day2}` : ''}
+                                </td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
+                                  {course.time1}
+                                  {course.time2 && course.time2 !== course.time1 && (
+                                    <div>{course.time2}</div>
                                   )}
-                                </div>
-                              </td>
-                            </tr>
+                                </td>
+                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                  {course.room1}{course.room2 && course.room2 !== course.room1 ? ` - ${course.room2}` : ''}
+                                </td>
+                                <td className="px-2 py-1">
+                                  <div className="flex gap-1 whitespace-nowrap">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => handleRemoveCourse(course, plan.id)}
+                                      className="text-xs"
+                                    >
+                                      Remove
+                                    </Button>
+                                    {sectionPlans.length > 1 && (
+                                      <Select
+                                        value=""
+                                        onValueChange={(toPlanId) => handleMoveCourse(course, plan.id, toPlanId)}
+                                      >
+                                        <SelectTrigger className="h-8 text-xs w-[100px]">
+                                          <SelectValue placeholder="Move to..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {sectionPlans
+                                            .filter(p => p.id !== plan.id)
+                                            .map(p => {
+                                              const wouldConflict = hasConflictInPlan(course, p);
+                                              const alreadyHasCourse = p.courses.some(c =>
+                                                c.courseCode === course.courseCode && c.section === course.section
+                                              );
+
+                                              return (
+                                                <SelectItem
+                                                  key={p.id}
+                                                  value={p.id}
+                                                  className={`text-xs ${wouldConflict ? 'text-red-600 dark:text-red-400' : ''}`}
+                                                  disabled={alreadyHasCourse}
+                                                >
+                                                  {wouldConflict && '⚠️ '}
+                                                  {p.name}
+                                                  {alreadyHasCourse ? ' (Has this)' : wouldConflict ? ' (Will conflict)' : ''}
+                                                </SelectItem>
+                                              );
+                                            })}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-                    )}
-                  </CardContent>
-                )}
-              </Card>
-            ))}
-          </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          ))}
+        </div>
 
         {/* Content based on view mode */}
         {viewMode === 'planner' ? (
           <SchedulePlanner courses={initialCourses} onAddPlanFromSchedule={handleAddPlanFromSchedule} />
         ) : viewMode === 'card' ? (
-          <CourseCardSelector 
-            courses={initialCourses} 
+          <CourseCardSelector
+            courses={initialCourses}
             sectionPlans={sectionPlans}
             onCourseSelect={handleSelectCourse}
             onClearAllSelected={handleClearAllSelected}
@@ -1141,18 +1192,18 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                           </td>
                           <td className="px-2 py-1">
                             {sectionPlans.length === 1 ? (
-                              <Button 
-                                size="sm" 
-                                variant="outline" 
-                                onClick={() => handleSelectCourse(course, sectionPlans[0].id)} 
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSelectCourse(course, sectionPlans[0].id)}
                                 className="text-xs"
                                 disabled={sectionPlans[0].courses.some(c => c.courseCode === course.courseCode)}
-                                title={sectionPlans[0].courses.some(c => c.courseCode === course.courseCode) 
-                                  ? `${course.courseCode} already in plan` 
+                                title={sectionPlans[0].courses.some(c => c.courseCode === course.courseCode)
+                                  ? `${course.courseCode} already in plan`
                                   : 'Add to plan'}
                               >
-                                {sectionPlans[0].courses.some(c => c.courseCode === course.courseCode) 
-                                  ? 'Already Added' 
+                                {sectionPlans[0].courses.some(c => c.courseCode === course.courseCode)
+                                  ? 'Already Added'
                                   : 'Add'}
                               </Button>
                             ) : (
@@ -1164,9 +1215,9 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                                   {sectionPlans.map(p => {
                                     const alreadyHasCourse = p.courses.some(c => c.courseCode === course.courseCode);
                                     return (
-                                      <SelectItem 
-                                        key={p.id} 
-                                        value={p.id} 
+                                      <SelectItem
+                                        key={p.id}
+                                        value={p.id}
                                         className="text-xs"
                                         disabled={alreadyHasCourse}
                                       >
