@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { CalendarDays } from "lucide-react";
@@ -247,6 +247,26 @@ const parsePdfText = (text: string): Course[] => {
 const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) => void }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [datasets, setDatasets] = useState<any[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("");
+
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        const res = await fetch("/api/section-selector?action=list");
+        if (res.ok) {
+          const { datasets } = await res.json();
+          setDatasets(datasets);
+          const active = datasets.find((d: any) => d.isActive);
+          if (active) setSelectedDatasetId(active._id);
+          else if (datasets.length > 0) setSelectedDatasetId(datasets[0]._id);
+        }
+      } catch (err) {
+        console.error("Failed to fetch datasets", err);
+      }
+    };
+    fetchDatasets();
+  }, []);
 
   const processJsonData = (data: any): Course[] => {
     const courses: Course[] = [];
@@ -339,10 +359,15 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
   };
 
   const handlePreUploadedLoad = async () => {
+    if (!selectedDatasetId) {
+      toast.error("Please select a dataset to load.");
+      return;
+    }
+
     setIsLoading(true);
-    toast.info("Loading latest course data from UCAM...");
+    toast.info("Loading selected course data...");
     try {
-      const response = await fetch("/courses.json", {
+      const response = await fetch(`/api/section-selector?id=${selectedDatasetId}`, {
         method: "GET",
       });
 
@@ -350,13 +375,21 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
         throw new Error("Failed to load course data.");
       }
 
-      const data = await response.json();
-      const parsedCourses = processJsonData(data);
+      const responseBody = await response.json();
+
+      let parsedCourses: Course[] = [];
+
+      if (responseBody.type === "json") {
+        parsedCourses = processJsonData(responseBody.data);
+      } else if (responseBody.type === "pdf") {
+        parsedCourses = parsePdfText(responseBody.data.text);
+      }
+
       if (parsedCourses.length > 0) {
         onPdfProcessed(parsedCourses);
-        toast.success(`Loaded ${parsedCourses.length} course sections directly from UCAM!`);
+        toast.success(`Loaded ${parsedCourses.length} course sections directly from: ${responseBody.title}`);
       } else {
-        throw new Error("No courses found in the data.");
+        throw new Error("No courses found in the selected dataset.");
       }
     } catch (error) {
       console.error("Error loading course data:", error);
@@ -421,12 +454,35 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
                 <span className="text-xl">🚀</span>
                 <h3 className="font-semibold text-orange-700 dark:text-orange-300">Use Live UCAM Data</h3>
               </div>
+
+              {datasets.length > 0 ? (
+                <div className="my-3 text-left">
+                  <Select value={selectedDatasetId} onValueChange={setSelectedDatasetId}>
+                    <SelectTrigger className="w-full bg-background border-orange-200 dark:border-orange-800/50">
+                      <SelectValue placeholder="Select a dataset..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {datasets.map((d: any) => (
+                        <SelectItem key={d._id} value={d._id}>
+                          {d.title} {d.isActive ? "(Default)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div className="my-3 text-sm text-center text-orange-600/70 dark:text-orange-400/70">
+                  Loading available datasets...
+                </div>
+              )}
+
               <Button
                 size="lg"
                 onClick={handlePreUploadedLoad}
                 className="w-full font-semibold py-3 px-6 shadow-lg hover:shadow-xl transition-all duration-200"
+                disabled={datasets.length === 0}
               >
-                Start with Latest Course Data
+                Start with Selected Course Data
               </Button>
               <p className="text-sm text-orange-600 dark:text-orange-400">
                 100% accurate formal data drawn straight from the cloud! No upload required.

@@ -29,6 +29,7 @@ const adminLinks = [
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/programs", label: "Programs", icon: GraduationCap },
   { href: "/admin/domains", label: "Email Domains", icon: Globe },
+  { href: "/admin/section-selector", label: "Section Selector", icon: ClipboardList },
 ];
 
 export default function AdminLayout({
