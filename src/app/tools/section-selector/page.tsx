@@ -1287,7 +1287,10 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
           if (loginRes.success && loginRes.data) {
             jwt = extractJwt(loginRes.data);
             if (jwt) log("[Native] 🔑 JWT acquired!");
-            else log(`[Native] ⚠️ Login response received but no JWT found`);
+            else {
+              const preview = JSON.stringify(loginRes.data).slice(0, 300);
+              log(`[Native] ⚠️ Login response but no JWT. Keys: ${Object.keys(loginRes.data).join(', ')}. Preview: ${preview}`);
+            }
           } else {
             log(`[Native] ⚠️ Login failed: ${loginRes.message || 'Unknown'}`);
           }
