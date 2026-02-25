@@ -1130,8 +1130,363 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     });
   };
 
+  // ===== CLIENT-SIDE BOT ENGINE (runs in-browser, no timeout) =====
+  const proxyFetch = async (url: string, method = 'GET', headers: Record<string, string> = {}, body?: any) => {
+    const res = await fetch('/api/bot-proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, method, headers, body }),
+    });
+    return res.json();
+  };
+
+  const deepFindArray = (obj: any, predicate: (item: any) => boolean, maxDepth = 8): any[] | null => {
+    if (maxDepth <= 0 || obj === null || obj === undefined) return null;
+    if (Array.isArray(obj) && obj.length > 0 && obj.some(predicate)) return obj;
+    if (typeof obj === "object") {
+      for (const val of Object.values(obj)) {
+        const found = deepFindArray(val, predicate, maxDepth - 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  };
+
+  const deepFindValue = (obj: any, keyName: string, maxDepth = 8): any => {
+    if (maxDepth <= 0 || obj === null || obj === undefined) return undefined;
+    if (typeof obj === "object") {
+      if (keyName in obj) return obj[keyName];
+      for (const val of Object.values(obj)) {
+        const found = deepFindValue(val, keyName, maxDepth - 1);
+        if (found !== undefined) return found;
+      }
+    }
+    return undefined;
+  };
+
+  const extractJwt = (data: any): string | null => {
+    for (const key of ["token", "jwt", "access_token", "accessToken", "id_token"]) {
+      const v = deepFindValue(data, key);
+      if (typeof v === "string" && v.length > 20) return v;
+    }
+    return null;
+  };
+
+  const extractCourses = (data: any): any[] =>
+    deepFindArray(data, (item: any) => typeof item === "object" && item !== null && (item.course_code || item.courseCode || item.code)) || [];
+
+  const extractSections = (data: any): any[] =>
+    deepFindArray(data, (item: any) => typeof item === "object" && item !== null && (item.section_name || item.sectionName || item.name || item.section)) || [];
+
+  const getSectionName = (sec: any): string => sec.section_name || sec.sectionName || sec.name || sec.section || "";
+  const getSectionId = (sec: any) => sec.section_id || sec.sectionId || sec.id || sec._id;
+  const getCourseCode = (c: any) => c.course_code || c.courseCode || c.code;
+  const getFormalCode = (c: any) => c.formal_code || c.formalCode || c.display_code || c.displayCode;
+
+  const runClientSideBot = async (account: typeof botAccounts[0], selectedCourses: Record<string, string>, signal: AbortSignal) => {
+    const log = (msg: string) => {
+      setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, logs: [...a.logs, msg] } : a));
+    };
+
+    const apiUrlOf = (baseUrl: string, version: string, path: string) => `${baseUrl}/${version}${path}`;
+
+    try {
+      log("[Native] 🚀 Deploying client-side API bot (no server timeout!)...");
+
+      const targets = Object.keys(selectedCourses).map(key => ({
+        courseCode: key.split(" - ")[0].trim(),
+        targetSection: selectedCourses[key],
+      }));
+
+      // ── STEP 1: Discover API from frontend JS ──
+      log("[Native] 🔍 Scraping frontend JS bundles for API architecture...");
+      const frontendUrl = "https://cloud-v3.edusoft-ltd.workers.dev";
+      let baseUrl = "", version = "", loginPath: string | null = null, preAdvisedPath: string | null = null;
+      const allPaths: string[] = [];
+
+      try {
+        const htmlRes = await proxyFetch(frontendUrl);
+        const html = htmlRes.text || "";
+        const jsRegex = /(?:src|href)="([^"]+\.js[^"]*)"/g;
+        let match;
+        const scripts: string[] = [];
+        while ((match = jsRegex.exec(html)) !== null) scripts.push(match[1]);
+
+        for (const scriptPath of scripts) {
+          if (signal.aborted) return;
+          const url = scriptPath.startsWith("http") ? scriptPath : `${frontendUrl}${scriptPath.startsWith("/") ? "" : "/"}${scriptPath}`;
+          const jsRes = await proxyFetch(url);
+          const js = jsRes.text || "";
+
+          if (!baseUrl || !version) {
+            const fullUrlMatch = js.match(/["'`](https:\/\/[^"'`\s]{5,80}?)\/(v\d+)\/(?:auth|users|courses|command)/);
+            if (fullUrlMatch) { baseUrl = baseUrl || fullUrlMatch[1]; version = version || fullUrlMatch[2]; }
+            if (!baseUrl) {
+              const urlRegex = /["'`](https:\/\/[a-zA-Z0-9._-]+(?:\.[a-zA-Z]{2,})+(?:\/[^"'`\s]*)?)\b["'`]/g;
+              let urlMatch;
+              while ((urlMatch = urlRegex.exec(js)) !== null) {
+                const c = urlMatch[1].replace(/\/+$/, "");
+                if (c.includes("edusoft-ltd") || c.includes("googleapis") || c.includes("cloudflare") || c.includes("sentry") || c.includes("cdn") || c.endsWith(".js") || c.endsWith(".css")) continue;
+                const verInUrl = c.match(/^(https:\/\/[^/]+)\/(v\d+)/);
+                if (verInUrl) { baseUrl = verInUrl[1]; version = verInUrl[2]; break; }
+                if (c.match(/api|execute|gateway|backend|server/i)) { baseUrl = c.replace(/\/v\d+$/, ""); break; }
+              }
+            }
+            if (!version) { const vm = js.match(/["'`/](v\d+)\/(?:auth|courses|users)/); if (vm) version = vm[1]; }
+          }
+
+          const pathRegex = /["'](\/(?:auth|users|courses|command|management|student)[^"']{2,80})["']/g;
+          let pathMatch;
+          while ((pathMatch = pathRegex.exec(js)) !== null) {
+            const p = pathMatch[1];
+            if (!p.includes("console/") && !p.includes(".js") && !p.includes(".css") && !allPaths.includes(p)) allPaths.push(p);
+          }
+        }
+
+        for (const p of allPaths) {
+          if (p.includes("auth/login") && !p.includes("logout")) loginPath = p;
+          if (p.includes("preadvice") || p.includes("pre-advis")) preAdvisedPath = p;
+        }
+
+        if (baseUrl && version) {
+          log(`[Native] 🌐 Discovered: ${baseUrl}/${version}`);
+          log(`[Native] 📡 Found ${allPaths.length} API routes`);
+        }
+      } catch (e: any) {
+        log(`[Native] ⚠️ Discovery error: ${e.message}`);
+      }
+
+      if (!baseUrl || !version) {
+        log("[Native] ❌ Could not discover API. Aborting.");
+        setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', result: { success: false, message: "API discovery failed" } } : a));
+        return;
+      }
+
+      // Custom API base URL override
+      if (apiBaseUrl && apiBaseUrl.trim()) {
+        const clean = apiBaseUrl.trim().replace(/\/$/, "");
+        try {
+          const res = await proxyFetch(clean);
+          if (res.success && !res.text?.includes("<html")) {
+            baseUrl = clean;
+            log(`[Native] 🌐 Using custom base URL: ${clean}`);
+          }
+        } catch (_) { }
+      }
+
+      // ── STEP 2: Login ──
+      let jwt: string | null = null;
+      if (loginPath) {
+        log("[Native] ⚡ Authenticating...");
+        try {
+          const loginRes = await proxyFetch(
+            apiUrlOf(baseUrl, version, loginPath), "POST",
+            { "Content-Type": "application/json", "Origin": "https://cloud-v3.edusoft-ltd.workers.dev", "Referer": "https://cloud-v3.edusoft-ltd.workers.dev/" },
+            { user_id: account.studentId, password: account.password, logout_other_sessions: false }
+          );
+          if (loginRes.success && loginRes.data) {
+            jwt = extractJwt(loginRes.data);
+            if (jwt) log("[Native] 🔑 JWT acquired!");
+            else log(`[Native] ⚠️ Login response received but no JWT found`);
+          } else {
+            log(`[Native] ⚠️ Login failed: ${loginRes.message || 'Unknown'}`);
+          }
+        } catch (e: any) {
+          log(`[Native] ❌ Login error: ${e.message}`);
+        }
+      }
+
+      if (!jwt) {
+        setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', result: { success: false, message: "Could not acquire session token" } } : a));
+        return;
+      }
+
+      // ── STEP 3: Resolve course IDs ──
+      const courseIds: Record<string, string> = {};
+      log("[Native] 📋 Fetching pre-advised courses...");
+
+      // Probe pre-advised paths
+      const preAdvisedCandidates = new Set<string>();
+      if (preAdvisedPath) preAdvisedCandidates.add(preAdvisedPath);
+      for (const p of allPaths) { if (p.includes("preadvice") || p.includes("pre-advis")) preAdvisedCandidates.add(p); }
+      const userMePath = allPaths.find(p => p === "/users/me");
+      if (userMePath) {
+        preAdvisedCandidates.add(`${userMePath}/preadvice-courses`);
+        allPaths.filter(p => p.includes("preadvice")).forEach(frag => {
+          const keyword = frag.split("/").filter(Boolean).find(s => s.includes("preadvice"));
+          if (keyword) preAdvisedCandidates.add(`${userMePath}/${keyword}`);
+        });
+      }
+
+      for (const path of preAdvisedCandidates) {
+        if (signal.aborted || Object.keys(courseIds).length > 0) break;
+        try {
+          const res = await proxyFetch(apiUrlOf(baseUrl, version, path), "GET", { Authorization: `Bearer ${jwt}`, Accept: "application/json" });
+          if (res.success && res.data) {
+            const courses = extractCourses(res.data);
+            for (const c of courses) {
+              const cc = getCourseCode(c);
+              if (cc) { courseIds[cc] = cc; const fc = getFormalCode(c); if (fc) courseIds[fc] = cc; }
+            }
+            if (Object.keys(courseIds).length > 0) log(`[Native] 📋 Mapped ${Object.keys(courseIds).length} course entries`);
+          }
+        } catch (_) { }
+      }
+
+      // ── STEP 4: Discover sections path ──
+      let sectionsPathTemplate: string | null = null;
+      const firstCourseId = targets.map(t => courseIds[t.courseCode]).find(Boolean);
+
+      if (firstCourseId) {
+        log("[Native] 🔎 Discovering sections endpoint...");
+        const sectionCandidates = new Set<string>();
+        for (const p of allPaths) {
+          if (p.includes("section")) {
+            const clean = p.replace(/\/$/, "");
+            sectionCandidates.add(`${clean}/${firstCourseId}`);
+          }
+          if (p.includes("course") && !p.includes("command") && !p.includes("management")) {
+            sectionCandidates.add(`${p.replace(/\/$/, "")}/sections/${firstCourseId}`);
+          }
+        }
+        if (allPaths.some(p => p.includes("course"))) {
+          sectionCandidates.add(`/courses/sections/${firstCourseId}`);
+        }
+
+        for (const path of sectionCandidates) {
+          if (signal.aborted) break;
+          try {
+            const res = await proxyFetch(apiUrlOf(baseUrl, version, path), "GET", { Authorization: `Bearer ${jwt}`, Accept: "application/json" });
+            if (res.success && res.data) {
+              const sections = res.data?.data?.sections || res.data?.data;
+              if (sections && (Array.isArray(sections) || res.data?.data?.course_code)) {
+                sectionsPathTemplate = path.replace(firstCourseId, "");
+                log(`[Native] ✅ Sections path: ${sectionsPathTemplate}{courseId}`);
+                break;
+              }
+            }
+          } catch (_) { }
+        }
+      }
+
+      if (!sectionsPathTemplate) {
+        log("[Native] ❌ Could not discover sections endpoint.");
+        setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', result: { success: false, message: "No sections path found" } } : a));
+        return;
+      }
+
+      // ── STEP 5: Per-course section selection (PARALLEL, with Death Strike pace control) ──
+      const completedCourses = new Set<string>();
+      const timerMs: Record<string, number> = {};
+      const results: { course: string; success: boolean; reason: string }[] = [];
+
+      const executeTasks = targets.map(target => (async () => {
+        const courseId = courseIds[target.courseCode];
+        if (!courseId) {
+          log(`[${target.courseCode}] ⚠️ Could not resolve course ID. Skipping.`);
+          results.push({ course: target.courseCode, success: false, reason: "Course ID not found" });
+          return false;
+        }
+
+        const sectionsPath = `${sectionsPathTemplate}${courseId}`;
+        const selectPath = `${sectionsPathTemplate}${courseId}/select`;
+        let attempts = 0;
+
+        log(`[${target.courseCode}] 🏁 Polling for section ${target.targetSection}...`);
+
+        while (attempts < 5000 && !signal.aborted) {
+          if (completedCourses.has(target.courseCode)) {
+            log(`[${target.courseCode}] 🛑 Already completed! Stopping.`);
+            return true;
+          }
+          attempts++;
+
+          // Death Strike Pace Control
+          let sleepTime = 1000;
+          const timer = timerMs[target.courseCode];
+          if (timer !== undefined) {
+            if (timer > 10000) {
+              sleepTime = 5000;
+              if (attempts % 2 === 0) log(`[${target.courseCode}] 💤 Timer: ${Math.round(timer / 1000)}s. Idling...`);
+            } else if (timer > 0 && timer <= 2000) {
+              sleepTime = 250;
+              if (attempts % 4 === 0) log(`[${target.courseCode}] 🔥 WARMUP! ${timer}ms left...`);
+            } else if (timer <= 0) {
+              sleepTime = 100;
+              if (attempts % 10 === 0) log(`[${target.courseCode}] ⚔️ GATLING MODE!`);
+            }
+          }
+
+          try {
+            if (!jwt) { await new Promise(r => setTimeout(r, sleepTime)); continue; }
+
+            if (sleepTime >= 1000 && (attempts === 1 || attempts % 5 === 0)) {
+              log(`[${target.courseCode}] 📡 Polling sections...`);
+            }
+
+            const getRes = await proxyFetch(apiUrlOf(baseUrl, version, sectionsPath), "GET", { Authorization: `Bearer ${jwt}`, Accept: "application/json" });
+
+            // JWT expired — re-login
+            if (getRes.status === 401 && loginPath) {
+              log(`[${target.courseCode}] 🔄 JWT expired. Re-authenticating...`);
+              const reRes = await proxyFetch(apiUrlOf(baseUrl, version, loginPath), "POST",
+                { "Content-Type": "application/json", Origin: "https://cloud-v3.edusoft-ltd.workers.dev" },
+                { user_id: account.studentId, password: account.password, logout_other_sessions: false }
+              );
+              if (reRes.success && reRes.data) {
+                const newJwt = extractJwt(reRes.data);
+                if (newJwt) { jwt = newJwt; log(`[${target.courseCode}] 🔑 Re-login OK!`); }
+              }
+              await new Promise(r => setTimeout(r, sleepTime));
+              continue;
+            }
+
+            if (!getRes.success || getRes.status !== 200) throw new Error("HTTP " + getRes.status);
+
+            const sections = extractSections(getRes.data);
+            const matched = sections.find((s: any) => getSectionName(s) === target.targetSection);
+            if (!matched) throw new Error("Section unavailable");
+
+            log(`[${target.courseCode}] 🎯 Section found! Striking...`);
+            const selectRes = await proxyFetch(apiUrlOf(baseUrl, version, selectPath), "POST",
+              { Authorization: `Bearer ${jwt}`, "Content-Type": "application/json" },
+              { section_id: getSectionId(matched), action: "select", parent_course_code: courseId }
+            );
+
+            if (selectRes.success && selectRes.status === 200) {
+              completedCourses.add(target.courseCode);
+              log(`[${target.courseCode}] 🟩 SUCCESS! Section ${target.targetSection} registered!`);
+              results.push({ course: target.courseCode, success: true, reason: "Registered" });
+              return true;
+            } else {
+              throw new Error(selectRes.data?.message || "Rejected");
+            }
+          } catch (e: any) {
+            if (!e.message?.includes("unavailable")) {
+              log(`[${target.courseCode}] ❌ ${e.message}. Retrying...`);
+            }
+            await new Promise(r => setTimeout(r, sleepTime));
+          }
+        }
+
+        if (!completedCourses.has(target.courseCode)) {
+          results.push({ course: target.courseCode, success: false, reason: signal.aborted ? "Cancelled" : "Exhausted" });
+        }
+        return false;
+      })());
+
+      await Promise.all(executeTasks);
+
+      log("[Native] 🏆 All operations completed.");
+      setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'done', result: { success: true, results } } : a));
+    } catch (e: any) {
+      log(`[Native] ❌ Fatal: ${e.message}`);
+      setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', result: { success: false, message: e.message } } : a));
+    }
+  };
+
+  // ===== MAIN LAUNCH HANDLER =====
   const handleLaunchBots = async (accountIdsToLaunch: string[]) => {
-    // Determine which accounts to actually launch
     const accountsToLaunch = botAccounts.filter(a => accountIdsToLaunch.includes(a.id) && a.studentId && a.password);
 
     if (accountsToLaunch.length === 0) {
@@ -1159,8 +1514,14 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
       abortControllersRef.current.set(account.id, controller);
 
       try {
+        // FAST MODE → Client-side (no timeout!)
+        if (botType === 'native') {
+          await runClientSideBot(account, selectedCourses, controller.signal);
+          return;
+        }
 
-        const mode = botType === 'native' ? 'native-only' : botType === 'puppeteer' ? 'puppeteer-only' : 'hybrid';
+        // PUPPETEER / HYBRID → Server-side SSE (needs Node.js)
+        const mode = botType === 'puppeteer' ? 'puppeteer-only' : 'hybrid';
         const res = await fetch('/api/auto-register-hybrid', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1205,7 +1566,6 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
 
     await Promise.all(launchPromises);
 
-    // Check if any bots are still running after these finish (in case others were started separately)
     setBotAccounts(current => {
       if (!current.some(a => a.status === 'running')) {
         setIsAnyBotRunning(false);
