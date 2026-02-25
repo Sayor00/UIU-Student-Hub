@@ -540,8 +540,8 @@ export async function POST(req: Request) {
                                         shared.jwt = jwt;
                                         log("[Native] 🔑 JWT acquired independently!");
                                     }
-                                } catch (_) {
-                                    log("[Native] ⚠️ Login failed. Will use Puppeteer's JWT if available.");
+                                } catch (loginErr: any) {
+                                    log(`[Native] ⚠️ Login failed: ${loginErr.message}. Will use Puppeteer's JWT if available.`);
                                 }
                             }
 
