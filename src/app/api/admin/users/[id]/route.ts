@@ -15,20 +15,42 @@ export async function PATCH(
 
   try {
     const { id } = await params;
-    const { role } = await req.json();
+    const body = await req.json();
+    const { role, permissions } = body;
 
-    if (!["user", "admin"].includes(role)) {
-      return NextResponse.json(
-        { error: "Invalid role" },
-        { status: 400 }
-      );
+    const update: any = {};
+
+    if (role !== undefined) {
+      if (!["user", "admin"].includes(role)) {
+        return NextResponse.json(
+          { error: "Invalid role" },
+          { status: 400 }
+        );
+      }
+      update.role = role;
+    }
+
+    if (permissions !== undefined) {
+      if (!Array.isArray(permissions)) {
+        return NextResponse.json(
+          { error: "Permissions must be an array" },
+          { status: 400 }
+        );
+      }
+      const allowedPermissions = ["bot_access"];
+      const validPermissions = permissions.filter((p: string) => allowedPermissions.includes(p));
+      update.permissions = validPermissions;
+    }
+
+    if (Object.keys(update).length === 0) {
+      return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
     }
 
     await dbConnect();
 
     const user = await User.findByIdAndUpdate(
       id,
-      { role },
+      update,
       { new: true }
     ).select("-password -verificationCode -verificationExpires");
 

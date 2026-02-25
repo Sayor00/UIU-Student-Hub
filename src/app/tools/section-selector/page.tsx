@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Bot, Trash2, Plus, Play, Square, Globe, User, Terminal, CheckCircle2, XCircle, Rocket } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,6 +21,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import CourseCardSelector from "@/components/course-card-selector";
 import SchedulePlanner from "@/components/schedule-planner";
 import {
@@ -549,12 +552,187 @@ interface SectionPlan {
   courses: Course[];
 }
 
+interface BotAccount {
+  id: string;
+  studentId: string;
+  password: string;
+  planId: string;      // which section plan to use
+  status: 'idle' | 'running' | 'done' | 'error';
+  logs: string[];
+  result: { success: boolean; message?: string; results?: any[] } | null;
+}
+
 const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBack: () => void }) => {
-  const [sectionPlans, setSectionPlans] = useState<SectionPlan[]>([
-    { id: '1', name: 'Section Plan 1', courses: [] }
-  ]);
+  const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const userPermissions: string[] = (session?.user as any)?.permissions || [];
+  const hasBotAccess = userRole === 'admin' || userPermissions.includes('bot_access');
+
+  const [sectionPlans, setSectionPlans] = useState<SectionPlan[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('uiu-section-plans');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error("Failed to load section plans from local storage", e);
+        }
+      }
+    }
+    return [
+      { id: '1', name: 'Section Plan 1', courses: [] }
+    ];
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('uiu-section-plans', JSON.stringify(sectionPlans));
+    }
+  }, [sectionPlans]);
+
+  // Multi-Account Bot State
+  const [botAccounts, setBotAccounts] = useState<BotAccount[]>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('uiu-bot-accounts');
+      if (saved) try { return JSON.parse(saved); } catch (_) { }
+    }
+    return [{ id: '1', studentId: '', password: '', planId: sectionPlans[0]?.id || '1', status: 'idle' as const, logs: [], result: null }];
+  });
+  const [botType, setBotType] = useState<'native' | 'puppeteer' | 'hybrid'>('native');
+  const [isAnyBotRunning, setIsAnyBotRunning] = useState(false);
+  const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Save accounts without logs/results (those are transient)
+      const toSave = botAccounts.map(a => ({ ...a, logs: [], result: null, status: 'idle' }));
+      localStorage.setItem('uiu-bot-accounts', JSON.stringify(toSave));
+    }
+  }, [botAccounts]);
+
+  // Legacy state preserved for backward compatibility (not shown in UI)
+  const [registeringPlan, setRegisteringPlan] = useState<SectionPlan | null>(null);
+  const [studentId, setStudentId] = useState("");
+  const [ucamPassword, setUcamPassword] = useState("");
+  const [apiBaseUrl, setApiBaseUrl] = useState("");
+  const [liveLogs, setLiveLogs] = useState<string[]>([]);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registerResult, setRegisterResult] = useState<{ success: boolean; message?: string; results?: any[] } | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelRegistration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setLiveLogs(prev => [...prev, "⚠️ Operation cancelled by user."]);
+      setIsRegistering(false);
+    }
+  };
+
+  const performAutoRegistration = async (botType: 'native' | 'puppeteer' | 'hybrid') => {
+    if (!registeringPlan || !studentId || !ucamPassword) return;
+
+    setIsRegistering(true);
+    setRegisterResult(null);
+    setLiveLogs([]); // Clear logs on new attempt
+
+    // Format selected courses mapping
+    const selectedCourses: { [key: string]: string } = {};
+    registeringPlan.courses.forEach(c => {
+      selectedCourses[`${c.courseCode} - ${c.title}`] = c.section;
+    });
+
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      // All bot types route through the unified hybrid engine
+      let endpoint = "/api/auto-register-hybrid";
+      if (botType === 'puppeteer') endpoint = "/api/auto-register";
+
+      // Determine mode: native-only, puppeteer-only, or full hybrid
+      const mode = botType === 'native' ? 'native-only' : botType === 'hybrid' ? 'hybrid' : undefined;
+
+      const resp = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          studentId,
+          password: ucamPassword,
+          selectedCourses,
+          apiBaseUrl,
+          ...(mode && { mode }),
+        }),
+      });
+
+      if (!resp.ok) {
+        setRegisterResult({ success: false, message: `Server error: ${resp.status}` });
+        setIsRegistering(false);
+        return;
+      }
+
+      if (botType === 'puppeteer') {
+        setLiveLogs(["[Puppeteer] 🤖 Launching headless chromium browser in the cloud. This usually takes exactly 45 seconds. Do not close this window..."]);
+        const data = await resp.json();
+        setRegisterResult(data);
+        return;
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error("No response body.");
+
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+      let gotResult = false;
+
+      // Stream processor
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        let endOfEventIndex;
+        while ((endOfEventIndex = buffer.indexOf("\n\n")) >= 0) {
+          const eventData = buffer.substring(0, endOfEventIndex);
+          buffer = buffer.substring(endOfEventIndex + 2);
+
+          if (eventData.startsWith("data: ")) {
+            try {
+              const parsed = JSON.parse(eventData.substring(6));
+              if (parsed.type === 'log') {
+                setLiveLogs(prev => [...prev, parsed.message]);
+              } else if (parsed.type === 'result') {
+                gotResult = true;
+                setRegisterResult(parsed.data);
+              } else if (parsed.type === 'error') {
+                gotResult = true;
+                setRegisterResult({ success: false, message: parsed.message });
+              }
+            } catch (e) {
+              console.error("Failed to parse SSE line", e);
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.log('Registration fetch aborted');
+        return; // Handled by handleCancelRegistration
+      }
+
+      // Only show the error if the stream abruptly crashed BEFORE the backend finished its job.
+      setRegisterResult(prev => {
+        if (prev) return prev; // Keep the existing success/error state if already set
+        return { success: false, message: err.message || "Network error occurred." };
+      });
+    } finally {
+      setIsRegistering(false);
+      abortControllerRef.current = null;
+    }
+  };
   const [searchTerm, setSearchTerm] = useState("");
-  const [viewMode, setViewMode] = useState<'card' | 'table' | 'planner'>('card');
+  const [viewMode, setViewMode] = useState<'card' | 'table' | 'planner' | 'bot'>('card');
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(new Set(sectionPlans.map(p => p.id)));
   const [sectionPlansVisible, setSectionPlansVisible] = useState(false);
   const [bulkProgramFilter, setBulkProgramFilter] = useState<string>("All");
@@ -952,6 +1130,89 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     });
   };
 
+  const handleLaunchBots = async (accountIdsToLaunch: string[]) => {
+    // Determine which accounts to actually launch
+    const accountsToLaunch = botAccounts.filter(a => accountIdsToLaunch.includes(a.id) && a.studentId && a.password);
+
+    if (accountsToLaunch.length === 0) {
+      toast.error('No valid accounts to launch. Check credentials.');
+      return;
+    }
+
+    setBotAccounts(prev => prev.map(a =>
+      accountIdsToLaunch.includes(a.id) ? { ...a, status: 'running' as const, logs: [], result: null } : a
+    ));
+
+    setIsAnyBotRunning(true);
+
+    const launchPromises = accountsToLaunch.map(async (account) => {
+      const plan = sectionPlans.find(p => p.id === account.planId);
+      if (!plan || plan.courses.length === 0) {
+        setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', logs: ['❌ No plan or empty plan.'] } : a));
+        return;
+      }
+
+      const selectedCourses: { [key: string]: string } = {};
+      plan.courses.forEach(c => { selectedCourses[`${c.courseCode} - ${c.title}`] = c.section; });
+
+      const controller = new AbortController();
+      abortControllersRef.current.set(account.id, controller);
+
+      try {
+
+        const mode = botType === 'native' ? 'native-only' : botType === 'puppeteer' ? 'puppeteer-only' : 'hybrid';
+        const res = await fetch('/api/auto-register-hybrid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentId: account.studentId, password: account.password, selectedCourses, mode, apiBaseUrl }),
+          signal: controller.signal,
+        });
+
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+        if (!reader) throw new Error('No response stream');
+
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'log') setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, logs: [...a.logs, data.message] } : a));
+                else if (data.type === 'result') {
+                  const resultData = data.data;
+                  setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'done', result: { success: resultData?.success ?? true, results: resultData?.results || resultData } } : a));
+                }
+                else if (data.type === 'error') setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', result: { success: false, message: data.message } } : a));
+              } catch (_) { }
+            }
+          }
+        }
+        setBotAccounts(prev => prev.map(a => a.id === account.id && a.status === 'running' ? { ...a, status: 'done' } : a));
+      } catch (e: any) {
+        if (e.name !== 'AbortError') {
+          setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', logs: [...a.logs, `❌ ${e.message}`] } : a));
+        }
+      } finally {
+        abortControllersRef.current.delete(account.id);
+      }
+    });
+
+    await Promise.all(launchPromises);
+
+    // Check if any bots are still running after these finish (in case others were started separately)
+    setBotAccounts(current => {
+      if (!current.some(a => a.status === 'running')) {
+        setIsAnyBotRunning(false);
+      }
+      return current;
+    });
+  };
   return (
     <div className="container mx-auto px-3 pb-3 sm:px-4 sm:pb-4 md:px-6 md:pb-6 min-h-[calc(100vh-8rem)]">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 mb-4">
@@ -981,237 +1242,248 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
           >
             Schedule Planner
           </Button>
+          {hasBotAccess && (
+            <Button
+              variant={viewMode === 'bot' ? 'default' : 'outline'}
+              onClick={() => setViewMode('bot')}
+              size="sm"
+              className="flex-1 sm:flex-none text-xs sm:text-sm gap-1"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              Bot Registration
+            </Button>
+          )}
         </div>
       </div>
       <div className="flex flex-col gap-4">
-        {/* Show Section Plans in all views */}
-        <div className="w-full space-y-4">
-          {/* Add New Plan and Export All Buttons */}
-          <div className="flex flex-col gap-3">
-            <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between bg-muted/30 hover:bg-muted/60 px-3 sm:px-4 py-3 rounded-lg transition-colors border border-border shadow-sm gap-2">
-              <button
-                onClick={() => setSectionPlansVisible(!sectionPlansVisible)}
-                className="flex items-center gap-2 cursor-pointer flex-1 w-full sm:w-auto"
-              >
-                <span className="text-lg font-semibold">
-                  {sectionPlansVisible ? '▼' : '▶'}
-                </span>
-                <h2 className="text-lg sm:text-xl font-semibold">Section Plans</h2>
-                <span className="text-xs sm:text-sm text-muted-foreground ml-1">
-                  ({sectionPlans.length} plan{sectionPlans.length !== 1 ? 's' : ''})
-                </span>
-              </button>
-              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-                <Button onClick={handleAddNewPlan} size="sm" variant="outline" className="text-xs sm:text-sm flex-1 sm:flex-none">
-                  + Add New Plan
-                </Button>
-                {sectionPlans.length > 0 && sectionPlans.some(p => p.courses.length > 0) && (
-                  <Select value="" onValueChange={(value) => {
-                    const plansWithCourses = sectionPlans.filter(p => p.courses.length > 0);
-                    if (value === 'pdf') exportAllPlansAsPDF(plansWithCourses);
-                    else if (value === 'png') exportAllPlansAsPNG(plansWithCourses);
-                    else if (value === 'excel') exportAllPlansAsExcel(plansWithCourses);
-                    else if (value === 'calendar') exportAllPlansAsCalendar(plansWithCourses);
-                  }}>
-                    <SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-[140px] md:w-[160px]">
-                      <SelectValue placeholder="Export All as..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="pdf">📄 PDF</SelectItem>
-                      <SelectItem value="png">🖼️ PNG</SelectItem>
-                      <SelectItem value="excel">📊 Excel</SelectItem>
-                      <SelectItem value="calendar">📅 Calendar</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
+        {/* Section Plans — visible in ALL views */}
+        {/* Add New Plan and Export All Buttons */}
+        <div className="flex flex-col gap-3">
+          <div className="w-full flex flex-col sm:flex-row items-start sm:items-center justify-between bg-muted/30 hover:bg-muted/60 px-3 sm:px-4 py-3 rounded-lg transition-colors border border-border shadow-sm gap-2">
+            <button
+              onClick={() => setSectionPlansVisible(!sectionPlansVisible)}
+              className="flex items-center gap-2 cursor-pointer flex-1 w-full sm:w-auto"
+            >
+              <span className="text-lg font-semibold">
+                {sectionPlansVisible ? '▼' : '▶'}
+              </span>
+              <h2 className="text-lg sm:text-xl font-semibold">Section Plans</h2>
+              <span className="text-xs sm:text-sm text-muted-foreground ml-1">
+                ({sectionPlans.length} plan{sectionPlans.length !== 1 ? 's' : ''})
+              </span>
+            </button>
+            <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+              <Button onClick={handleAddNewPlan} size="sm" variant="outline" className="text-xs sm:text-sm flex-1 sm:flex-none">
+                + Add New Plan
+              </Button>
+              {sectionPlans.length > 0 && sectionPlans.some(p => p.courses.length > 0) && (
+                <Select value="" onValueChange={(value) => {
+                  const plansWithCourses = sectionPlans.filter(p => p.courses.length > 0);
+                  if (value === 'pdf') exportAllPlansAsPDF(plansWithCourses);
+                  else if (value === 'png') exportAllPlansAsPNG(plansWithCourses);
+                  else if (value === 'excel') exportAllPlansAsExcel(plansWithCourses);
+                  else if (value === 'calendar') exportAllPlansAsCalendar(plansWithCourses);
+                }}>
+                  <SelectTrigger className="h-9 text-xs sm:text-sm w-full sm:w-[140px] md:w-[160px]">
+                    <SelectValue placeholder="Export All as..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pdf">📄 PDF</SelectItem>
+                    <SelectItem value="png">🖼️ PNG</SelectItem>
+                    <SelectItem value="excel">📊 Excel</SelectItem>
+                    <SelectItem value="calendar">📅 Calendar</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
-
-          {/* Section Plans */}
-          {sectionPlansVisible && sectionPlans.map((plan) => (
-            <Card
-              key={plan.id}
-              id={`plan-card-${plan.id}`}
-              className="transition-all duration-300"
-              ref={(el) => {
-                if (el) {
-                  planRefs.current.set(plan.id, el);
-                } else {
-                  planRefs.current.delete(plan.id);
-                }
-              }}
-            >
-              <CardHeader className="px-4 sm:px-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                  <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => togglePlanExpanded(plan.id)}
-                      className="p-1 h-auto"
-                    >
-                      {expandedPlans.has(plan.id) ? '▼' : '▶'}
-                    </Button>
-                    <Input
-                      value={plan.name}
-                      onChange={(e) => handleRenamePlan(plan.id, e.target.value)}
-                      className="text-base sm:text-lg font-semibold max-w-xs"
-                    />
-                    <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                      ({plan.courses.length} course{plan.courses.length !== 1 ? 's' : ''})
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
-                    {plan.courses.length > 0 && (
-                      <Select value="" onValueChange={(value) => {
-                        if (value === 'pdf') exportPlanAsPDF(plan);
-                        else if (value === 'png') exportPlanAsPNG(plan);
-                        else if (value === 'excel') exportPlanAsExcel(plan);
-                        else if (value === 'calendar') exportPlanAsCalendar(plan);
-                      }}>
-                        <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[120px]">
-                          <SelectValue placeholder="Export as..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pdf">📄 PDF</SelectItem>
-                          <SelectItem value="png">🖼️ PNG</SelectItem>
-                          <SelectItem value="excel">📊 Excel</SelectItem>
-                          <SelectItem value="calendar">📅 Calendar</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    )}
-                    {sectionPlans.length > 1 && (
-                      <Button
-                        onClick={() => handleDeletePlan(plan.id)}
-                        size="sm"
-                        variant="destructive"
-                        className="text-xs w-full sm:w-auto"
-                      >
-                        Delete Plan
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <CardDescription>
-                  {plan.courses.length === 0
-                    ? 'No sections selected in this plan.'
-                    : 'Selected sections for this plan.'}
-                </CardDescription>
-              </CardHeader>
-              {expandedPlans.has(plan.id) && (
-                <CardContent className="px-4 sm:px-6">
-                  {plan.courses.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      Start selecting courses from the options below.
-                    </p>
-                  ) : (
-                    <div className="overflow-x-auto max-h-[40vh] w-full border rounded-md" id={`plan-table-${plan.id}`}>
-                      <table className="w-full border-collapse min-w-[900px]">
-                        <thead>
-                          <tr>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Course Code</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Course Name</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Section</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Faculty</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Credit</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Days</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Time</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Room</th>
-                            <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {plan.courses.map((course, index) => {
-                            const hasConflict = hasConflictInPlan(course, plan);
-                            return (
-                              <tr
-                                key={`${plan.id}-${course.courseCode}-${course.section}-${index}`}
-                                className={`border-b hover:bg-muted/50 ${hasConflict ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
-                              >
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                  {hasConflict && <span className="text-red-600 mr-1">⚠️</span>}
-                                  {course.courseCode}
-                                </td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.title}</td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.section}</td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                  {course.facultyName === "TBA"
-                                    ? "TBA"
-                                    : `${course.facultyName} (${course.facultyInitial})`}
-                                </td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.credit}</td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
-                                  {course.day1}{course.day2 ? ` - ${course.day2}` : ''}
-                                </td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
-                                  {course.time1}
-                                  {course.time2 && course.time2 !== course.time1 && (
-                                    <div>{course.time2}</div>
-                                  )}
-                                </td>
-                                <td className="px-2 py-1 break-words text-xs sm:text-sm">
-                                  {course.room1}{course.room2 && course.room2 !== course.room1 ? ` - ${course.room2}` : ''}
-                                </td>
-                                <td className="px-2 py-1">
-                                  <div className="flex gap-1 whitespace-nowrap">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => handleRemoveCourse(course, plan.id)}
-                                      className="text-xs"
-                                    >
-                                      Remove
-                                    </Button>
-                                    {sectionPlans.length > 1 && (
-                                      <Select
-                                        value=""
-                                        onValueChange={(toPlanId) => handleMoveCourse(course, plan.id, toPlanId)}
-                                      >
-                                        <SelectTrigger className="h-8 text-xs w-[100px]">
-                                          <SelectValue placeholder="Move to..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {sectionPlans
-                                            .filter(p => p.id !== plan.id)
-                                            .map(p => {
-                                              const wouldConflict = hasConflictInPlan(course, p);
-                                              const alreadyHasCourse = p.courses.some(c =>
-                                                c.courseCode === course.courseCode && c.section === course.section
-                                              );
-
-                                              return (
-                                                <SelectItem
-                                                  key={p.id}
-                                                  value={p.id}
-                                                  className={`text-xs ${wouldConflict ? 'text-red-600 dark:text-red-400' : ''}`}
-                                                  disabled={alreadyHasCourse}
-                                                >
-                                                  {wouldConflict && '⚠️ '}
-                                                  {p.name}
-                                                  {alreadyHasCourse ? ' (Has this)' : wouldConflict ? ' (Will conflict)' : ''}
-                                                </SelectItem>
-                                              );
-                                            })}
-                                        </SelectContent>
-                                      </Select>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-          ))}
         </div>
 
-        {/* Content based on view mode */}
+        {/* Section Plans */}
+        {sectionPlansVisible && sectionPlans.map((plan) => (
+          <Card
+            key={plan.id}
+            id={`plan-card-${plan.id}`}
+            className="transition-all duration-300"
+            ref={(el) => {
+              if (el) {
+                planRefs.current.set(plan.id, el);
+              } else {
+                planRefs.current.delete(plan.id);
+              }
+            }}
+          >
+            <CardHeader className="px-4 sm:px-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div className="flex items-center gap-2 flex-1 w-full sm:w-auto">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => togglePlanExpanded(plan.id)}
+                    className="p-1 h-auto"
+                  >
+                    {expandedPlans.has(plan.id) ? '▼' : '▶'}
+                  </Button>
+                  <Input
+                    value={plan.name}
+                    onChange={(e) => handleRenamePlan(plan.id, e.target.value)}
+                    className="text-base sm:text-lg font-semibold max-w-xs"
+                  />
+                  <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                    ({plan.courses.length} course{plan.courses.length !== 1 ? 's' : ''})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto">
+                  {plan.courses.length > 0 && (
+                    <Select value="" onValueChange={(value) => {
+                      if (value === 'pdf') exportPlanAsPDF(plan);
+                      else if (value === 'png') exportPlanAsPNG(plan);
+                      else if (value === 'excel') exportPlanAsExcel(plan);
+                      else if (value === 'calendar') exportPlanAsCalendar(plan);
+                    }}>
+                      <SelectTrigger className="h-8 text-xs w-full sm:w-[100px] md:w-[120px]">
+                        <SelectValue placeholder="Export as..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pdf">📄 PDF</SelectItem>
+                        <SelectItem value="png">🖼️ PNG</SelectItem>
+                        <SelectItem value="excel">📊 Excel</SelectItem>
+                        <SelectItem value="calendar">📅 Calendar</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+
+                  {/* Bot button removed — use the Bot Registration tab instead */}
+                  {sectionPlans.length > 1 && (
+                    <Button
+                      onClick={() => handleDeletePlan(plan.id)}
+                      size="sm"
+                      variant="destructive"
+                      className="text-xs w-full sm:w-auto"
+                    >
+                      Delete Plan
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <CardDescription>
+                {plan.courses.length === 0
+                  ? 'No sections selected in this plan.'
+                  : 'Selected sections for this plan.'}
+              </CardDescription>
+            </CardHeader>
+            {expandedPlans.has(plan.id) && (
+              <CardContent className="px-4 sm:px-6">
+                {plan.courses.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Start selecting courses from the options below.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto max-h-[40vh] w-full border rounded-md" id={`plan-table-${plan.id}`}>
+                    <table className="w-full border-collapse min-w-[900px]">
+                      <thead>
+                        <tr>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Course Code</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Course Name</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Section</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Faculty</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Credit</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Days</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Time</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Room</th>
+                          <th className="sticky top-0 bg-background z-20 border-b px-2 py-2 sm:py-3 text-left font-medium text-xs sm:text-sm">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {plan.courses.map((course, index) => {
+                          const hasConflict = hasConflictInPlan(course, plan);
+                          return (
+                            <tr
+                              key={`${plan.id}-${course.courseCode}-${course.section}-${index}`}
+                              className={`border-b hover:bg-muted/50 ${hasConflict ? 'bg-red-50 dark:bg-red-950/20' : ''}`}
+                            >
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                {hasConflict && <span className="text-red-600 mr-1">⚠️</span>}
+                                {course.courseCode}
+                              </td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.title}</td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.section}</td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                {course.facultyName === "TBA"
+                                  ? "TBA"
+                                  : `${course.facultyName} (${course.facultyInitial})`}
+                              </td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">{course.credit}</td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
+                                {course.day1}{course.day2 ? ` - ${course.day2}` : ''}
+                              </td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm whitespace-nowrap">
+                                {course.time1}
+                                {course.time2 && course.time2 !== course.time1 && (
+                                  <div>{course.time2}</div>
+                                )}
+                              </td>
+                              <td className="px-2 py-1 break-words text-xs sm:text-sm">
+                                {course.room1}{course.room2 && course.room2 !== course.room1 ? ` - ${course.room2}` : ''}
+                              </td>
+                              <td className="px-2 py-1">
+                                <div className="flex gap-1 whitespace-nowrap">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleRemoveCourse(course, plan.id)}
+                                    className="text-xs"
+                                  >
+                                    Remove
+                                  </Button>
+                                  {sectionPlans.length > 1 && (
+                                    <Select
+                                      value=""
+                                      onValueChange={(toPlanId) => handleMoveCourse(course, plan.id, toPlanId)}
+                                    >
+                                      <SelectTrigger className="h-8 text-xs w-[100px]">
+                                        <SelectValue placeholder="Move to..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {sectionPlans
+                                          .filter(p => p.id !== plan.id)
+                                          .map(p => {
+                                            const wouldConflict = hasConflictInPlan(course, p);
+                                            const alreadyHasCourse = p.courses.some(c =>
+                                              c.courseCode === course.courseCode && c.section === course.section
+                                            );
+
+                                            return (
+                                              <SelectItem
+                                                key={p.id}
+                                                value={p.id}
+                                                className={`text-xs ${wouldConflict ? 'text-red-600 dark:text-red-400' : ''}`}
+                                                disabled={alreadyHasCourse}
+                                              >
+                                                {wouldConflict && '⚠️ '}
+                                                {p.name}
+                                                {alreadyHasCourse ? ' (Has this)' : wouldConflict ? ' (Will conflict)' : ''}
+                                              </SelectItem>
+                                            );
+                                          })}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            )}
+          </Card>
+        ))}
+
+        {/* Content based on view mode — hidden in bot view */}
         {viewMode === 'planner' ? (
           <SchedulePlanner courses={initialCourses} onAddPlanFromSchedule={handleAddPlanFromSchedule} />
         ) : viewMode === 'card' ? (
@@ -1222,7 +1494,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
             onClearAllSelected={handleClearAllSelected}
             onNavigateToPlan={handleNavigateToPlan}
           />
-        ) : (
+        ) : viewMode === 'table' ? (
           <div className="w-full">
             <Card>
               <CardHeader>
@@ -1332,13 +1604,242 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
               </CardContent>
             </Card>
           </div>
+        ) : null}
+
+        {/* ============================================================ */}
+        {/* BOT REGISTRATION TAB                                        */}
+        {/* ============================================================ */}
+        {viewMode === 'bot' && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full bg-muted/30 px-3 sm:px-4 py-4 rounded-lg transition-colors border border-border shadow-sm">
+            <div className="space-y-6 w-full">
+              {/* Minimal Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5 w-full">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-orange-500/10 rounded-xl text-orange-500">
+                    <Bot className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold tracking-tight text-foreground">Auto Registration Bot</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">Automate your UIU section registration effortlessly</p>
+                  </div>
+                </div>
+
+                {/* Top Controls */}
+                <div className="flex items-center gap-3">
+                  <Input
+                    placeholder="Custom Login URL (Optional)"
+                    value={apiBaseUrl}
+                    onChange={(e) => setApiBaseUrl(e.target.value)}
+                    className="w-64 h-10 !bg-transparent border-white/10 text-sm hidden md:block"
+                    disabled={isAnyBotRunning}
+                  />
+                  <div className="flex bg-background/40 backdrop-blur-xl p-1 rounded-lg border border-white/10">
+                    <button
+                      onClick={() => setBotType('native')}
+                      className={`text-xs px-3 py-1.5 rounded-md transition-all font-semibold ${botType === 'native' ? 'bg-orange-500/90 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      disabled={isAnyBotRunning}
+                    >
+                      ⚡ Fast
+                    </button>
+                    <button
+                      onClick={() => setBotType('hybrid')}
+                      className={`text-xs px-3 py-1.5 rounded-md transition-all font-semibold ${botType === 'hybrid' ? 'bg-orange-500/90 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      disabled={isAnyBotRunning}
+                    >
+                      🚀 Hybrid
+                    </button>
+                    <button
+                      onClick={() => setBotType('puppeteer')}
+                      className={`text-xs px-3 py-1.5 rounded-md transition-all font-semibold ${botType === 'puppeteer' ? 'bg-orange-500/90 text-white' : 'text-muted-foreground hover:text-foreground'}`}
+                      disabled={isAnyBotRunning}
+                    >
+                      🤖 Puppeteer
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Account Rows Minimal List */}
+              <div className="space-y-3 w-full">
+                <div className="flex items-center justify-between px-1 border-b border-white/5 pb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <User className="w-3.5 h-3.5 text-orange-500/70" /> Accounts ({botAccounts.length})
+                  </h3>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl shadow-sm w-full block">
+                  {botAccounts.map((account, idx) => (
+                    <div key={account.id} className={`grid grid-cols-1 lg:grid-cols-[1fr_1fr_1.5fr_auto] gap-4 items-center p-4 ${idx > 0 ? 'border-t border-white/5' : ''} hover:bg-white/5 transition-colors`}>
+
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-muted-foreground bg-white/5 px-2 py-1 rounded-md shrink-0">{idx + 1}</span>
+                        <Input placeholder="Student ID" value={account.studentId}
+                          onChange={(e) => setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, studentId: e.target.value } : a))}
+                          className="h-10 text-sm w-full !bg-transparent border-white/10 focus:border-orange-500/50" disabled={isAnyBotRunning} />
+                      </div>
+
+                      <div>
+                        <Input placeholder="Password" type="password" value={account.password}
+                          onChange={(e) => setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, password: e.target.value } : a))}
+                          className="h-10 text-sm w-full !bg-transparent border-white/10 focus:border-orange-500/50" disabled={isAnyBotRunning} />
+                      </div>
+
+                      <div>
+                        <Select value={account.planId}
+                          onValueChange={(val) => setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, planId: val } : a))}
+                          disabled={isAnyBotRunning}>
+                          <SelectTrigger className="h-10 text-sm w-full !bg-transparent border-white/10 focus:border-orange-500/50">
+                            <SelectValue placeholder="Select plan" />
+                          </SelectTrigger>
+                          <SelectContent className="bg-background/95 backdrop-blur-xl border-white/10">
+                            {sectionPlans.map(p => (
+                              <SelectItem key={p.id} value={p.id}>{p.name} <span className="text-muted-foreground text-xs ml-1">({p.courses.length})</span></SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-center justify-between lg:justify-end gap-3">
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${account.status === 'running' ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 animate-pulse' :
+                          account.status === 'done' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                            account.status === 'error' ? 'bg-red-500/10 text-red-500 border border-red-500/20' :
+                              'bg-background/50 text-muted-foreground border border-white/10'
+                          }`}>
+                          {account.status === 'running' ? 'Running' : account.status === 'done' ? 'Done' : account.status === 'error' ? 'Error' : 'Idle'}
+                        </span>
+
+                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          {account.status === 'running' ? (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              className="h-8 px-3 text-xs bg-red-600/80 hover:bg-red-600"
+                              onClick={() => {
+                                const controller = abortControllersRef.current.get(account.id);
+                                if (controller) {
+                                  controller.abort();
+                                  abortControllersRef.current.delete(account.id);
+                                }
+                                setBotAccounts(prev => prev.map(a => a.id === account.id ? { ...a, status: 'error', logs: [...a.logs, '⚠️ Cancelled by user.'] } : a));
+
+                                // Check if any bots are still running
+                                setBotAccounts(current => {
+                                  if (!current.some(a => a.status === 'running')) {
+                                    setIsAnyBotRunning(false);
+                                  }
+                                  return current;
+                                });
+                              }}
+                            >
+                              <Square className="w-3.5 h-3.5 mr-1" /> Stop
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              className="h-8 px-3 text-xs bg-orange-500/10 text-orange-500 hover:bg-orange-500/20 border border-orange-500/20"
+                              disabled={!account.studentId || !account.password}
+                              onClick={() => handleLaunchBots([account.id])}
+                            >
+                              <Play className="w-3.5 h-3.5 mr-1" /> Run
+                            </Button>
+                          )}
+                          {!isAnyBotRunning && botAccounts.length > 1 && (
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                              onClick={() => setBotAccounts(prev => prev.filter(a => a.id !== account.id))}>
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Buttons Row */}
+                <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                  {!isAnyBotRunning && (
+                    <Button variant="outline" className="h-11 sm:w-auto w-full border-dashed border-white/20 hover:border-orange-500/50 hover:text-orange-500 bg-background/30 backdrop-blur-xl"
+                      onClick={() => setBotAccounts(prev => [...prev, {
+                        id: String(Date.now()), studentId: '', password: '',
+                        planId: sectionPlans[0]?.id || '1', status: 'idle', logs: [], result: null,
+                      }])}>
+                      <Plus className="w-4 h-4 mr-2" /> Add Account
+                    </Button>
+                  )}
+
+                  {isAnyBotRunning ? (
+                    <Button variant="destructive" className="flex-1 h-11 font-bold shadow-md"
+                      onClick={() => {
+                        abortControllersRef.current.forEach(c => c.abort());
+                        abortControllersRef.current.clear();
+                        setIsAnyBotRunning(false);
+                        setBotAccounts(prev => prev.map(a => a.status === 'running' ? { ...a, status: 'error', logs: [...a.logs, '⚠️ Cancelled.'] } : a));
+                      }}>
+                      <Square className="w-4 h-4 mr-2" /> Cancel All Running
+                    </Button>
+                  ) : (
+                    <Button className="flex-1 h-11 bg-orange-500/90 hover:bg-orange-600 text-white font-bold shadow-md"
+                      disabled={botAccounts.every(a => !a.studentId || !a.password)}
+                      onClick={() => handleLaunchBots(botAccounts.map(a => a.id))}>
+                      <Rocket className="w-4 h-4 mr-2" /> Launch All Bots
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Results Grid - Minimal */}
+              {(botAccounts.some(a => a.result) || botAccounts.some(a => a.logs.length > 0)) && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+
+                  {/* Console */}
+                  {botAccounts.some(a => a.logs.length > 0) && (
+                    <div className="rounded-xl border border-white/10 bg-black/50 backdrop-blur-xl flex flex-col h-64 overflow-hidden">
+                      <div className="bg-white/5 px-4 py-2 text-xs font-bold tracking-wider text-muted-foreground border-b border-white/5 flex items-center">
+                        <Terminal className="w-3.5 h-3.5 mr-2" /> Console Output
+                      </div>
+                      <div className="p-4 font-mono text-xs text-green-400 overflow-y-auto space-y-1 flex-1">
+                        {botAccounts.flatMap(a =>
+                          a.logs.map((log, i) => ({ key: `${a.id}-${i}`, text: botAccounts.length > 1 ? `[${a.studentId || '?'}] ${log}` : log }))
+                        ).map(e => <div key={e.key} className="opacity-90"><span className="text-green-500/50 mr-2">›</span>{e.text}</div>)}
+                        {isAnyBotRunning && <div className="animate-pulse text-green-500 mt-2">▌</div>}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Results */}
+                  {botAccounts.some(a => a.result) && (
+                    <div className="rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl flex flex-col h-64 overflow-hidden">
+                      <div className="bg-white/5 px-4 py-2 text-xs font-bold tracking-wider text-muted-foreground border-b border-white/5 flex items-center">
+                        <CheckCircle2 className="w-3.5 h-3.5 mr-2" /> Results
+                      </div>
+                      <div className="p-4 overflow-y-auto space-y-3 flex-1">
+                        {botAccounts.filter(a => a.result).map(account => (
+                          <div key={account.id} className={`p-3 rounded-lg text-sm border ${account.result?.success ? 'bg-green-500/5 border-green-500/20 text-green-500' : 'bg-red-500/5 border-red-500/20 text-red-500'}`}>
+                            <strong className="flex items-center gap-1.5 mb-1.5"><User className="w-3.5 h-3.5" />{account.studentId || 'Account'}:</strong>
+                            {account.result?.success ? (
+                              <ul className="space-y-1">
+                                {Array.isArray(account.result.results) && account.result.results.map((r: any, i: number) => (
+                                  <li key={i} className="flex text-xs items-start bg-background/50 p-1.5 rounded">
+                                    {r.success ? '✅' : '❌'} <span className="ml-1.5 opacity-90">{r.course}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : <span className="text-xs">{account.result?.message || 'Error'}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
 };
-
-
 export default function SectionSelectorPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [view, setView] = useState<'upload' | 'data'>('upload');

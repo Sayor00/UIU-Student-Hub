@@ -21,6 +21,7 @@ export interface IUser extends Document {
   password: string;
   studentId?: string;
   role: "user" | "admin";
+  permissions: string[];
   emailVerified: boolean;
   verificationCode?: string;
   verificationExpires?: Date;
@@ -56,6 +57,10 @@ const UserSchema = new Schema<IUser>(
       type: String,
       enum: ["user", "admin"],
       default: "user",
+    },
+    permissions: {
+      type: [String],
+      default: [],
     },
     emailVerified: {
       type: Boolean,

@@ -1431,20 +1431,22 @@ const SchedulePlanner = ({ courses, onAddPlanFromSchedule }: SchedulePlannerProp
                 </div>
 
                 {/* Schedule Summary */}
-                <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm">
-                  <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Total Courses: </span>
-                    <span className="font-bold text-blue-600 dark:text-blue-400">{schedule.courses.length}</span>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Total Credits: </span>
-                    <span className="font-bold text-green-600 dark:text-green-400">
-                      {schedule.courses.reduce((sum, course) => sum + parseInt(course.credit || '0'), 0)}
-                    </span>
-                  </div>
-                  <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
-                    <span className="font-medium text-gray-900 dark:text-gray-100">Class Days: </span>
-                    <span className="font-bold text-purple-600 dark:text-purple-400">{schedule.totalDays}</span>
+                <div className="mt-4 flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-4 text-xs sm:text-sm flex-1 w-full sm:w-auto">
+                    <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
+                      <span className="font-medium text-gray-900 dark:text-gray-100">Total Courses: </span>
+                      <span className="font-bold text-blue-600 dark:text-blue-400">{schedule.courses.length}</span>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
+                      <span className="font-medium text-gray-900 dark:text-gray-100">Total Credits: </span>
+                      <span className="font-bold text-green-600 dark:text-green-400">
+                        {schedule.courses.reduce((sum, course) => sum + parseInt(course.credit || '0'), 0)}
+                      </span>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-2 sm:p-3 rounded">
+                      <span className="font-medium text-gray-900 dark:text-gray-100">Class Days: </span>
+                      <span className="font-bold text-purple-600 dark:text-purple-400">{schedule.totalDays}</span>
+                    </div>
                   </div>
                 </div>
               </CardContent>

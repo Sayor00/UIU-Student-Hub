@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Search, Shield, ShieldOff, Trash2 } from "lucide-react";
+import { Loader2, Search, Shield, ShieldOff, Trash2, Bot } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ interface UserItem {
   name: string;
   email: string;
   role: string;
+  permissions?: string[];
   emailVerified: boolean;
   studentId?: string;
   createdAt: string;
@@ -40,7 +41,7 @@ export default function AdminUsersPage() {
     variant?: "destructive" | "default";
     confirmLabel?: string;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
   const fetchUsers = React.useCallback(async () => {
     setLoading(true);
@@ -92,9 +93,8 @@ export default function AdminUsersPage() {
     setConfirmDialog({
       open: true,
       title: newRole === "admin" ? "Promote to Admin" : "Remove Admin Role",
-      description: `Are you sure you want to ${
-        newRole === "admin" ? "promote this user to admin" : "remove admin role from this user"
-      }?`,
+      description: `Are you sure you want to ${newRole === "admin" ? "promote this user to admin" : "remove admin role from this user"
+        }?`,
       confirmLabel: newRole === "admin" ? "Promote" : "Remove",
       variant: newRole === "admin" ? "default" : "destructive",
       onConfirm: async () => {
@@ -115,6 +115,29 @@ export default function AdminUsersPage() {
         }
       },
     });
+  };
+
+  const toggleBotAccess = async (userId: string, currentPermissions: string[] = []) => {
+    const hasBotAccess = currentPermissions.includes("bot_access");
+    const newPermissions = hasBotAccess
+      ? currentPermissions.filter(p => p !== "bot_access")
+      : [...currentPermissions, "bot_access"];
+
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ permissions: newPermissions }),
+      });
+      if (!res.ok) {
+        toast.error("Failed to update bot access");
+        return;
+      }
+      toast.success(hasBotAccess ? "Bot access removed" : "Bot access granted");
+      fetchUsers();
+    } catch {
+      toast.error("Something went wrong");
+    }
   };
 
   return (
@@ -155,7 +178,7 @@ export default function AdminUsersPage() {
           {users.map((user) => (
             <Card key={user._id}>
               <CardContent className="py-3">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-sm">{user.name}</h3>
@@ -164,23 +187,27 @@ export default function AdminUsersPage() {
                           Admin
                         </span>
                       )}
+                      {(user.permissions || []).includes("bot_access") && (
+                        <span className="text-xs bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">
+                          🤖 Bot
+                        </span>
+                      )}
                       <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          user.emailVerified
-                            ? "bg-green-500/10 text-green-600"
-                            : "bg-yellow-500/10 text-yellow-600"
-                        }`}
+                        className={`text-xs px-2 py-0.5 rounded-full ${user.emailVerified
+                          ? "bg-green-500/10 text-green-600"
+                          : "bg-yellow-500/10 text-yellow-600"
+                          }`}
                       >
                         {user.emailVerified ? "Verified" : "Unverified"}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground truncate">
                       {user.email}
                       {user.studentId && ` · ID: ${user.studentId}`}
                       {` · Joined ${new Date(user.createdAt).toLocaleDateString()}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0 flex-wrap">
                     <Button
                       size="sm"
                       variant={user.role === "admin" ? "destructive" : "outline"}
@@ -195,6 +222,16 @@ export default function AdminUsersPage() {
                           <Shield className="h-4 w-4 mr-1" /> Make Admin
                         </>
                       )}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={(user.permissions || []).includes("bot_access") ? "default" : "outline"}
+                      onClick={() => toggleBotAccess(user._id, user.permissions || [])}
+                      title={`${(user.permissions || []).includes("bot_access") ? "Revoke" : "Grant"} bot access`}
+                      className={(user.permissions || []).includes("bot_access") ? "bg-orange-500 hover:bg-orange-600 text-white" : ""}
+                    >
+                      <Bot className="h-4 w-4 mr-1" />
+                      {(user.permissions || []).includes("bot_access") ? "Bot ✓" : "Bot"}
                     </Button>
                     <Button
                       size="icon"

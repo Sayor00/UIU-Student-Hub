@@ -44,6 +44,7 @@ export const authOptions: NextAuthOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          permissions: (user as any).permissions || [],
           studentId: user.studentId, // Add studentId
         };
       },
@@ -60,6 +61,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.permissions = (user as any).permissions || [];
         token.studentId = (user as any).studentId;
       }
 
@@ -67,10 +69,11 @@ export const authOptions: NextAuthOptions = {
       if (token.id) {
         try {
           await dbConnect();
-          const dbUser = await User.findById(token.id).select("studentId role").lean();
+          const dbUser = await User.findById(token.id).select("studentId role permissions").lean();
           if (dbUser) {
             token.studentId = (dbUser as any).studentId || token.studentId;
             token.role = (dbUser as any).role || token.role;
+            token.permissions = (dbUser as any).permissions || token.permissions || [];
           }
         } catch {
           // Silently fail — use cached token values
@@ -83,6 +86,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        (session.user as any).permissions = token.permissions || [];
         (session.user as any).studentId = token.studentId;
       }
       return session;
