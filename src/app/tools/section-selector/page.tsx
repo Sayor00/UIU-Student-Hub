@@ -1987,15 +1987,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                   </div>
                 </div>
 
-                {/* Top Controls */}
                 <div className="flex items-center gap-3">
-                  <Input
-                    placeholder="Custom Login URL (Optional)"
-                    value={apiBaseUrl}
-                    onChange={(e) => setApiBaseUrl(e.target.value)}
-                    className="w-64 h-10 !bg-transparent border-white/10 text-sm hidden md:block"
-                    disabled={isAnyBotRunning}
-                  />
                   <div className="flex bg-background/40 backdrop-blur-xl p-1 rounded-lg border border-white/10">
                     <button
                       onClick={() => setBotType('native')}
@@ -2020,6 +2012,23 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
                     </button>
                   </div>
                 </div>
+              </div>
+
+              {/* Custom Login URL */}
+              <div className="space-y-3 w-full">
+                <div className="flex items-center justify-between px-1 border-b border-white/5 pb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 text-orange-500/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                    Custom API URL
+                  </h3>
+                </div>
+                <Input
+                  placeholder="https://your-api-base-url.com/v3"
+                  value={apiBaseUrl}
+                  onChange={(e) => setApiBaseUrl(e.target.value)}
+                  className="w-full h-10 border-white/10 text-sm"
+                  disabled={isAnyBotRunning}
+                />
               </div>
 
               {/* Account Rows Minimal List */}
