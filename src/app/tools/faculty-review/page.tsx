@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useInView } from "react-intersection-observer";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,11 +114,10 @@ function StarRating({
       {[1, 2, 3, 4, 5].map((star) => (
         <Star
           key={star}
-          className={`${sizeClasses[size]} ${
-            star <= value
-              ? "fill-yellow-400 text-yellow-400"
-              : "fill-muted text-muted-foreground/30"
-          }`}
+          className={`${sizeClasses[size]} ${star <= value
+            ? "fill-yellow-400 text-yellow-400"
+            : "fill-muted text-muted-foreground/30"
+            }`}
         />
       ))}
     </div>
@@ -266,8 +266,12 @@ export default function FacultyReviewPage() {
     1
   );
 
+  const [page, setPage] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const { ref, inView } = useInView();
+
   /* ─── Fetch Faculty ─── */
-  const fetchFaculty = React.useCallback(async () => {
+  const fetchFaculty = React.useCallback(async (pageNum: number) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -275,13 +279,23 @@ export default function FacultyReviewPage() {
       if (filterDept) params.set("department", filterDept);
       params.set("sortBy", sortBy);
       params.set("order", sortOrder);
-      params.set("limit", "100");
+      params.set("limit", "20");
+      params.set("page", pageNum.toString());
 
       const res = await fetch(`/api/faculty?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
-        setFacultyList(data.faculty);
-        setDepartments(data.departments || []);
+        if (pageNum === 1) {
+          setFacultyList(data.faculty);
+        } else {
+          setFacultyList((prev) => {
+            const existingIds = new Set(prev.map(item => item._id));
+            const uniqueNew = (data.faculty || []).filter((item: any) => !existingIds.has(item._id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        setHasMore(pageNum < data.pagination.totalPages);
+        if (pageNum === 1) setDepartments(data.departments || []);
       }
     } catch {
       /* empty */
@@ -290,9 +304,20 @@ export default function FacultyReviewPage() {
     }
   }, [searchQuery, filterDept, sortBy, sortOrder]);
 
+  // Reset page to 1 when filters change
   React.useEffect(() => {
-    fetchFaculty();
-  }, [fetchFaculty]);
+    setPage(1);
+    fetchFaculty(1);
+  }, [searchQuery, filterDept, sortBy, sortOrder, fetchFaculty]);
+
+  // Load more when scrolled to bottom
+  React.useEffect(() => {
+    if (inView && hasMore && !loading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchFaculty(nextPage);
+    }
+  }, [inView, hasMore, loading, fetchFaculty, page]);
 
   /* ─── Add Faculty ─── */
   const handleAddFaculty = async () => {
@@ -334,7 +359,8 @@ export default function FacultyReviewPage() {
           bio: "",
         });
         initialsCheck.reset();
-        fetchFaculty();
+        setPage(1);
+        fetchFaculty(1);
       } else {
         toast.error(data.error || "Failed to add faculty");
       }
@@ -697,13 +723,13 @@ export default function FacultyReviewPage() {
       <div className="flex items-center gap-2 mb-4">
         <Users className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm text-muted-foreground">
-          {facultyList.length} faculty member
+          Showing {facultyList.length} faculty member
           {facultyList.length !== 1 ? "s" : ""}
         </span>
       </div>
 
       {/* ── Faculty Grid ── */}
-      {loading ? (
+      {loading && page === 1 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(9)].map((_, i) => (
             <div key={i} className="animate-pulse rounded-xl border p-4">
@@ -748,11 +774,10 @@ export default function FacultyReviewPage() {
                   <div className="flex items-start gap-3">
                     {/* Rating Circle */}
                     <div
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${
-                        faculty.totalReviews > 0
-                          ? getRatingBg(faculty.averageRating)
-                          : "bg-muted/50 border-border"
-                      }`}
+                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${faculty.totalReviews > 0
+                        ? getRatingBg(faculty.averageRating)
+                        : "bg-muted/50 border-border"
+                        }`}
                     >
                       {faculty.totalReviews > 0 ? (
                         <span
@@ -812,6 +837,13 @@ export default function FacultyReviewPage() {
               </Card>
             </motion.div>
           ))}
+        </div>
+      )}
+
+      {/* Loading More Indicator */}
+      {hasMore && facultyList.length > 0 && !(loading && page === 1) && (
+        <div ref={ref} className="flex justify-center py-8">
+          {loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
         </div>
       )}
     </div>

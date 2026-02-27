@@ -68,6 +68,10 @@ export async function PATCH(req: NextRequest) {
             updateFields["preferences.targetCGPA"] = data.targetCGPA || null;
         }
 
+        if (data.timeFormat !== undefined) {
+            updateFields["preferences.timeFormat"] = data.timeFormat === "24h" ? "24h" : "12h";
+        }
+
         if (data.recentTool) {
             // Add or update a recent tool visit
             const user = await User.findById((session.user as any).id).select("preferences");

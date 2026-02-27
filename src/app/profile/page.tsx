@@ -18,6 +18,7 @@ import {
   BookOpen,
   Clock,
   Target,
+  Settings2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,7 @@ import {
 } from "@/components/ui/dialog";
 import { parseStudentId } from "@/lib/trimesterUtils";
 import { useAcademicContext } from "@/context/academic-context";
+import { Switch } from "@/components/ui/switch";
 
 interface UserProfile {
   _id: string;
@@ -54,6 +56,33 @@ export default function PersonalInfoPage() {
   const [editForm, setEditForm] = React.useState({ name: "", studentId: "" });
   const [saving, setSaving] = React.useState(false);
   const academic = useAcademicContext();
+  const [timeFormat, setTimeFormat] = React.useState<"12h" | "24h">("12h");
+
+  // Load time format preference
+  React.useEffect(() => {
+    if (!session?.user) return;
+    fetch("/api/user/preferences")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.preferences?.timeFormat) setTimeFormat(data.preferences.timeFormat);
+      })
+      .catch(() => { });
+  }, [session?.user]);
+
+  const handleTimeFormatToggle = async (checked: boolean) => {
+    const fmt = checked ? "24h" : "12h";
+    setTimeFormat(fmt);
+    try {
+      await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ timeFormat: fmt }),
+      });
+      toast.success(`Time format set to ${fmt === "24h" ? "24-hour" : "12-hour"}`);
+    } catch {
+      toast.error("Failed to save preference");
+    }
+  };
 
   const fetchProfile = React.useCallback(async () => {
     try {
@@ -337,6 +366,38 @@ export default function PersonalInfoPage() {
             </CardContent>
           </Card>
         </div>
+      </motion.div>
+
+      {/* Preferences */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: studentInfo ? 0.3 : 0.2 }}
+      >
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <Settings2 className="h-5 w-5 text-primary" />
+          Preferences
+        </h2>
+        <Card className="border-white/10 bg-background/25 backdrop-blur-xl">
+          <CardContent className="pt-5 space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> Time Format</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Currently showing times in <span className="font-medium">{timeFormat === "24h" ? "24-hour (14:30)" : "12-hour (2:30 PM)"}</span> format
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs font-medium ${timeFormat === "12h" ? "text-foreground" : "text-muted-foreground"}`}>12h</span>
+                <Switch
+                  checked={timeFormat === "24h"}
+                  onCheckedChange={handleTimeFormatToggle}
+                />
+                <span className={`text-xs font-medium ${timeFormat === "24h" ? "text-foreground" : "text-muted-foreground"}`}>24h</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Edit Dialog */}

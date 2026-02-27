@@ -36,6 +36,7 @@ import {
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import { useInView } from "react-intersection-observer";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,8 +119,9 @@ interface Review {
   facultyId: string;
   userId: string;
   userName: string;
-  courseTaken: string;
-  trimester: string;
+  courseTaken?: string;
+  trimester?: string;
+  courseHistory?: { courseCode: string; trimester: string }[];
   ratings: {
     teaching: number;
     grading: number;
@@ -136,9 +138,9 @@ interface Review {
 }
 
 /* ─────── Constants ─────── */
-const TRIMESTERS = [
-  "Spring 2026", "Fall 2025", "Summer 2025", "Spring 2025",
-  "Fall 2024", "Summer 2024", "Spring 2024", "Fall 2023", "Before 2023",
+const DESIGNATIONS = [
+  "Lecturer", "Senior Lecturer", "Assistant Professor",
+  "Associate Professor", "Professor", "Adjunct Faculty",
 ];
 
 /* ─────── Star Rating Component ─────── */
@@ -163,11 +165,10 @@ function StarRating({
           className={`${readonly ? "cursor-default" : "cursor-pointer hover:scale-110"} transition-transform`}
         >
           <Star
-            className={`${sizeClasses[size]} transition-colors ${
-              star <= (hoverValue || value)
-                ? "fill-yellow-400 text-yellow-400"
-                : "fill-muted text-muted-foreground/30"
-            }`}
+            className={`${sizeClasses[size]} transition-colors ${star <= (hoverValue || value)
+              ? "fill-yellow-400 text-yellow-400"
+              : "fill-muted text-muted-foreground/30"
+              }`}
           />
         </button>
       ))}
@@ -186,9 +187,8 @@ function RatingBar({ label, value }: { label: string; value: number }) {
           initial={{ width: 0 }}
           animate={{ width: `${percentage}%` }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          className={`h-full rounded-full ${
-            value >= 4 ? "bg-green-500" : value >= 3 ? "bg-yellow-500" : value >= 2 ? "bg-orange-500" : "bg-red-500"
-          }`}
+          className={`h-full rounded-full ${value >= 4 ? "bg-green-500" : value >= 3 ? "bg-yellow-500" : value >= 2 ? "bg-orange-500" : "bg-red-500"
+            }`}
         />
       </div>
       <span className="text-xs font-medium w-8 text-right">{value > 0 ? value.toFixed(1) : "—"}</span>
@@ -251,6 +251,41 @@ function useUniquenessCheck(url: string, paramKey: string, minLen = 2) {
   return { value, check, checking, available, reset, setValue };
 }
 
+/* ─────── Course Search Hook ─────── */
+function useCourseSearch() {
+  const [courses, setCourses] = React.useState<{ _id: string, code: string, title: string, credit: number }[]>([]);
+  const [searching, setSearching] = React.useState(false);
+  const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const search = React.useCallback((query: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (query.trim().length < 2) {
+      setCourses([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/courses/search?q=${encodeURIComponent(query.trim())}`);
+        if (res.ok) {
+          const data = await res.json();
+          setCourses(data.courses || []);
+        } else {
+          setCourses([]);
+        }
+      } catch {
+        setCourses([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 300);
+  }, []);
+
+  const clear = React.useCallback(() => setCourses([]), []);
+  return { courses, search, searching, clear };
+}
+
 /* ─────── Availability Indicator ─────── */
 function AvailabilityIndicator({ checking, available, label }: { checking: boolean; available: boolean | null; label: string }) {
   if (checking) {
@@ -305,6 +340,9 @@ export default function FacultyDetailPage() {
   const [reviews, setReviews] = React.useState<Review[]>([]);
   const [reviewsLoading, setReviewsLoading] = React.useState(false);
   const [reviewSort, setReviewSort] = React.useState("recent");
+  const [page, setPage] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const { ref, inView } = useInView();
 
   // User's review status
   const [hasReviewed, setHasReviewed] = React.useState(false);
@@ -320,8 +358,7 @@ export default function FacultyDetailPage() {
   // Review form
   const [reviewForm, setReviewForm] = React.useState({
     anonymousName: "",
-    courseTaken: "",
-    trimester: "",
+    courseHistory: [{ courseCode: "", trimester: "" }],
     ratings: { teaching: 0, grading: 0, friendliness: 0, availability: 0 },
     comment: "",
     difficulty: "" as string,
@@ -331,9 +368,49 @@ export default function FacultyDetailPage() {
   // Username uniqueness
   const usernameCheck = useUniquenessCheck("/api/reviews/check-username", "userName", 2);
 
+  // Faculty Edit form
+  const [editFacultyOpen, setEditFacultyOpen] = React.useState(false);
+  const [editFacultyLoading, setEditFacultyLoading] = React.useState(false);
+  const [editFacultyForm, setEditFacultyForm] = React.useState({
+    name: "", initials: "", department: "", designation: "", email: "", phone: "", office: "", website: "", github: "", linkedin: "", scholar: "", bio: ""
+  });
+  const editInitialsCheck = useUniquenessCheck("/api/faculty/check-initials", "initials", 1);
+
   // Past usernames for autocomplete
   const [pastUsernames, setPastUsernames] = React.useState<string[]>([]);
   const [usernamePopoverOpen, setUsernamePopoverOpen] = React.useState(false);
+
+  // Dynamic Config Data
+  const [trimesters, setTrimesters] = React.useState<string[]>([]);
+  const [departments, setDepartments] = React.useState<string[]>([]);
+
+  // Course Autocomplete
+  const courseSearch = useCourseSearch();
+  const [activeCourseIndex, setActiveCourseIndex] = React.useState<number | null>(null);
+
+  /* ─── Fetch Config Data ─── */
+  const fetchConfigData = React.useCallback(async () => {
+    try {
+      const [triRes, deptRes] = await Promise.all([
+        fetch("/api/admin/trimesters").catch(() => null),
+        fetch("/api/admin/departments").catch(() => null),
+      ]);
+      if (triRes?.ok) {
+        const tData = await triRes.json();
+        setTrimesters(tData.trimesters || []);
+      }
+      if (deptRes?.ok) {
+        const dData = await deptRes.json();
+        setDepartments(dData.departments || []);
+      }
+    } catch {
+      // Keep silent fallback
+    }
+  }, []);
+
+  React.useEffect(() => {
+    fetchConfigData();
+  }, [fetchConfigData]);
 
   /* ─── Fetch Faculty ─── */
   const fetchFaculty = React.useCallback(async () => {
@@ -363,24 +440,45 @@ export default function FacultyDetailPage() {
   React.useEffect(() => { fetchFaculty(); }, [fetchFaculty]);
 
   /* ─── Fetch Reviews ─── */
-  const fetchReviews = React.useCallback(async () => {
+  const fetchReviews = React.useCallback(async (pageNum: number) => {
     if (!facultyId) return;
-    setReviewsLoading(true);
+    if (pageNum === 1) setReviewsLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("facultyId", facultyId);
       params.set("sortBy", reviewSort);
-      params.set("limit", "50");
+      params.set("limit", "20");
+      params.set("page", pageNum.toString());
 
       const res = await fetch(`/api/reviews?${params.toString()}`);
       const data = await res.json();
-      if (res.ok) setReviews(data.reviews);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setReviews(data.reviews || []);
+        } else {
+          setReviews((prev) => [...prev, ...(data.reviews || [])]);
+        }
+        setHasMore(pageNum < (data.pagination?.totalPages || 1));
+      }
     } catch { /* empty */ } finally {
       setReviewsLoading(false);
     }
   }, [facultyId, reviewSort]);
 
-  React.useEffect(() => { fetchReviews(); }, [fetchReviews]);
+  React.useEffect(() => {
+    if (facultyId) {
+      setPage(1);
+      fetchReviews(1);
+    }
+  }, [fetchReviews, facultyId]);
+
+  React.useEffect(() => {
+    if (inView && hasMore && !reviewsLoading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchReviews(nextPage);
+    }
+  }, [inView, hasMore, reviewsLoading, fetchReviews, page]);
 
   /* ─── Check if user already reviewed ─── */
   const checkHasReviewed = React.useCallback(async () => {
@@ -419,9 +517,16 @@ export default function FacultyDetailPage() {
 
   /* ─── Submit Review ─── */
   const handleSubmitReview = async () => {
-    const { anonymousName, courseTaken, trimester, ratings, comment, difficulty, wouldTakeAgain } = reviewForm;
+    const { anonymousName, courseHistory, ratings, comment, difficulty, wouldTakeAgain } = reviewForm;
 
-    if (!anonymousName || !courseTaken || !trimester || !comment || !difficulty || wouldTakeAgain === null) {
+    if (
+      !anonymousName ||
+      !comment ||
+      !difficulty ||
+      wouldTakeAgain === null ||
+      !courseHistory.length ||
+      courseHistory.some((c) => !c.courseCode || !c.trimester)
+    ) {
       toast.error("Please fill in all fields");
       return;
     }
@@ -457,7 +562,8 @@ export default function FacultyDetailPage() {
         toast.success(isEdit ? "Review updated!" : "Review submitted!");
         setAddReviewOpen(false);
         resetReviewForm();
-        fetchReviews();
+        setPage(1);
+        fetchReviews(1);
         checkHasReviewed();
         fetchFaculty();
       } else {
@@ -482,7 +588,8 @@ export default function FacultyDetailPage() {
       const res = await fetch(`/api/reviews?reviewId=${deleteReviewId}`, { method: "DELETE" });
       if (res.ok) {
         toast.success("Review deleted");
-        fetchReviews();
+        setPage(1);
+        fetchReviews(1);
         checkHasReviewed();
         fetchFaculty();
       } else {
@@ -508,7 +615,12 @@ export default function FacultyDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reviewId, action }),
       });
-      if (res.ok) fetchReviews();
+      // Silent update specifically to not disrupt infinite scroll, but we need to re-fetch the specific page or just the item...
+      // Just re-fetching the first page for now is okay, or we could update local state. Let's just update local state instead
+      if (res.ok) {
+        const data = await res.json();
+        setReviews((prev) => prev.map((r) => r._id === reviewId ? { ...r, likes: data.likes, dislikes: data.dislikes } : r));
+      }
     } catch {
       toast.error("Network error");
     }
@@ -519,8 +631,9 @@ export default function FacultyDetailPage() {
     setEditingReview(review);
     setReviewForm({
       anonymousName: review.userName,
-      courseTaken: review.courseTaken,
-      trimester: review.trimester,
+      courseHistory: review.courseHistory?.length
+        ? review.courseHistory
+        : [{ courseCode: review.courseTaken || "", trimester: review.trimester || "" }],
       ratings: { ...review.ratings },
       comment: review.comment,
       difficulty: review.difficulty,
@@ -534,8 +647,7 @@ export default function FacultyDetailPage() {
     setEditingReview(null);
     setReviewForm({
       anonymousName: "",
-      courseTaken: "",
-      trimester: "",
+      courseHistory: [{ courseCode: "", trimester: "" }],
       ratings: { teaching: 0, grading: 0, friendliness: 0, availability: 0 },
       comment: "",
       difficulty: "",
@@ -554,6 +666,40 @@ export default function FacultyDetailPage() {
     !editingReview
       ? usernameCheck.available === true && !usernameCheck.checking
       : true;
+
+  /* ─── Submit Edit Suggestion ─── */
+  const handleSuggestEdit = async () => {
+    if (!editFacultyForm.name || !editFacultyForm.initials || !editFacultyForm.department) {
+      toast.error("Name, Initials, and Department are required");
+      return;
+    }
+
+    // if they changed initials and it's already taken
+    if (editFacultyForm.initials !== faculty?.initials && editInitialsCheck.available === false) {
+      toast.error("These initials are already taken");
+      return;
+    }
+
+    setEditFacultyLoading(true);
+    try {
+      const res = await fetch("/api/faculty-edits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facultyId: faculty?._id, ...editFacultyForm }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.message || "Edit suggestions submitted!");
+        setEditFacultyOpen(false);
+      } else {
+        toast.error(data.error || "Failed to submit edit suggestions");
+      }
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setEditFacultyLoading(false);
+    }
+  };
 
   /* ─── Loading State ─── */
   if (facultyLoading) {
@@ -622,9 +768,8 @@ export default function FacultyDetailPage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 text-2xl font-bold ${
-                  faculty.totalReviews > 0 ? getRatingBg(faculty.averageRating) : "bg-muted/50 border-border"
-                }`}>
+                <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 text-2xl font-bold ${faculty.totalReviews > 0 ? getRatingBg(faculty.averageRating) : "bg-muted/50 border-border"
+                  }`}>
                   {faculty.totalReviews > 0 ? (
                     <span className={getRatingColor(faculty.averageRating)}>{faculty.averageRating.toFixed(1)}</span>
                   ) : (
@@ -648,6 +793,205 @@ export default function FacultyDetailPage() {
                   </div>
                 </div>
               </div>
+
+              {/* === SUGGEST EDIT BUTTON AND DIALOG === */}
+              {session && (
+                <Dialog
+                  open={editFacultyOpen}
+                  onOpenChange={(open) => {
+                    setEditFacultyOpen(open);
+                    if (open && faculty) {
+                      setEditFacultyForm({
+                        name: faculty.name,
+                        initials: faculty.initials,
+                        department: faculty.department,
+                        designation: faculty.designation,
+                        email: faculty.email || "",
+                        phone: faculty.phone || "",
+                        office: faculty.office || "",
+                        website: faculty.website || "",
+                        github: faculty.github || "",
+                        linkedin: faculty.linkedin || "",
+                        scholar: faculty.scholar || "",
+                        bio: faculty.bio || "",
+                      });
+                      editInitialsCheck.reset();
+                    }
+                  }}
+                >
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2 shrink-0">
+                      <Pencil className="h-4 w-4" /> Suggest Edit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto w-full">
+                    <DialogHeader>
+                      <DialogTitle>Suggest Faculty Edit</DialogTitle>
+                      <DialogDescription>
+                        Update the details below. An admin will review your changes before they go live.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    {/* Edit Form */}
+                    <div className="space-y-4">
+                      {/* Name */}
+                      <div className="space-y-1.5">
+                        <Label>Full Name *</Label>
+                        <Input
+                          placeholder="e.g. Dr. John Doe"
+                          value={editFacultyForm.name}
+                          onChange={(e) => setEditFacultyForm({ ...editFacultyForm, name: e.target.value })}
+                        />
+                      </div>
+                      {/* Initials */}
+                      <div className="space-y-1.5">
+                        <Label>Initials (Unique Code) *</Label>
+                        <Input
+                          placeholder="e.g. JDO"
+                          value={editFacultyForm.initials}
+                          onChange={(e) => {
+                            const v = e.target.value.slice(0, 10);
+                            setEditFacultyForm({ ...editFacultyForm, initials: v });
+                            if (v !== faculty.initials) {
+                              editInitialsCheck.check(v);
+                            } else {
+                              editInitialsCheck.reset();
+                            }
+                          }}
+                          maxLength={10}
+                        />
+                        {editFacultyForm.initials !== faculty.initials && (
+                          <AvailabilityIndicator
+                            checking={editInitialsCheck.checking}
+                            available={editInitialsCheck.available}
+                            label="Initials"
+                          />
+                        )}
+                      </div>
+                      {/* Department */}
+                      <div className="space-y-1.5">
+                        <Label>Department *</Label>
+                        <Select
+                          value={editFacultyForm.department}
+                          onValueChange={(v) => setEditFacultyForm({ ...editFacultyForm, department: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select department" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {departments.map((d) => (
+                              <SelectItem key={d} value={d}>{d}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {/* Designation */}
+                      <div className="space-y-1.5">
+                        <Label>Designation</Label>
+                        <Select
+                          value={editFacultyForm.designation}
+                          onValueChange={(v) => setEditFacultyForm({ ...editFacultyForm, designation: v })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {DESIGNATIONS.map((d) => (
+                              <SelectItem key={d} value={d}>{d}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <Separator />
+
+                      {/* Contact & Portfolio */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Email</Label>
+                          <Input
+                            value={editFacultyForm.email}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, email: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Phone</Label>
+                          <Input
+                            value={editFacultyForm.phone}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, phone: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Office Room</Label>
+                          <Input
+                            value={editFacultyForm.office}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, office: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Website / Portfolio</Label>
+                          <Input
+                            value={editFacultyForm.website}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, website: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">GitHub</Label>
+                          <Input
+                            value={editFacultyForm.github}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, github: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">LinkedIn</Label>
+                          <Input
+                            value={editFacultyForm.linkedin}
+                            onChange={(e) => setEditFacultyForm({ ...editFacultyForm, linkedin: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Google Scholar</Label>
+                        <Input
+                          value={editFacultyForm.scholar}
+                          onChange={(e) => setEditFacultyForm({ ...editFacultyForm, scholar: e.target.value })}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Short Bio</Label>
+                        <textarea
+                          className="flex min-h-[80px] w-full rounded-md border border-input bg-background/60 backdrop-blur-xl supports-[backdrop-filter]:bg-background/50 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none transition-all duration-200 hover:border-muted-foreground/40"
+                          value={editFacultyForm.bio}
+                          onChange={(e) => setEditFacultyForm({ ...editFacultyForm, bio: e.target.value.slice(0, 500) })}
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setEditFacultyOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={handleSuggestEdit}
+                        disabled={
+                          editFacultyLoading ||
+                          (editFacultyForm.initials !== faculty.initials && (editInitialsCheck.available === false || editInitialsCheck.checking))
+                        }
+                      >
+                        {editFacultyLoading ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...</>
+                        ) : (
+                          "Submit Edit"
+                        )}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              )}
+
             </div>
           </CardHeader>
 
@@ -881,10 +1225,18 @@ export default function FacultyDetailPage() {
                           </div>
                           <div>
                             <p className="text-sm font-medium">{review.userName}{isOwner ? " (You)" : ""}</p>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                              <span>{review.courseTaken}</span>
-                              <span>·</span>
-                              <span>{review.trimester}</span>
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground mt-0.5">
+                              {review.courseHistory?.length ? (
+                                review.courseHistory.map((ch, idx) => (
+                                  <span key={idx} className="bg-muted px-1.5 py-0.5 rounded">
+                                    {ch.courseCode} ({ch.trimester})
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="bg-muted px-1.5 py-0.5 rounded">
+                                  {review.courseTaken} ({review.trimester})
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -897,11 +1249,10 @@ export default function FacultyDetailPage() {
                       {/* Tags */}
                       <div className="flex flex-wrap gap-1.5">
                         <DifficultyBadge difficulty={review.difficulty} />
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${
-                          review.wouldTakeAgain
-                            ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
-                            : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-                        }`}>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${review.wouldTakeAgain
+                          ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                          : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                          }`}>
                           {review.wouldTakeAgain ? "Would take again" : "Would not take again"}
                         </span>
                       </div>
@@ -953,6 +1304,12 @@ export default function FacultyDetailPage() {
                     </motion.div>
                   );
                 })}
+
+                {hasMore && reviews.length > 0 && !(reviewsLoading && page === 1) && (
+                  <div ref={ref} className="flex justify-center py-8">
+                    {reviewsLoading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -990,9 +1347,19 @@ export default function FacultyDetailPage() {
                 <DialogTitle className="flex items-center gap-2">
                   Review by {reviewDetailOpen.userName}
                 </DialogTitle>
-                <DialogDescription>
-                  {reviewDetailOpen.courseTaken} · {reviewDetailOpen.trimester}
-                </DialogDescription>
+                <div className="flex flex-wrap gap-2 mt-1.5 text-xs text-muted-foreground">
+                  {reviewDetailOpen.courseHistory?.length ? (
+                    reviewDetailOpen.courseHistory.map((ch, idx) => (
+                      <span key={idx} className="bg-muted px-2 py-0.5 rounded-md border text-foreground">
+                        {ch.courseCode} ({ch.trimester})
+                      </span>
+                    ))
+                  ) : (
+                    <span className="bg-muted px-2 py-0.5 rounded-md border text-foreground">
+                      {reviewDetailOpen.courseTaken} ({reviewDetailOpen.trimester})
+                    </span>
+                  )}
+                </div>
               </DialogHeader>
               <div className="space-y-4">
                 {/* Overall */}
@@ -1009,11 +1376,10 @@ export default function FacultyDetailPage() {
                 {/* Tags */}
                 <div className="flex flex-wrap gap-2">
                   <DifficultyBadge difficulty={reviewDetailOpen.difficulty} />
-                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                    reviewDetailOpen.wouldTakeAgain
-                      ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
-                      : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
-                  }`}>
+                  <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${reviewDetailOpen.wouldTakeAgain
+                    ? "bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20"
+                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
+                    }`}>
                     {reviewDetailOpen.wouldTakeAgain ? "Would take again" : "Would not take again"}
                   </span>
                 </div>
@@ -1100,10 +1466,11 @@ export default function FacultyDetailPage() {
                 <Input
                   placeholder="e.g. ShadowCoder, NightOwl23"
                   value={reviewForm.anonymousName}
+                  disabled={!!editingReview}
                   onChange={(e) => {
                     const v = e.target.value.slice(0, 30);
                     setReviewForm({ ...reviewForm, anonymousName: v });
-                    if (!editingReview || v !== editingReview.userName) {
+                    if (!editingReview) {
                       usernameCheck.check(v);
                     } else {
                       usernameCheck.setValue(v);
@@ -1113,13 +1480,13 @@ export default function FacultyDetailPage() {
                     }
                   }}
                   onFocus={() => {
-                    if (pastUsernames.length > 0) setUsernamePopoverOpen(true);
+                    if (pastUsernames.length > 0 && !editingReview) setUsernamePopoverOpen(true);
                   }}
                   maxLength={30}
                 />
               </div>
             </PopoverTrigger>
-            {pastUsernames.length > 0 && (
+            {pastUsernames.length > 0 && !editingReview && (
               <PopoverContent className="p-0 w-[--radix-popover-trigger-width]" align="start" sideOffset={4}
                 onOpenAutoFocus={(e) => e.preventDefault()}>
                 <Command>
@@ -1133,7 +1500,7 @@ export default function FacultyDetailPage() {
                             value={username}
                             onSelect={() => {
                               setReviewForm({ ...reviewForm, anonymousName: username });
-                              if (!editingReview || username !== editingReview.userName) {
+                              if (!editingReview) {
                                 usernameCheck.check(username);
                               } else {
                                 usernameCheck.setValue(username);
@@ -1158,27 +1525,133 @@ export default function FacultyDetailPage() {
               </PopoverContent>
             )}
           </Popover>
+          {!!editingReview && (
+            <p className="text-xs text-muted-foreground mt-1 text-orange-500">You cannot change your username after writing a review.</p>
+          )}
         </div>
 
-        {/* Course Taken */}
-        <div className="space-y-1.5">
-          <Label>Course Taken *</Label>
-          <Input
-            placeholder="e.g. CSE 1111 — Structured Programming"
-            value={reviewForm.courseTaken}
-            onChange={(e) => setReviewForm({ ...reviewForm, courseTaken: e.target.value })}
-          />
-        </div>
+        {/* Course History (Dynamic List) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label>Courses Taken *</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setReviewForm({
+                  ...reviewForm,
+                  courseHistory: [...reviewForm.courseHistory, { courseCode: "", trimester: "" }],
+                })
+              }
+              className="h-7 text-xs px-2"
+            >
+              <Plus className="mr-1 h-3 w-3" /> Add Another Course
+            </Button>
+          </div>
+          <div className="space-y-3">
+            {reviewForm.courseHistory.map((course, index) => (
+              <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-end bg-muted/30 p-3 rounded-lg border">
+                <div className="space-y-1.5 flex-1 w-full relative">
+                  <Label className="text-xs">Course Code/Name</Label>
+                  <Input
+                    placeholder="e.g. CSE 1111"
+                    value={course.courseCode}
+                    onChange={(e) => {
+                      const newHistory = [...reviewForm.courseHistory];
+                      newHistory[index].courseCode = e.target.value;
+                      setReviewForm({ ...reviewForm, courseHistory: newHistory });
+                      courseSearch.search(e.target.value);
+                      setActiveCourseIndex(index);
+                    }}
+                    onFocus={() => {
+                      if (course.courseCode.length >= 2) {
+                        courseSearch.search(course.courseCode);
+                        setActiveCourseIndex(index);
+                      }
+                    }}
+                    onBlur={() => {
+                      // Delay clearing to allow click events on the popover
+                      setTimeout(() => {
+                        if (activeCourseIndex === index) {
+                          setActiveCourseIndex(null);
+                        }
+                      }, 200);
+                    }}
+                  />
 
-        {/* Trimester */}
-        <div className="space-y-1.5">
-          <Label>Trimester *</Label>
-          <Select value={reviewForm.trimester} onValueChange={(v) => setReviewForm({ ...reviewForm, trimester: v })}>
-            <SelectTrigger><SelectValue placeholder="When did you take this course?" /></SelectTrigger>
-            <SelectContent>
-              {TRIMESTERS.map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-            </SelectContent>
-          </Select>
+                  {/* Autocomplete Popover */}
+                  {activeCourseIndex === index && (courseSearch.courses.length > 0 || courseSearch.searching) && (
+                    <div className="absolute top-16 left-0 z-50 w-full min-w-[200px] bg-popover border text-popover-foreground shadow-md rounded-md p-1 overflow-hidden"
+                      onClick={(e) => e.stopPropagation()}>
+                      {courseSearch.searching ? (
+                        <div className="p-2 text-xs text-muted-foreground flex items-center justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" /> Searching courses...
+                        </div>
+                      ) : (
+                        <div className="max-h-48 overflow-y-auto">
+                          {courseSearch.courses.map((c) => (
+                            <div
+                              key={c._id}
+                              className="relative flex cursor-default select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                              onClick={() => {
+                                const newHistory = [...reviewForm.courseHistory];
+                                newHistory[index].courseCode = c.code;
+                                setReviewForm({ ...reviewForm, courseHistory: newHistory });
+                                setActiveCourseIndex(null);
+                                courseSearch.clear();
+                              }}
+                            >
+                              <div>
+                                <span className="font-semibold block">{c.code}</span>
+                                <span className="text-xs text-muted-foreground block line-clamp-1">{c.title}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5 flex-1 w-full">
+                  <Label className="text-xs">Trimester</Label>
+                  <Select
+                    value={course.trimester}
+                    onValueChange={(v) => {
+                      const newHistory = [...reviewForm.courseHistory];
+                      newHistory[index].trimester = v;
+                      setReviewForm({ ...reviewForm, courseHistory: newHistory });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Trimester" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {trimesters.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {reviewForm.courseHistory.length > 1 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-destructive mt-2 sm:mt-0"
+                    onClick={() => {
+                      const newHistory = reviewForm.courseHistory.filter((_, i) => i !== index);
+                      setReviewForm({ ...reviewForm, courseHistory: newHistory });
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Ratings */}

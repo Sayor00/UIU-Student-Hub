@@ -4,8 +4,9 @@ export interface IReview extends Document {
   facultyId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   userName: string;
-  courseTaken: string;
-  trimester: string;
+  courseTaken?: string;
+  trimester?: string;
+  courseHistory?: { courseCode: string; trimester: string }[];
   ratings: {
     teaching: number;
     grading: number;
@@ -41,14 +42,20 @@ const ReviewSchema = new Schema<IReview>(
     },
     courseTaken: {
       type: String,
-      required: [true, "Course name is required"],
+      required: false, // Legacy field
       trim: true,
     },
     trimester: {
       type: String,
-      required: [true, "Trimester is required"],
+      required: false, // Legacy field
       trim: true,
     },
+    courseHistory: [
+      {
+        courseCode: { type: String, required: true, trim: true },
+        trimester: { type: String, required: true, trim: true },
+      },
+    ],
     ratings: {
       teaching: { type: Number, required: true, min: 1, max: 5 },
       grading: { type: Number, required: true, min: 1, max: 5 },

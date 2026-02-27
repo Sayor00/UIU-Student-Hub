@@ -86,7 +86,7 @@ export default function AdminProgramsPage() {
             <div>
                 <h1 className="text-2xl font-bold">Academic Programs</h1>
                 <p className="text-muted-foreground">
-                    Manage the list of academic programs available when creating new academic calendars.
+                    Manage the list of academic programs available when creating new calendars.
                 </p>
             </div>
 

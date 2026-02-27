@@ -29,10 +29,10 @@ const tools = [
     ],
   },
   {
-    title: "Section Selector",
+    title: "Section Planner",
     description:
       "Smart course scheduling tool with PDF import, conflict detection, faculty preferences, and automatic schedule generation for UIU students.",
-    href: "/tools/section-selector",
+    href: "/tools/section-planner",
     icon: CalendarDays,
     gradient: "from-blue-500 to-indigo-500",
     features: [

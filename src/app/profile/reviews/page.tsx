@@ -20,8 +20,9 @@ interface ReviewItem {
   facultyName: string;
   facultyInitials: string;
   facultyDepartment: string;
-  courseTaken: string;
-  trimester: string;
+  courseTaken?: string;
+  trimester?: string;
+  courseHistory?: { courseCode: string; trimester: string }[];
   overallRating: number;
   difficulty: string;
   createdAt: string;
@@ -146,7 +147,9 @@ export default function MyReviewsPage() {
                             <DifficultyBadge difficulty={review.difficulty} />
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {review.courseTaken} &middot; {review.trimester}
+                            {review.courseHistory?.length
+                              ? review.courseHistory.map(c => `${c.courseCode} (${c.trimester})`).join(" • ")
+                              : `${review.courseTaken} · ${review.trimester}`}
                             {review.facultyDepartment && ` · ${review.facultyDepartment}`}
                             {" · "}
                             {new Date(review.createdAt).toLocaleDateString()}

@@ -11,8 +11,9 @@ export interface IUserPreferences {
   pinnedCalendarIds: string[];
   recentTools: IRecentTool[];
   focusMode: boolean;
-  careerGoal?: string; // ID of CareerPath
+  careerGoal?: string;
   targetCGPA?: number;
+  timeFormat?: "12h" | "24h";
 }
 
 export interface IUser extends Document {
@@ -88,6 +89,7 @@ const UserSchema = new Schema<IUser>(
       focusMode: { type: Boolean, default: false },
       careerGoal: { type: String },
       targetCGPA: { type: Number },
+      timeFormat: { type: String, enum: ["12h", "24h"], default: "12h" },
     },
   },
   {

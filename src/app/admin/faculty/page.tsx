@@ -4,6 +4,7 @@ import * as React from "react";
 import { Loader2, Search, Edit, Trash2, Check, X, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useInView } from "react-intersection-observer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -143,6 +144,16 @@ export default function AdminFacultyPage() {
   const [faculty, setFaculty] = React.useState<Faculty[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
+  const [totalFaculties, setTotalFaculties] = React.useState(0);
+  const [departmentFilter, setDepartmentFilter] = React.useState("All");
+  const [departments, setDepartments] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    fetch('/api/admin/departments')
+      .then(res => res.json())
+      .then(data => setDepartments(data.departments || []))
+      .catch(() => console.error("Failed to load departments"));
+  }, []);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [selected, setSelected] = React.useState<Faculty | null>(null);
   const [editForm, setEditForm] = React.useState<Record<string, any>>({});
@@ -154,7 +165,7 @@ export default function AdminFacultyPage() {
     title: string;
     description: string;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
   // Create dialog
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
@@ -172,25 +183,53 @@ export default function AdminFacultyPage() {
     1
   );
 
-  const fetchFaculty = React.useCallback(async () => {
+  const [page, setPage] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const { ref, inView } = useInView();
+
+  const fetchFaculty = React.useCallback(async (pageNum: number) => {
     setLoading(true);
     try {
+      const deptQuery = departmentFilter === "All" ? "" : departmentFilter;
       const res = await fetch(
-        `/api/admin/faculty?search=${encodeURIComponent(search)}&limit=100`
+        `/api/admin/faculty?search=${encodeURIComponent(search)}&department=${encodeURIComponent(deptQuery)}&limit=20&page=${pageNum}`
       );
       const data = await res.json();
-      setFaculty(data.faculty || []);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setFaculty(data.faculty || []);
+          setTotalFaculties(data.pagination?.total || 0);
+        } else {
+          setFaculty((prev) => {
+            const existingIds = new Set(prev.map(item => item._id));
+            const uniqueNew = (data.faculty || []).filter((item: any) => !existingIds.has(item._id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        setHasMore(pageNum < (data.pagination?.totalPages || 1));
+      }
     } catch {
       toast.error("Failed to fetch faculty");
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, departmentFilter]);
 
   React.useEffect(() => {
-    const t = setTimeout(fetchFaculty, 300);
+    const t = setTimeout(() => {
+      setPage(1);
+      fetchFaculty(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [fetchFaculty]);
+
+  React.useEffect(() => {
+    if (inView && hasMore && !loading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchFaculty(nextPage);
+    }
+  }, [inView, hasMore, loading, fetchFaculty, page]);
 
   const openEdit = (f: Faculty) => {
     setSelected(f);
@@ -233,7 +272,8 @@ export default function AdminFacultyPage() {
       toast.success("Faculty created successfully!");
       setCreateDialogOpen(false);
       resetCreateForm();
-      fetchFaculty();
+      setPage(1);
+      fetchFaculty(1);
     } catch {
       toast.error("Something went wrong");
     } finally {
@@ -268,7 +308,8 @@ export default function AdminFacultyPage() {
       }
       toast.success("Faculty updated");
       setEditDialogOpen(false);
-      fetchFaculty();
+      setPage(1);
+      fetchFaculty(1);
     } catch {
       toast.error("Something went wrong");
     } finally {
@@ -289,7 +330,8 @@ export default function AdminFacultyPage() {
             return;
           }
           toast.success("Faculty deleted");
-          fetchFaculty();
+          setPage(1);
+          fetchFaculty(1);
         } catch {
           toast.error("Something went wrong");
         }
@@ -311,7 +353,8 @@ export default function AdminFacultyPage() {
       toast.success(
         currentlyApproved ? "Faculty hidden from public" : "Faculty approved"
       );
-      fetchFaculty();
+      setPage(1);
+      fetchFaculty(1);
     } catch {
       toast.error("Something went wrong");
     }
@@ -326,23 +369,40 @@ export default function AdminFacultyPage() {
         </p>
       </div>
 
-      {/* Search + Add */}
-      <div className="flex items-center gap-3">
-        <div className="relative max-w-sm flex-1">
+      {/* Search + Filters + Add */}
+      <div className="flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full max-w-sm">
           <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search faculty..."
+            placeholder="Search by name, initials, or department..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
           />
+        </div>
+        <div className="w-full sm:w-[180px]">
+          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <SelectTrigger>
+              <SelectValue placeholder="Filter Department" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Departments</SelectItem>
+              {(departments.length > 0 ? departments : UIU_DEPARTMENTS).map(d => (
+                <SelectItem key={d} value={d}>{d}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button onClick={() => { resetCreateForm(); setCreateDialogOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" /> Add Faculty
         </Button>
       </div>
 
-      {loading ? (
+      <div className="text-sm text-muted-foreground">
+        Total {totalFaculties} {totalFaculties === 1 ? 'faculty' : 'faculties'} listed
+      </div>
+
+      {loading && page === 1 ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -412,6 +472,13 @@ export default function AdminFacultyPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Loading More Indicator */}
+      {hasMore && faculty.length > 0 && !(loading && page === 1) && (
+        <div ref={ref} className="flex justify-center py-8">
+          {loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
         </div>
       )}
 

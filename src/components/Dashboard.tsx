@@ -23,10 +23,10 @@ import {
 /* ─── Constants ─── */
 const allTools = [
     { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator, color: "text-blue-500", bg: "bg-blue-500/10", desc: "Calculate & track" },
-    { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays, color: "text-emerald-500", bg: "bg-emerald-500/10", desc: "Build schedule" },
+    { href: "/tools/section-planner", label: "Section Planner", icon: CalendarDays, color: "text-emerald-500", bg: "bg-emerald-500/10", desc: "Build schedule" },
     { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign, color: "text-amber-500", bg: "bg-amber-500/10", desc: "Estimate costs" },
     { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, color: "text-orange-500", bg: "bg-orange-500/10", desc: "Rate & discover" },
-    { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, color: "text-violet-500", bg: "bg-violet-500/10", desc: "Events & deadlines" },
+    { href: "/tools/calendars", label: "Calendars", icon: BookOpen, color: "text-violet-500", bg: "bg-violet-500/10", desc: "Events & deadlines" },
     { href: "/tools/career-planner", label: "Career Planner", icon: Compass, color: "text-rose-500", bg: "bg-rose-500/10", desc: "Plan your future" },
     { href: "/tools/question-bank", label: "Question Bank", icon: FileQuestion, color: "text-cyan-500", bg: "bg-cyan-500/10", desc: "Past papers & Q&A" },
 ];
@@ -459,7 +459,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                         <CalendarDays className="h-4 w-4 text-primary" />
                                         <span className="text-sm font-semibold">Upcoming Events</span>
                                     </div>
-                                    <Link href="/tools/academic-calendar">
+                                    <Link href="/tools/calendars">
                                         <Button variant="ghost" size="sm" className="text-xs gap-1 h-7">
                                             Calendar <ArrowRight className="h-3 w-3" />
                                         </Button>
@@ -469,7 +469,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                     <div className="text-center py-8">
                                         <CalendarDays className="h-8 w-8 mx-auto mb-2 text-muted-foreground/20" />
                                         <p className="text-xs text-muted-foreground">No upcoming events</p>
-                                        <Link href="/tools/academic-calendar">
+                                        <Link href="/tools/calendars">
                                             <Button variant="outline" size="sm" className="mt-3 gap-1.5 text-xs">
                                                 <BookOpen className="h-3 w-3" /> Open Calendar
                                             </Button>
@@ -482,7 +482,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                             const daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                                             const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
                                             return (
-                                                <Link key={i} href={`/tools/academic-calendar?calendar=${event.calendarId}&date=${dateStr}`}>
+                                                <Link key={i} href={`/tools/calendars?calendar=${event.calendarId}&date=${dateStr}`}>
                                                     <div className="flex items-center gap-3 p-2.5 rounded-lg border bg-background/30 hover:bg-accent/30 transition-colors cursor-pointer">
                                                         <div className={`w-1 h-10 rounded-full shrink-0 ${categoryColors[event.category] || "bg-gray-500"}`} />
                                                         <div className="flex-1 min-w-0">
@@ -560,7 +560,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                     </div>
                                     <div className="space-y-1.5">
                                         {pinnedCalendarIds.map(id => (
-                                            <Link key={id} href={`/tools/academic-calendar?calendar=${id}`}>
+                                            <Link key={id} href={`/tools/calendars?calendar=${id}`}>
                                                 <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-accent/30 transition-colors text-xs">
                                                     <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
                                                     <span className="truncate flex-1 min-w-0">{calendarDetails[id]?.title || "Calendar"}</span>

@@ -88,6 +88,7 @@ export async function GET() {
         facultyDepartment: r.facultyId?.department || "",
         courseTaken: r.courseTaken,
         trimester: r.trimester,
+        courseHistory: r.courseHistory,
         overallRating: r.overallRating,
         difficulty: r.difficulty,
         createdAt: r.createdAt,

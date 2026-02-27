@@ -26,100 +26,129 @@ export function TimePicker({ value, onChange, className }: TimePickerInputProps)
     const hourRef = React.useRef<HTMLInputElement>(null);
     const minuteRef = React.useRef<HTMLInputElement>(null);
     const periodRef = React.useRef<HTMLButtonElement>(null);
+    const isInternalUpdate = React.useRef(false);
 
-    // Sync from props
+    // Sync from props — only when value changes from an EXTERNAL source
     React.useEffect(() => {
+        if (isInternalUpdate.current) {
+            isInternalUpdate.current = false;
+            return;
+        }
+
         if (value) {
-            const [h, m] = value.split(":");
-            let hourInt = parseInt(h, 10);
+            const parts = value.split(":");
+            if (parts.length !== 2) return;
+            let hourInt = parseInt(parts[0], 10);
             const periodVal = hourInt >= 12 ? "PM" : "AM";
 
             if (hourInt > 12) hourInt -= 12;
             if (hourInt === 0) hourInt = 12;
 
             setHour(hourInt.toString().padStart(2, "0"));
-            setMinute(m);
+            setMinute(parts[1]);
             setPeriod(periodVal);
         } else {
-            // Keep empty if value is empty/undefined
             setHour("");
             setMinute("");
             setPeriod("AM");
         }
     }, [value]);
 
-    const updateTime = (h: string, m: string, p: "AM" | "PM") => {
+    const emitTime = (h: string, m: string, p: "AM" | "PM") => {
         const hourNum = parseInt(h);
         const minuteNum = parseInt(m);
 
-        if (!isNaN(hourNum) && !isNaN(minuteNum)) {
+        if (!isNaN(hourNum) && !isNaN(minuteNum) && hourNum >= 1 && hourNum <= 12 && minuteNum >= 0 && minuteNum <= 59) {
             let finalHour = hourNum;
             if (p === "PM" && finalHour !== 12) finalHour += 12;
             if (p === "AM" && finalHour === 12) finalHour = 0;
 
             const timeStr = `${finalHour.toString().padStart(2, "0")}:${m.padStart(2, "0")}`;
+            isInternalUpdate.current = true;
             onChange?.(timeStr);
         }
     };
 
     const handleHourChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = e.target.value.replace(/\D/g, "").slice(0, 2);
-        // if (parseInt(val) > 12) val = val.slice(0, 1); // rough check, maybe better logic needed
+        const raw = e.target.value.replace(/\D/g, "");
 
-        setHour(val);
+        if (raw.length === 0) {
+            setHour("");
+            return;
+        }
+
+        // Allow typing up to 2 digits
+        let val = raw.slice(0, 2);
+        const num = parseInt(val);
 
         if (val.length === 2) {
-            // Validate range 01-12
-            let num = parseInt(val);
+            // Clamp to valid 12h range
             if (num > 12) val = "12";
-            if (num === 0) val = "12"; // 00 -> 12? or just invalid? usually 12
+            else if (num === 0) val = "12";
             setHour(val);
-            if (minute) updateTime(val, minute, period);
-            minuteRef.current?.focus();
-        } else if (val.length === 1 && parseInt(val) > 1) {
-            // fast type 2-9 -> 02-09
+            if (minute) emitTime(val, minute, period);
+            // Auto-focus minute after 2 valid digits
+            setTimeout(() => minuteRef.current?.focus(), 0);
+        } else if (val.length === 1 && num > 1) {
+            // Single digit 2-9: can't be start of 10/11/12, auto-pad
             val = "0" + val;
             setHour(val);
-            if (minute) updateTime(val, minute, period);
-            minuteRef.current?.focus();
+            if (minute) emitTime(val, minute, period);
+            setTimeout(() => minuteRef.current?.focus(), 0);
+        } else {
+            // Single digit 0 or 1: could be start of 01-09 or 10-12, let user keep typing
+            setHour(val);
         }
     };
 
     const handleHourBlur = () => {
+        if (hour === "") return;
         let val = hour;
-        if (val === "") return; // Do nothing if empty
         if (val.length === 1) val = "0" + val;
         if (val === "00") val = "12";
-        // if (val === "") val = "12"; // Default
         setHour(val);
-        if (minute) updateTime(val, minute, period);
+        if (minute) emitTime(val, minute, period);
     };
 
     const handleMinuteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        let val = e.target.value.replace(/\D/g, "").slice(0, 2);
-        if (parseInt(val) > 59) val = "59";
+        const raw = e.target.value.replace(/\D/g, "");
 
-        setMinute(val);
+        if (raw.length === 0) {
+            setMinute("");
+            return;
+        }
+
+        let val = raw.slice(0, 2);
+        const num = parseInt(val);
 
         if (val.length === 2) {
-            if (hour) updateTime(hour, val, period);
-            periodRef.current?.focus();
+            if (num > 59) val = "59";
+            setMinute(val);
+            if (hour) emitTime(hour, val, period);
+            setTimeout(() => periodRef.current?.focus(), 0);
+        } else if (val.length === 1 && num > 5) {
+            // 6-9 can't be start of valid minute tens digit, auto-pad
+            val = "0" + val;
+            setMinute(val);
+            if (hour) emitTime(hour, val, period);
+            setTimeout(() => periodRef.current?.focus(), 0);
+        } else {
+            setMinute(val);
         }
     };
 
     const handleMinuteBlur = () => {
+        if (minute === "") return;
         let val = minute;
-        if (val === "") return; // Do nothing if empty
         if (val.length === 1) val = "0" + val;
-        // if (val === "") val = "00";
         setMinute(val);
-        if (hour) updateTime(hour, val, period);
+        if (hour) emitTime(hour, val, period);
     };
 
     const togglePeriod = () => {
         const newPeriod = period === "AM" ? "PM" : "AM";
         setPeriod(newPeriod);
-        if (hour && minute) updateTime(hour, minute, newPeriod);
+        if (hour && minute) emitTime(hour, minute, newPeriod);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, type: 'hour' | 'minute') => {
@@ -139,13 +168,17 @@ export function TimePicker({ value, onChange, className }: TimePickerInputProps)
     const selectTime = (type: "hour" | "minute" | "period", v: string) => {
         if (type === "hour") {
             setHour(v);
-            if (minute) updateTime(v, minute, period);
+            const m = minute || "00";
+            setMinute(m);
+            emitTime(v, m, period);
         } else if (type === "minute") {
             setMinute(v);
-            if (hour) updateTime(hour, v, period);
+            const h = hour || "12";
+            setHour(h);
+            emitTime(h, v, period);
         } else if (type === "period") {
             setPeriod(v as "AM" | "PM");
-            if (hour && minute) updateTime(hour, minute, v as "AM" | "PM");
+            if (hour && minute) emitTime(hour, minute, v as "AM" | "PM");
         }
     };
 
@@ -163,6 +196,7 @@ export function TimePicker({ value, onChange, className }: TimePickerInputProps)
                         onChange={handleHourChange}
                         onBlur={handleHourBlur}
                         onKeyDown={(e) => handleKeyDown(e, 'hour')}
+                        onFocus={(e) => e.target.select()}
                         maxLength={2}
                     />
                     <span className="text-muted-foreground/50 text-center text-xs mx-0.5">:</span>
@@ -176,6 +210,7 @@ export function TimePicker({ value, onChange, className }: TimePickerInputProps)
                         onChange={handleMinuteChange}
                         onBlur={handleMinuteBlur}
                         onKeyDown={(e) => handleKeyDown(e, 'minute')}
+                        onFocus={(e) => e.target.select()}
                         maxLength={2}
                     />
                     <span className="text-muted-foreground/50 text-center text-xs mx-0.5"> </span>

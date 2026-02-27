@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useInView } from "react-intersection-observer";
 
 interface UserItem {
   _id: string;
@@ -33,7 +34,8 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
-  const [totalPages, setTotalPages] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const { ref, inView } = useInView();
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean;
     title: string;
@@ -43,26 +45,47 @@ export default function AdminUsersPage() {
     onConfirm: () => void;
   }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
-  const fetchUsers = React.useCallback(async () => {
+  const fetchUsers = React.useCallback(async (pageNum: number) => {
     setLoading(true);
     try {
       const res = await fetch(
-        `/api/admin/users?search=${encodeURIComponent(search)}&page=${page}&limit=20`
+        `/api/admin/users?search=${encodeURIComponent(search)}&page=${pageNum}&limit=20`
       );
       const data = await res.json();
-      setUsers(data.users || []);
-      setTotalPages(data.pagination?.totalPages || 1);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setUsers(data.users || []);
+        } else {
+          setUsers((prev) => {
+            const existingIds = new Set(prev.map(item => item._id));
+            const uniqueNew = (data.users || []).filter((item: any) => !existingIds.has(item._id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        setHasMore(pageNum < (data.pagination?.totalPages || 1));
+      }
     } catch {
       toast.error("Failed to fetch users");
     } finally {
       setLoading(false);
     }
-  }, [search, page]);
+  }, [search]);
 
   React.useEffect(() => {
-    const t = setTimeout(fetchUsers, 300);
+    const t = setTimeout(() => {
+      setPage(1);
+      fetchUsers(1);
+    }, 300);
     return () => clearTimeout(t);
   }, [fetchUsers]);
+
+  React.useEffect(() => {
+    if (inView && hasMore && !loading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchUsers(nextPage);
+    }
+  }, [inView, hasMore, loading, fetchUsers, page]);
 
   const handleDeleteUser = (userId: string, userName: string) => {
     setConfirmDialog({
@@ -80,7 +103,8 @@ export default function AdminUsersPage() {
             return;
           }
           toast.success("User deleted");
-          fetchUsers();
+          setPage(1);
+          fetchUsers(1);
         } catch {
           toast.error("Something went wrong");
         }
@@ -109,7 +133,8 @@ export default function AdminUsersPage() {
             return;
           }
           toast.success(`User role updated to ${newRole}`);
-          fetchUsers();
+          setPage(1);
+          fetchUsers(1);
         } catch {
           toast.error("Something went wrong");
         }
@@ -134,7 +159,8 @@ export default function AdminUsersPage() {
         return;
       }
       toast.success(hasBotAccess ? "Bot access removed" : "Bot access granted");
-      fetchUsers();
+      setPage(1);
+      fetchUsers(1);
     } catch {
       toast.error("Something went wrong");
     }
@@ -163,7 +189,7 @@ export default function AdminUsersPage() {
         />
       </div>
 
-      {loading ? (
+      {loading && page === 1 ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -248,28 +274,10 @@ export default function AdminUsersPage() {
             </Card>
           ))}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <span className="flex items-center text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
+          {/* Loading More Indicator */}
+          {hasMore && users.length > 0 && !(loading && page === 1) && (
+            <div ref={ref} className="py-6 flex justify-center">
+              {loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
             </div>
           )}
         </div>

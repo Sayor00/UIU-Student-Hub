@@ -37,10 +37,10 @@ import {
 
 const toolLinks = [
   { href: "/tools/cgpa-calculator", label: "CGPA Calculator", icon: Calculator, description: "Calculate your GPA & CGPA" },
-  { href: "/tools/section-selector", label: "Section Selector", icon: CalendarDays, description: "Plan your class schedule" },
+  { href: "/tools/section-planner", label: "Section Planner", icon: CalendarDays, description: "Plan your class schedule" },
   { href: "/tools/fee-calculator", label: "Fee Calculator", icon: DollarSign, description: "Estimate tuition fees" },
   { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, description: "Rate & review faculty" },
-  { href: "/tools/academic-calendar", label: "Academic Calendar", icon: BookOpen, description: "Semester calendar & planner" },
+  { href: "/tools/calendars", label: "Calendars", icon: BookOpen, description: "Semester calendar & planner" },
   { href: "/tools/career-planner", label: "Career Planner", icon: TrendingUp, description: "Track CGPA & Plan Career" },
 ];
 

@@ -11,6 +11,8 @@ export interface IUserCalendarEvent {
     category: "class" | "assignment" | "exam" | "personal" | "reminder" | "other";
     color?: string;
     completed?: boolean;
+    recurrenceGroupId?: string;
+    customFields?: { label: string; value: string }[];
 }
 
 export interface IUserHighlight {
@@ -29,6 +31,13 @@ export interface IUserTodo {
     priority: "low" | "medium" | "high";
 }
 
+export interface IEventTemplate {
+    _id?: string;
+    name: string;
+    category: string;
+    customFieldLabels: string[];
+}
+
 export interface IUserCalendar extends Document {
     userId: mongoose.Types.ObjectId;
     title: string;
@@ -37,6 +46,7 @@ export interface IUserCalendar extends Document {
     events: IUserCalendarEvent[];
     highlights: IUserHighlight[];
     todos: IUserTodo[];
+    templates: IEventTemplate[];
     savedAcademicCalendarId?: mongoose.Types.ObjectId;
     createdAt: Date;
     updatedAt: Date;
@@ -57,6 +67,8 @@ const UserCalendarEventSchema = new Schema<IUserCalendarEvent>(
         },
         color: { type: String },
         completed: { type: Boolean, default: false },
+        recurrenceGroupId: { type: String },
+        customFields: [{ label: { type: String }, value: { type: String } }],
     },
     { _id: true }
 );
@@ -85,6 +97,15 @@ const UserTodoSchema = new Schema<IUserTodo>(
     { _id: true }
 );
 
+const EventTemplateSchema = new Schema<IEventTemplate>(
+    {
+        name: { type: String, required: true, trim: true },
+        category: { type: String, default: "other" },
+        customFieldLabels: [{ type: String }],
+    },
+    { _id: true }
+);
+
 const UserCalendarSchema = new Schema<IUserCalendar>(
     {
         userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
@@ -94,6 +115,7 @@ const UserCalendarSchema = new Schema<IUserCalendar>(
         events: [UserCalendarEventSchema],
         highlights: [UserHighlightSchema],
         todos: [UserTodoSchema],
+        templates: [EventTemplateSchema],
         savedAcademicCalendarId: { type: Schema.Types.ObjectId, ref: "AcademicCalendar" },
     },
     { timestamps: true }

@@ -13,6 +13,8 @@ import {
   Globe,
   ClipboardList,
   CalendarDays,
+  Building2,
+  CalendarRange,
   Loader2,
   ShieldAlert,
   FileQuestion,
@@ -21,15 +23,18 @@ import { Button } from "@/components/ui/button";
 
 const adminLinks = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/academic-calendars", label: "Academic Calendars", icon: CalendarDays },
+  { href: "/admin/calendars", label: "Calendars", icon: CalendarDays },
   { href: "/admin/question-bank", label: "Question Bank", icon: FileQuestion },
   { href: "/admin/faculty-requests", label: "Faculty Requests", icon: ClipboardList },
   { href: "/admin/faculty", label: "Faculty", icon: GraduationCap },
   { href: "/admin/reviews", label: "Reviews", icon: MessageSquare },
   { href: "/admin/users", label: "Users", icon: Users },
   { href: "/admin/programs", label: "Programs", icon: GraduationCap },
+  { href: "/admin/departments", label: "Departments", icon: Building2 },
+  { href: "/admin/courses", label: "Courses", icon: ClipboardList },
+  { href: "/admin/trimesters", label: "Trimesters", icon: CalendarRange },
   { href: "/admin/domains", label: "Email Domains", icon: Globe },
-  { href: "/admin/section-selector", label: "Section Selector", icon: ClipboardList },
+  { href: "/admin/section-planner", label: "Section Planner", icon: ClipboardList },
 ];
 
 export default function AdminLayout({

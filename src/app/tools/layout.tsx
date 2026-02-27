@@ -6,9 +6,9 @@ import { useSession } from "next-auth/react";
 
 const allTools = [
     { href: "/tools/cgpa-calculator", label: "CGPA Calculator" },
-    { href: "/tools/section-selector", label: "Section Selector" },
+    { href: "/tools/section-planner", label: "Section Planner" },
     { href: "/tools/fee-calculator", label: "Fee Calculator" },
-    { href: "/tools/academic-calendar", label: "Academic Calendar" },
+    { href: "/tools/calendars", label: "Calendars" },
     { href: "/tools/faculty-review", label: "Faculty Review" },
     { href: "/tools/course-advising", label: "Course Advising" },
     { href: "/tools/routine-builder", label: "Routine Builder" },

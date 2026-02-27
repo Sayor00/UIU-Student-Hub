@@ -37,7 +37,7 @@ interface SectionDataset {
     updatedAt: string;
 }
 
-export default function AdminSectionSelectorPage() {
+export default function AdminSectionPlannerPage() {
     const [datasets, setDatasets] = useState<SectionDataset[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -46,6 +46,7 @@ export default function AdminSectionSelectorPage() {
     const [isScraping, setIsScraping] = useState(false);
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [previewDataset, setPreviewDataset] = useState<{ title: string, data: any } | null>(null);
+    const [isExtractingId, setIsExtractingId] = useState<string | null>(null);
 
     // Scrape Form State
     const [scrapeTitle, setScrapeTitle] = useState("");
@@ -113,6 +114,24 @@ export default function AdminSectionSelectorPage() {
             toast.error("Failed to delete dataset");
         } finally {
             setDeleteId(null);
+        }
+    };
+
+    const handleExtract = async (id: string) => {
+        try {
+            setIsExtractingId(id);
+            toast.info("Extracting programs, courses, and faculty into database...");
+            const res = await fetch(`/api/admin/section-data/${id}/extract`, { method: "POST" });
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error || "Failed to extract dataset");
+
+            toast.success(`Successfully Extracted! Found: ${data.summary.programsFound} Programs, ${data.summary.coursesFound} Courses, ${data.summary.facultiesFound} Faculty`);
+        } catch (error: any) {
+            console.error(error);
+            toast.error(error.message || "Failed to extract dataset");
+        } finally {
+            setIsExtractingId(null);
         }
     };
 
@@ -249,9 +268,9 @@ export default function AdminSectionSelectorPage() {
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Section Selector Database</h1>
+                <h1 className="text-3xl font-bold tracking-tight">Section Planner Database</h1>
                 <p className="text-muted-foreground">
-                    Manage the public course datasets for the Section Selector tool. You can upload existing structures or directly scrape the live UCAM system.
+                    Manage the public course datasets for the Section Planner tool. You can upload existing structures or directly scrape the live UCAM system.
                 </p>
             </div>
 
@@ -319,6 +338,21 @@ export default function AdminSectionSelectorPage() {
                                                     onClick={() => handleSetStatus(dataset._id, true)}
                                                 >
                                                     Make Active
+                                                </Button>
+                                            )}
+                                            {dataset.type === 'json' && (
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    className="flex-1 sm:flex-none border border-green-700 bg-green-600 hover:bg-green-700 text-white"
+                                                    disabled={isExtractingId === dataset._id}
+                                                    onClick={() => handleExtract(dataset._id)}
+                                                >
+                                                    {isExtractingId === dataset._id ? (
+                                                        <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Extracting</>
+                                                    ) : (
+                                                        <><Database className="w-4 h-4 mr-2" /> Extract to DB</>
+                                                    )}
                                                 </Button>
                                             )}
                                             <Button

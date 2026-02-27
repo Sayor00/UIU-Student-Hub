@@ -101,7 +101,7 @@ export default function MyCalendarsPage() {
                         Your personal calendars, planners, and schedules
                     </p>
                 </div>
-                <Link href="/tools/academic-calendar">
+                <Link href="/tools/calendars">
                     <Button className="gap-2">
                         <Plus className="h-4 w-4" />
                         New Calendar
@@ -116,7 +116,7 @@ export default function MyCalendarsPage() {
                     <p className="text-sm text-muted-foreground mt-1 mb-4">
                         Create your first personal calendar
                     </p>
-                    <Link href="/tools/academic-calendar">
+                    <Link href="/tools/calendars">
                         <Button variant="outline" className="gap-2">
                             <Plus className="h-4 w-4" /> Create Calendar
                         </Button>
@@ -182,7 +182,7 @@ export default function MyCalendarsPage() {
                                                 Created {new Date(cal.createdAt).toLocaleDateString()}
                                             </span>
                                             <Link
-                                                href={`/tools/academic-calendar?calendar=${cal._id}`}
+                                                href={`/tools/calendars?calendar=${cal._id}`}
                                             >
                                                 <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs">
                                                     <ExternalLink className="h-3 w-3" />

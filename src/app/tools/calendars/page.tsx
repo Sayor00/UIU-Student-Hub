@@ -31,19 +31,23 @@ import {
     Edit2,
     Calendar as CalendarIcon,
     Clock,
+    Repeat,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { DatePickerWithInput } from "@/components/ui/date-picker-input";
 import { TimePicker } from "@/components/ui/time-picker";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
+import { format, addDays, addMonths, addYears } from "date-fns";
 import { cn } from "@/lib/utils";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Select,
     SelectContent,
@@ -83,6 +87,15 @@ interface CalendarEvent {
     category: string;
     color?: string;
     completed?: boolean;
+    recurrenceGroupId?: string;
+    customFields?: { label: string; value: string }[];
+}
+
+interface EventTemplate {
+    _id?: string;
+    name: string;
+    category: string;
+    customFieldLabels: string[];
 }
 
 interface CalHighlight {
@@ -221,8 +234,44 @@ function toDateStr(d: Date) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-export default function AcademicCalendarPage() {
+/** Determine event temporal status relative to now. Pure client-side. */
+function getEventStatus(
+    event: { startTime?: string; endTime?: string; startDate?: string; date?: string; endDate?: string },
+    now: Date,
+    eventDate: Date
+): "gone" | "running" | "upcoming" | "allday" {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const evDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+
+    // If the event's date is in the past (before today)
+    if (evDay < today) return "gone";
+    // If the event's date is in the future
+    if (evDay > today) return "upcoming";
+
+    // Same day — check times
+    if (!event.startTime) return "allday"; // No time set = all-day, no status
+
+    const [sh, sm] = event.startTime.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    if (event.endTime) {
+        const [eh, em] = event.endTime.split(":").map(Number);
+        const endMin = eh * 60 + em;
+        if (nowMin >= startMin && nowMin < endMin) return "running";
+        if (nowMin >= endMin) return "gone";
+        return "upcoming";
+    }
+
+    // No end time — treat as 1-hour event
+    if (nowMin >= startMin + 60) return "gone";
+    if (nowMin >= startMin) return "running";
+    return "upcoming";
+}
+
+export default function CalendarsPage() {
     const { data: session } = useSession();
+    const { fmt } = useTimeFormat();
     const isSignedIn = !!session?.user;
 
     // Calendar state
@@ -254,6 +303,23 @@ export default function AcademicCalendarPage() {
     const [newEventForm, setNewEventForm] = React.useState({
         title: "", description: "", date: "", endDate: "", startTime: "", endTime: "", category: "other",
     });
+    const [recurrence, setRecurrence] = React.useState<{
+        isRepeating: boolean;
+        type: "daily" | "weekly" | "monthly" | "yearly";
+        interval: number;
+        days: string[];
+        endType: "count" | "date";
+        endDate: string;
+        count: number;
+    }>({
+        isRepeating: false,
+        type: "weekly",
+        interval: 1,
+        days: [],
+        endType: "count",
+        endDate: "",
+        count: 10,
+    });
     const [newTodoText, setNewTodoText] = React.useState("");
     const [newTodoDueDate, setNewTodoDueDate] = React.useState("");
     const [newTodoDueTime, setNewTodoDueTime] = React.useState("");
@@ -263,6 +329,20 @@ export default function AcademicCalendarPage() {
     const [editEventForm, setEditEventForm] = React.useState({
         title: "", description: "", date: "", endDate: "", startTime: "", endTime: "", category: "other",
     });
+    // Series action dialog state
+    const [seriesAction, setSeriesAction] = React.useState<{
+        open: boolean;
+        type: "edit" | "delete";
+        eventId: string;
+        groupId: string;
+        groupCount: number;
+    }>({ open: false, type: "delete", eventId: "", groupId: "", groupCount: 0 });
+    // Template state
+    const [templates, setTemplates] = React.useState<EventTemplate[]>([]);
+    const [saveAsTemplate, setSaveAsTemplate] = React.useState(false);
+    const [templateName, setTemplateName] = React.useState("");
+    const [newEventCustomFields, setNewEventCustomFields] = React.useState<{ label: string; value: string }[]>([]);
+    const [editEventCustomFields, setEditEventCustomFields] = React.useState<{ label: string; value: string }[]>([]);
     const [highlightDialog, setHighlightDialog] = React.useState(false);
     const [highlightColor, setHighlightColor] = React.useState("#f97316");
     const [highlightNote, setHighlightNote] = React.useState("");
@@ -273,6 +353,15 @@ export default function AcademicCalendarPage() {
     const [mobileDetailOpen, setMobileDetailOpen] = React.useState(false);
     const [showDetails, setShowDetails] = React.useState(false);
     const [expandedNotes, setExpandedNotes] = React.useState<Set<string>>(new Set());
+
+    // Load templates when active calendar changes
+    React.useEffect(() => {
+        if (activeUserCalendar) {
+            setTemplates((activeUserCalendar as any).templates || []);
+        } else {
+            setTemplates([]);
+        }
+    }, [activeUserCalendar]);
 
     // Toggle note expansion
     const toggleNote = (id: string) => {
@@ -680,11 +769,89 @@ export default function AcademicCalendarPage() {
             toast.error("Title and date are required");
             return;
         }
+
+        let eventsToAdd: CalendarEvent[] = [];
+
+        if (!recurrence.isRepeating) {
+            const cf = newEventCustomFields.filter(f => f.label.trim());
+            eventsToAdd.push({ ...newEventForm, date: newEventForm.date, startDate: newEventForm.date, customFields: cf.length > 0 ? cf : undefined });
+        } else {
+            if (recurrence.endType === "date" && !recurrence.endDate) {
+                toast.error("Please specify an end date for repeating events.");
+                return;
+            }
+            if (recurrence.type === "weekly" && recurrence.days.length === 0) {
+                toast.error("Please specify repeating days for weekly recurrence.");
+                return;
+            }
+            if (recurrence.endType === "date" && new Date(recurrence.endDate) < new Date(newEventForm.date)) {
+                toast.error("End Repeat Date must be after the start date.");
+                return;
+            }
+
+            const rEnd = recurrence.endType === "date" ? new Date(recurrence.endDate) : null;
+            const maxCount = recurrence.endType === "count" ? recurrence.count : 1000;
+            let occurrences = 0;
+            let currDate = new Date(newEventForm.date);
+            let done = false;
+
+            if (recurrence.type === "weekly") {
+                let currentWeekStart = new Date(newEventForm.date);
+                currentWeekStart.setDate(currentWeekStart.getDate() - currentWeekStart.getDay());
+
+                while (occurrences < maxCount && !done) {
+                    const daysMap = { "Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6 };
+                    for (let i = 0; i < 7; i++) {
+                        let checkDate = addDays(currentWeekStart, i);
+                        if (checkDate < new Date(newEventForm.date)) continue;
+
+                        const dayStr = Object.keys(daysMap).find(k => daysMap[k as keyof typeof daysMap] === checkDate.getDay());
+                        if (dayStr && recurrence.days.includes(dayStr)) {
+                            if (rEnd && checkDate > rEnd) { done = true; break; }
+                            if (occurrences >= maxCount) { done = true; break; }
+
+                            eventsToAdd.push({
+                                ...newEventForm,
+                                date: toDateStr(checkDate),
+                                startDate: toDateStr(checkDate)
+                            });
+                            occurrences++;
+                        }
+                    }
+                    currentWeekStart = addDays(currentWeekStart, 7 * recurrence.interval);
+                }
+            } else {
+                while (occurrences < maxCount) {
+                    if (rEnd && currDate > rEnd) break;
+                    eventsToAdd.push({
+                        ...newEventForm,
+                        date: toDateStr(currDate),
+                        startDate: toDateStr(currDate)
+                    });
+                    occurrences++;
+
+                    if (recurrence.type === "daily") currDate = addDays(currDate, recurrence.interval);
+                    else if (recurrence.type === "monthly") currDate = addMonths(currDate, recurrence.interval);
+                    else if (recurrence.type === "yearly") currDate = addYears(currDate, recurrence.interval);
+                }
+            }
+
+            if (eventsToAdd.length === 0) {
+                toast.error("No events fall within the specified period and rules.");
+                return;
+            }
+
+            // Assign recurrence group ID and include custom fields
+            const groupId = crypto.randomUUID();
+            const cf = newEventCustomFields.filter(f => f.label.trim());
+            eventsToAdd = eventsToAdd.map(e => ({ ...e, recurrenceGroupId: groupId, customFields: cf.length > 0 ? cf : undefined }));
+        }
+
         setSavingEvent(true);
         try {
             const newEvents = [
                 ...activeUserCalendar.events,
-                { ...newEventForm, date: newEventForm.date },
+                ...eventsToAdd,
             ];
             const res = await fetch(`/api/calendars/${activeUserCalendar._id}`, {
                 method: "PATCH",
@@ -701,7 +868,18 @@ export default function AcademicCalendarPage() {
                 setNewEventForm({
                     title: "", description: "", date: "", endDate: "", startTime: "", endTime: "", category: "other",
                 });
-                toast.success("Event added!");
+                setNewEventCustomFields([]);
+                setRecurrence({
+                    isRepeating: false, type: "weekly", interval: 1, days: [], endType: "count", endDate: "", count: 10
+                });
+                // Save as template if requested
+                if (saveAsTemplate && templateName.trim()) {
+                    const labels = newEventCustomFields.filter(f => f.label.trim()).map(f => f.label);
+                    handleSaveTemplate({ name: templateName.trim(), category: newEventForm.category, customFieldLabels: labels });
+                    setSaveAsTemplate(false);
+                    setTemplateName("");
+                }
+                toast.success(`${eventsToAdd.length} event${eventsToAdd.length !== 1 ? "s" : ""} added!`);
             }
         } catch {
             toast.error("Failed to add event");
@@ -841,10 +1019,26 @@ export default function AcademicCalendarPage() {
     };
 
     // Delete event from personal calendar
-    const handleDeleteEvent = async (eventId: string) => {
+    const handleDeleteEvent = async (eventId: string, deleteAll?: boolean) => {
         if (!activeUserCalendar) return;
+
+        // Check if this event belongs to a recurrence group
+        const targetEvent = activeUserCalendar.events.find(e => e._id === eventId);
+        if (targetEvent?.recurrenceGroupId && deleteAll === undefined) {
+            const groupCount = activeUserCalendar.events.filter(e => e.recurrenceGroupId === targetEvent.recurrenceGroupId).length;
+            if (groupCount > 1) {
+                setSeriesAction({ open: true, type: "delete", eventId, groupId: targetEvent.recurrenceGroupId, groupCount });
+                return;
+            }
+        }
+
         try {
-            const newEvents = activeUserCalendar.events.filter((e) => e._id !== eventId);
+            let newEvents;
+            if (deleteAll && targetEvent?.recurrenceGroupId) {
+                newEvents = activeUserCalendar.events.filter(e => e.recurrenceGroupId !== targetEvent.recurrenceGroupId);
+            } else {
+                newEvents = activeUserCalendar.events.filter((e) => e._id !== eventId);
+            }
             const res = await fetch(`/api/calendars/${activeUserCalendar._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -856,7 +1050,8 @@ export default function AcademicCalendarPage() {
                 setUserCalendars((prev) =>
                     prev.map((c) => (c._id === data.calendar._id ? data.calendar : c))
                 );
-                toast.success("Event deleted");
+                const count = deleteAll ? seriesAction.groupCount : 1;
+                toast.success(`${count} event${count > 1 ? 's' : ''} deleted`);
             }
         } catch {
             toast.error("Failed to delete event");
@@ -864,12 +1059,35 @@ export default function AcademicCalendarPage() {
     };
 
     // Save edited event
-    const handleSaveEditEvent = async () => {
+    const handleSaveEditEvent = async (editAll?: boolean) => {
         if (!activeUserCalendar || !editingEventId) return;
+
+        // Check if editing a series
+        const targetEvent = activeUserCalendar.events.find(e => e._id === editingEventId);
+        if (targetEvent?.recurrenceGroupId && editAll === undefined) {
+            const groupCount = activeUserCalendar.events.filter(e => e.recurrenceGroupId === targetEvent.recurrenceGroupId).length;
+            if (groupCount > 1) {
+                setSeriesAction({ open: true, type: "edit", eventId: editingEventId, groupId: targetEvent.recurrenceGroupId, groupCount });
+                return;
+            }
+        }
+
         try {
-            const newEvents = activeUserCalendar.events.map((e) =>
-                e._id === editingEventId ? { ...e, ...editEventForm, date: editEventForm.date } : e
-            );
+            let newEvents;
+            const cf = editEventCustomFields.filter(f => f.label.trim());
+            const customFieldsData = cf.length > 0 ? cf : undefined;
+            if (editAll && targetEvent?.recurrenceGroupId) {
+                // Apply title, description, category, startTime, endTime, customFields to all in group (keep individual dates)
+                newEvents = activeUserCalendar.events.map((e) =>
+                    e.recurrenceGroupId === targetEvent.recurrenceGroupId
+                        ? { ...e, title: editEventForm.title, description: editEventForm.description, category: editEventForm.category, startTime: editEventForm.startTime, endTime: editEventForm.endTime, customFields: customFieldsData }
+                        : e
+                );
+            } else {
+                newEvents = activeUserCalendar.events.map((e) =>
+                    e._id === editingEventId ? { ...e, ...editEventForm, date: editEventForm.date, customFields: customFieldsData } : e
+                );
+            }
             const res = await fetch(`/api/calendars/${activeUserCalendar._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -882,11 +1100,65 @@ export default function AcademicCalendarPage() {
                     prev.map((c) => (c._id === data.calendar._id ? data.calendar : c))
                 );
                 setEditingEventId(null);
-                toast.success("Event updated!");
+                const count = editAll ? seriesAction.groupCount : 1;
+                toast.success(`${count} event${count > 1 ? 's' : ''} updated!`);
             }
         } catch {
             toast.error("Failed to update event");
         }
+    };
+
+    // Save template to user calendar
+    const handleSaveTemplate = async (template: EventTemplate) => {
+        if (!activeUserCalendar) return;
+        const updatedTemplates = [...templates, template];
+        try {
+            const res = await fetch(`/api/calendars/${activeUserCalendar._id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ templates: updatedTemplates }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data.calendar.templates || []);
+                setActiveUserCalendar(data.calendar);
+                setUserCalendars((prev) =>
+                    prev.map((c) => (c._id === data.calendar._id ? data.calendar : c))
+                );
+                toast.success(`Template "${template.name}" saved!`);
+            }
+        } catch {
+            toast.error("Failed to save template");
+        }
+    };
+
+    const handleDeleteTemplate = async (templateId: string) => {
+        if (!activeUserCalendar) return;
+        const updatedTemplates = templates.filter(t => t._id !== templateId);
+        try {
+            const res = await fetch(`/api/calendars/${activeUserCalendar._id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ templates: updatedTemplates }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data.calendar.templates || []);
+                setActiveUserCalendar(data.calendar);
+                setUserCalendars((prev) =>
+                    prev.map((c) => (c._id === data.calendar._id ? data.calendar : c))
+                );
+                toast.success("Template deleted");
+            }
+        } catch {
+            toast.error("Failed to delete template");
+        }
+    };
+
+    const applyTemplate = (template: EventTemplate) => {
+        setNewEventForm(prev => ({ ...prev, category: template.category }));
+        setNewEventCustomFields(template.customFieldLabels.map(label => ({ label, value: "" })));
+        toast.success(`Template "${template.name}" applied`);
     };
 
     // Upcoming events
@@ -952,8 +1224,15 @@ export default function AcademicCalendarPage() {
         });
     }
 
-    // Events for selected date
-    const selectedEvents = getEventsForDate(selectedDate);
+    // Events for selected date — sorted by time (timed events first, then by startTime ascending)
+    const selectedEvents = getEventsForDate(selectedDate).slice().sort((a, b) => {
+        // Events with startTime first
+        if (a.startTime && !b.startTime) return -1;
+        if (!a.startTime && b.startTime) return 1;
+        if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+        return 0;
+    });
+    const now = new Date();
 
     if (loading) {
         return (
@@ -979,7 +1258,7 @@ export default function AcademicCalendarPage() {
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
                                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                                    Academic Calendar
+                                    Calendars
                                 </h1>
                                 {activeCalendar?.trimester && (
                                     <Badge variant="secondary" className="text-xs sm:text-sm font-medium shrink-0">
@@ -1133,6 +1412,9 @@ export default function AcademicCalendarPage() {
                                                         ...newEventForm,
                                                         date: toDateStr(selectedDate),
                                                     });
+                                                    setRecurrence({
+                                                        isRepeating: false, type: "weekly", interval: 1, days: [], endType: "count", endDate: "", count: 10
+                                                    });
                                                     setAddEventOpen(true);
                                                 }}
                                                 className="h-9 w-9 p-0"
@@ -1204,7 +1486,7 @@ export default function AcademicCalendarPage() {
                                             }}
                                         >
                                             <SelectTrigger className="h-9 w-full overflow-hidden [&>span]:truncate">
-                                                <SelectValue placeholder="Select academic calendar..." />
+                                                <SelectValue placeholder="Select calendar..." />
                                             </SelectTrigger>
                                             <SelectContent className="border-white/10 bg-background/80 backdrop-blur-xl">
                                                 {publicCalendars.filter(c => !programFilter || c.program === programFilter).length === 0 ? (
@@ -1268,6 +1550,9 @@ export default function AcademicCalendarPage() {
                                                 setNewEventForm({
                                                     ...newEventForm,
                                                     date: toDateStr(selectedDate),
+                                                });
+                                                setRecurrence({
+                                                    isRepeating: false, type: "weekly", interval: 1, days: [], endType: "count", endDate: "", count: 10
                                                 });
                                                 setAddEventOpen(true);
                                             }}
@@ -1568,7 +1853,7 @@ export default function AcademicCalendarPage() {
                                                             month: "short",
                                                             day: "numeric",
                                                         })}
-                                                        {event.startTime && ` · ${event.startTime}`}
+                                                        {event.startTime && ` · ${fmt(event.startTime)}`}
                                                     </p>
                                                 </div>
                                                 <Badge
@@ -1704,126 +1989,215 @@ export default function AcademicCalendarPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {selectedEvents.map((event, i) => (
-                                        <div
-                                            key={i}
-                                            className="p-2.5 rounded-lg border bg-background/30 group"
-                                        >
-                                            {editingEventId === event._id ? (
-                                                <div className="space-y-2">
-                                                    <Input
-                                                        value={editEventForm.title}
-                                                        onChange={(e) => setEditEventForm({ ...editEventForm, title: e.target.value })}
-                                                        className="h-7 text-xs bg-background/50 backdrop-blur-sm"
-                                                        placeholder="Title"
-                                                    />
-                                                    {/* Edit Date */}
-                                                    <div className="w-full">
-                                                        <DatePickerWithInput
-                                                            value={editEventForm.date ? new Date(editEventForm.date) : undefined}
-                                                            onChange={(d) => setEditEventForm({ ...editEventForm, date: d ? toDateStr(d) : "" })}
-                                                            className="h-9 text-xs"
+                                    {selectedEvents.map((event, i) => {
+                                        const status = getEventStatus(event, now, selectedDate);
+                                        const isGone = status === "gone";
+                                        const isRunning = status === "running";
+                                        return (
+                                            <div
+                                                key={i}
+                                                className={`p-2.5 rounded-lg border group transition-all ${isGone
+                                                    ? "bg-muted/20 border-white/5 opacity-50"
+                                                    : isRunning
+                                                        ? "bg-green-500/5 border-green-500/30 ring-1 ring-green-500/20"
+                                                        : "bg-background/30"
+                                                    }`}
+                                            >
+                                                {editingEventId === event._id ? (
+                                                    <div className="space-y-2">
+                                                        <Input
+                                                            value={editEventForm.title}
+                                                            onChange={(e) => setEditEventForm({ ...editEventForm, title: e.target.value })}
+                                                            className="h-7 text-xs bg-background/50 backdrop-blur-sm"
+                                                            placeholder="Title"
                                                         />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2">
-                                                        <div className="relative">
-                                                            <TimePicker
-                                                                value={editEventForm.startTime}
-                                                                onChange={(v) => setEditEventForm({ ...editEventForm, startTime: v })}
-                                                                className="h-9 text-xs"
-                                                            />
+                                                        <Textarea
+                                                            value={editEventForm.description}
+                                                            onChange={(e) => setEditEventForm({ ...editEventForm, description: e.target.value })}
+                                                            placeholder="Description (optional)"
+                                                            rows={2}
+                                                            className="text-xs resize-none bg-background/50 backdrop-blur-sm"
+                                                        />
+                                                        {/* Edit Date & End Date */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <Label className="text-[10px] text-muted-foreground mb-0.5 block">Date</Label>
+                                                                <DatePickerWithInput
+                                                                    value={editEventForm.date ? new Date(editEventForm.date) : undefined}
+                                                                    onChange={(d) => setEditEventForm({ ...editEventForm, date: d ? toDateStr(d) : "" })}
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-[10px] text-muted-foreground mb-0.5 block">End Date</Label>
+                                                                <DatePickerWithInput
+                                                                    value={editEventForm.endDate ? new Date(editEventForm.endDate) : undefined}
+                                                                    onChange={(d) => setEditEventForm({ ...editEventForm, endDate: d ? toDateStr(d) : "" })}
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
                                                         </div>
-                                                        <div className="relative">
-                                                            <TimePicker
-                                                                value={editEventForm.endTime}
-                                                                onChange={(v) => setEditEventForm({ ...editEventForm, endTime: v })}
-                                                                className="h-9 text-xs"
-                                                            />
+                                                        {/* Time */}
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <Label className="text-[10px] text-muted-foreground mb-0.5 block">Start Time</Label>
+                                                                <TimePicker
+                                                                    value={editEventForm.startTime}
+                                                                    onChange={(v) => setEditEventForm({ ...editEventForm, startTime: v })}
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <Label className="text-[10px] text-muted-foreground mb-0.5 block">End Time</Label>
+                                                                <TimePicker
+                                                                    value={editEventForm.endTime}
+                                                                    onChange={(v) => setEditEventForm({ ...editEventForm, endTime: v })}
+                                                                    className="h-8 text-xs"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        {/* Category */}
+                                                        <div>
+                                                            <Label className="text-[10px] text-muted-foreground mb-0.5 block">Category</Label>
+                                                            <Select value={editEventForm.category} onValueChange={(v) => setEditEventForm({ ...editEventForm, category: v })}>
+                                                                <SelectTrigger className="h-7 text-xs bg-background/50"><SelectValue /></SelectTrigger>
+                                                                <SelectContent className="border-white/10 bg-background/80 backdrop-blur-xl">
+                                                                    {userEventCategories.map(c => (
+                                                                        <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        {/* Custom Fields in Edit */}
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-between">
+                                                                <Label className="text-[10px] text-muted-foreground">Custom Fields</Label>
+                                                                <button type="button" onClick={() => setEditEventCustomFields([...editEventCustomFields, { label: "", value: "" }])} className="text-[10px] text-primary hover:underline">+ Add</button>
+                                                            </div>
+                                                            {editEventCustomFields.map((field, idx) => (
+                                                                <div key={idx} className="flex items-center gap-1">
+                                                                    <Input value={field.label} onChange={(e) => { const u = [...editEventCustomFields]; u[idx] = { ...field, label: e.target.value }; setEditEventCustomFields(u); }} placeholder="Label" className="h-6 text-[10px] flex-1" />
+                                                                    <Input value={field.value} onChange={(e) => { const u = [...editEventCustomFields]; u[idx] = { ...field, value: e.target.value }; setEditEventCustomFields(u); }} placeholder="Value" className="h-6 text-[10px] flex-1" />
+                                                                    <button type="button" onClick={() => setEditEventCustomFields(editEventCustomFields.filter((_, i) => i !== idx))} className="p-0.5 text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        {/* Series indicator */}
+                                                        {event.recurrenceGroupId && (() => {
+                                                            const count = selectedEvents.filter(e => e.recurrenceGroupId === event.recurrenceGroupId).length;
+                                                            return count > 1 ? (
+                                                                <p className="text-[10px] text-primary flex items-center gap-1"><Repeat className="h-3 w-3" /> Part of a series ({activeUserCalendar?.events.filter(e => e.recurrenceGroupId === event.recurrenceGroupId).length} events)</p>
+                                                            ) : null;
+                                                        })()}
+                                                        <div className="flex justify-end gap-1">
+                                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingEventId(null)}>
+                                                                <X className="h-3 w-3" />
+                                                            </Button>
+                                                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-green-500" onClick={() => handleSaveEditEvent()}>
+                                                                <Check className="h-3 w-3" />
+                                                            </Button>
                                                         </div>
                                                     </div>
-                                                    <div className="flex justify-end gap-1">
-                                                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingEventId(null)}>
-                                                            <X className="h-3 w-3" />
-                                                        </Button>
-                                                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-green-500" onClick={handleSaveEditEvent}>
-                                                            <Check className="h-3 w-3" />
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-start gap-2">
-                                                    <div
-                                                        className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${categoryColors[event.category]}`}
-                                                    />
-                                                    <div className="flex-1 min-w-0">
-                                                        <div className="flex items-center justify-between">
-                                                            <p className="text-sm font-medium leading-none">{event.title}</p>
-                                                            {calendarType === "personal" && (
-                                                                <div className="hidden group-hover:flex gap-1">
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            setEditingEventId(event._id as string);
-                                                                            setEditEventForm({
-                                                                                title: event.title,
-                                                                                description: event.description || "",
-                                                                                date: event.date || event.startDate, // Handle both structures
-                                                                                endDate: event.endDate || "",
-                                                                                startTime: event.startTime || "",
-                                                                                endTime: event.endTime || "",
-                                                                                category: event.category,
-                                                                            });
-                                                                        }}
-                                                                        className="text-muted-foreground hover:text-primary transition-colors"
-                                                                    >
-                                                                        <Edit2 className="h-3 w-3" />
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => handleDeleteEvent(event._id as string)}
-                                                                        className="text-muted-foreground hover:text-destructive transition-colors"
-                                                                    >
-                                                                        <Trash2 className="h-3 w-3" />
-                                                                    </button>
+                                                ) : (
+                                                    <div className="flex items-start gap-2">
+                                                        <div
+                                                            className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${categoryColors[event.category]}`}
+                                                        />
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex items-center justify-between">
+                                                                <p className={`text-sm font-medium leading-none ${isGone ? "line-through text-muted-foreground" : ""}`}>{event.title}</p>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    {status === "running" && (
+                                                                        <span className="flex items-center gap-1 text-[9px] font-semibold text-green-500 uppercase tracking-wider">
+                                                                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" /></span>
+                                                                            Live
+                                                                        </span>
+                                                                    )}
+                                                                    {status === "upcoming" && (
+                                                                        <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-wider">Upcoming</span>
+                                                                    )}
+                                                                    {status === "gone" && (
+                                                                        <span className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Done</span>
+                                                                    )}
+                                                                    {calendarType === "personal" && (
+                                                                        <div className="hidden group-hover:flex gap-1">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    setEditingEventId(event._id as string);
+                                                                                    setEditEventForm({
+                                                                                        title: event.title,
+                                                                                        description: event.description || "",
+                                                                                        date: event.date || event.startDate, // Handle both structures
+                                                                                        endDate: event.endDate || "",
+                                                                                        startTime: event.startTime || "",
+                                                                                        endTime: event.endTime || "",
+                                                                                        category: event.category,
+                                                                                    });
+                                                                                    setEditEventCustomFields(event.customFields || []);
+                                                                                }}
+                                                                                className="text-muted-foreground hover:text-primary transition-colors"
+                                                                            >
+                                                                                <Edit2 className="h-3 w-3" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteEvent(event._id as string)}
+                                                                                className="text-muted-foreground hover:text-destructive transition-colors"
+                                                                            >
+                                                                                <Trash2 className="h-3 w-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            {event.description && (
+                                                                <div className="mt-1">
+                                                                    <p className={`text-xs text-muted-foreground whitespace-pre-wrap ${expandedNotes.has(event._id || String(i)) ? "" : "line-clamp-2"}`}>
+                                                                        {event.description}
+                                                                    </p>
+                                                                    {event.description.length > 60 && (
+                                                                        <button
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                toggleNote(event._id || String(i));
+                                                                            }}
+                                                                            className="text-[10px] text-primary hover:underline mt-0.5 font-medium"
+                                                                        >
+                                                                            {expandedNotes.has(event._id || String(i)) ? "Show less" : "Read more"}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={`text-[10px] h-4 px-1 ${categoryBadgeColors[event.category] || ""}`}
+                                                                >
+                                                                    {event.category}
+                                                                </Badge>
+                                                                {(event.startTime || event.endTime) && (
+                                                                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                                                        <Clock className="h-2.5 w-2.5" />
+                                                                        {fmt(event.startTime)}
+                                                                        {event.endTime && ` - ${fmt(event.endTime)}`}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {/* Custom Fields Display */}
+                                                            {event.customFields && event.customFields.length > 0 && (
+                                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                                    {event.customFields.filter((f: any) => f.label?.trim()).map((f: any, fi: number) => (
+                                                                        <span key={fi} className="text-[10px] px-1.5 py-0.5 rounded bg-muted/50 text-muted-foreground">
+                                                                            <span className="font-medium">{f.label}:</span> {f.value}
+                                                                        </span>
+                                                                    ))}
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {event.description && (
-                                                            <div className="mt-1">
-                                                                <p className={`text-xs text-muted-foreground whitespace-pre-wrap ${expandedNotes.has(event._id || String(i)) ? "" : "line-clamp-2"}`}>
-                                                                    {event.description}
-                                                                </p>
-                                                                {event.description.length > 60 && (
-                                                                    <button
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            toggleNote(event._id || String(i));
-                                                                        }}
-                                                                        className="text-[10px] text-primary hover:underline mt-0.5 font-medium"
-                                                                    >
-                                                                        {expandedNotes.has(event._id || String(i)) ? "Show less" : "Read more"}
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                        )}
-                                                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                                                            <Badge
-                                                                variant="outline"
-                                                                className={`text-[10px] h-4 px-1 ${categoryBadgeColors[event.category] || ""}`}
-                                                            >
-                                                                {event.category}
-                                                            </Badge>
-                                                            {(event.startTime || event.endTime) && (
-                                                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                                                                    <Clock className="h-2.5 w-2.5" />
-                                                                    {event.startTime}
-                                                                    {event.endTime && ` - ${event.endTime}`}
-                                                                </span>
-                                                            )}
-                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
 
@@ -2052,7 +2426,7 @@ export default function AcademicCalendarPage() {
                                 <AlertCircle className="h-8 w-8 mx-auto mb-2 text-muted-foreground/40" />
                                 <p className="text-sm text-muted-foreground">
                                     {publicCalendars.length === 0
-                                        ? "No academic calendars published yet"
+                                        ? "No calendars published yet"
                                         : "Select a calendar to view"}
                                 </p>
                             </CardContent>
@@ -2208,9 +2582,231 @@ export default function AcademicCalendarPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+
+                        {/* Template Picker */}
+                        {templates.length > 0 && (
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Use Template</Label>
+                                <div className="flex flex-wrap gap-1.5">
+                                    {templates.map((t) => (
+                                        <div key={t._id || t.name} className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => applyTemplate(t)}
+                                                className="px-2.5 py-1 rounded-md text-xs font-medium border bg-background/50 hover:bg-accent transition-colors"
+                                            >
+                                                {t.name}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => t._id && handleDeleteTemplate(t._id)}
+                                                className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors"
+                                            >
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Custom Fields */}
+                        <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs">Custom Fields</Label>
+                                <Button
+                                    type="button" variant="ghost" size="sm"
+                                    onClick={() => setNewEventCustomFields([...newEventCustomFields, { label: "", value: "" }])}
+                                    className="h-6 px-2 text-xs gap-1"
+                                >
+                                    <Plus className="h-3 w-3" /> Add Field
+                                </Button>
+                            </div>
+                            {newEventCustomFields.map((field, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                    <Input
+                                        value={field.label}
+                                        onChange={(e) => {
+                                            const updated = [...newEventCustomFields];
+                                            updated[idx] = { ...field, label: e.target.value };
+                                            setNewEventCustomFields(updated);
+                                        }}
+                                        placeholder="Label (e.g. Room)"
+                                        className="h-8 text-xs flex-1"
+                                    />
+                                    <Input
+                                        value={field.value}
+                                        onChange={(e) => {
+                                            const updated = [...newEventCustomFields];
+                                            updated[idx] = { ...field, value: e.target.value };
+                                            setNewEventCustomFields(updated);
+                                        }}
+                                        placeholder="Value (e.g. AB5-601)"
+                                        className="h-8 text-xs flex-1"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => setNewEventCustomFields(newEventCustomFields.filter((_, i) => i !== idx))}
+                                        className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors shrink-0"
+                                    >
+                                        <X className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Recurrence Options */}
+                        <Separator />
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h4 className="text-sm font-medium">Repeat Event</h4>
+                                <Switch
+                                    checked={recurrence.isRepeating}
+                                    onCheckedChange={(c) => setRecurrence({ ...recurrence, isRepeating: c })}
+                                />
+                            </div>
+
+                            {recurrence.isRepeating && (
+                                <div className="p-4 rounded-xl border bg-background/40 space-y-4 animate-in fade-in slide-in-from-top-2">
+
+                                    {/* Interval & Type */}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground mr-1">Every</span>
+                                        <Input
+                                            type="number" min="1" max="99"
+                                            value={recurrence.interval === 0 ? "" : recurrence.interval}
+                                            onChange={(e) => setRecurrence({ ...recurrence, interval: e.target.value === "" ? 0 : parseInt(e.target.value) || 0 })}
+                                            onBlur={() => { if (recurrence.interval < 1) setRecurrence({ ...recurrence, interval: 1 }); }}
+                                            className="w-16 h-8 text-center bg-background/50"
+                                        />
+                                        <Select
+                                            value={recurrence.type}
+                                            onValueChange={(v: any) => setRecurrence({ ...recurrence, type: v })}
+                                        >
+                                            <SelectTrigger className="h-8 w-[110px] bg-background/50">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent className="border-white/10 bg-background/80 backdrop-blur-xl">
+                                                <SelectItem value="daily">day(s)</SelectItem>
+                                                <SelectItem value="weekly">week(s)</SelectItem>
+                                                <SelectItem value="monthly">month(s)</SelectItem>
+                                                <SelectItem value="yearly">year(s)</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Weekly Days Selection */}
+                                    {recurrence.type === "weekly" && (
+                                        <div className="space-y-2 pt-1">
+                                            <Label className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Repeat on</Label>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(day => (
+                                                    <button
+                                                        key={day}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const d = recurrence.days;
+                                                            setRecurrence({
+                                                                ...recurrence,
+                                                                days: d.includes(day) ? d.filter(x => x !== day) : [...d, day]
+                                                            })
+                                                        }}
+                                                        className={`h-8 w-11 rounded-md text-xs font-medium transition-colors border ${recurrence.days.includes(day)
+                                                            ? 'bg-primary text-primary-foreground border-primary'
+                                                            : 'bg-background/50 hover:bg-accent border-border/50'
+                                                            }`}
+                                                    >
+                                                        {day.substring(0, 3)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            {recurrence.days.length === 0 && (
+                                                <p className="text-[10px] text-destructive pl-1">Select at least one day</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* End Condition */}
+                                    <div className="space-y-2 pt-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">Ends</Label>
+
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <label className="flex items-center gap-3 p-2 rounded-lg border bg-background/30 hover:bg-background/50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="radio"
+                                                    name="endType"
+                                                    value="count"
+                                                    checked={recurrence.endType === "count"}
+                                                    onChange={() => setRecurrence({ ...recurrence, endType: "count" })}
+                                                    className="w-4 h-4 accent-primary ml-1"
+                                                />
+                                                <span className="text-xs font-medium">After</span>
+                                                <Input
+                                                    type="number" min="1" max="999"
+                                                    value={recurrence.count === 0 ? "" : recurrence.count}
+                                                    onChange={(e) => setRecurrence({ ...recurrence, count: e.target.value === "" ? 0 : parseInt(e.target.value) || 0 })}
+                                                    onBlur={() => { if (recurrence.count < 1) setRecurrence({ ...recurrence, count: 1 }); }}
+                                                    disabled={recurrence.endType !== "count"}
+                                                    className="w-16 h-7 text-center text-xs"
+                                                />
+                                                <span className="text-xs text-muted-foreground">occurrences</span>
+                                            </label>
+
+                                            <label className="flex items-center gap-3 p-2 rounded-lg border bg-background/30 hover:bg-background/50 cursor-pointer transition-colors">
+                                                <input
+                                                    type="radio"
+                                                    name="endType"
+                                                    value="date"
+                                                    checked={recurrence.endType === "date"}
+                                                    onChange={() => setRecurrence({ ...recurrence, endType: "date" })}
+                                                    className="w-4 h-4 accent-primary ml-1"
+                                                />
+                                                <span className="text-xs font-medium w-9">On</span>
+                                                <div className="flex-1 max-w-[160px]">
+                                                    <DatePickerWithInput
+                                                        value={recurrence.endDate ? new Date(recurrence.endDate) : undefined}
+                                                        onChange={(d) => setRecurrence({ ...recurrence, endDate: d ? toDateStr(d) : "" })}
+                                                        className="h-7 text-xs"
+                                                    />
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Save as Template */}
+                    <div className="flex items-center gap-2 pt-1">
+                        <input
+                            type="checkbox"
+                            id="saveAsTemplate"
+                            checked={saveAsTemplate}
+                            onChange={(e) => setSaveAsTemplate(e.target.checked)}
+                            className="w-4 h-4 accent-primary rounded"
+                        />
+                        <label htmlFor="saveAsTemplate" className="text-xs text-muted-foreground cursor-pointer">
+                            Save as template
+                        </label>
+                        {saveAsTemplate && (
+                            <Input
+                                value={templateName}
+                                onChange={(e) => setTemplateName(e.target.value)}
+                                placeholder="Template name..."
+                                className="h-7 text-xs flex-1 ml-1"
+                            />
+                        )}
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-2">
-                        <Button variant="outline" onClick={() => setAddEventOpen(false)}>
+                        <Button variant="outline" onClick={() => {
+                            setAddEventOpen(false);
+                            setRecurrence({
+                                isRepeating: false, type: "weekly", interval: 1, days: [], endType: "count", endDate: "", count: 10
+                            });
+                        }}>
                             Cancel
                         </Button>
                         <Button onClick={handleAddEvent} disabled={savingEvent}>
@@ -2266,6 +2862,48 @@ export default function AcademicCalendarPage() {
                     </div>
                 </DialogContent>
             </Dialog>
-        </div>
+            {/* Series Action Dialog */}
+            <Dialog open={seriesAction.open} onOpenChange={(o) => !o && setSeriesAction({ ...seriesAction, open: false })}>
+                <DialogContent className="sm:max-w-sm border-white/10 bg-background/80 backdrop-blur-xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Repeat className="h-4 w-4" />
+                            {seriesAction.type === "delete" ? "Delete Recurring Event" : "Edit Recurring Event"}
+                        </DialogTitle>
+                        <DialogDescription>
+                            This event is part of a series of {seriesAction.groupCount} events. What would you like to do?
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex flex-col gap-2 pt-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                const { type, eventId } = seriesAction;
+                                setSeriesAction({ ...seriesAction, open: false });
+                                if (type === "delete") handleDeleteEvent(eventId, false);
+                                else handleSaveEditEvent(false);
+                            }}
+                            className="justify-start gap-2"
+                        >
+                            <CalendarIcon className="h-4 w-4" />
+                            {seriesAction.type === "delete" ? "Delete this event only" : "Edit this event only"}
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                const { type, eventId } = seriesAction;
+                                setSeriesAction({ ...seriesAction, open: false });
+                                if (type === "delete") handleDeleteEvent(eventId, true);
+                                else handleSaveEditEvent(true);
+                            }}
+                            className="justify-start gap-2"
+                        >
+                            <Repeat className="h-4 w-4" />
+                            {seriesAction.type === "delete" ? `Delete all ${seriesAction.groupCount} events` : `Edit all ${seriesAction.groupCount} events`}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div >
     );
 }

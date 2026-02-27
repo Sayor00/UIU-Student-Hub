@@ -256,7 +256,7 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
   useEffect(() => {
     const fetchDatasets = async () => {
       try {
-        const res = await fetch("/api/section-selector?action=list");
+        const res = await fetch("/api/section-planner?action=list");
         if (res.ok) {
           const { datasets } = await res.json();
           setDatasets(datasets);
@@ -383,7 +383,7 @@ const UploadView = ({ onPdfProcessed }: { onPdfProcessed: (courses: Course[]) =>
     setIsLoading(true);
     toast.info("Loading selected course data...");
     try {
-      const response = await fetch(`/api/section-selector?id=${selectedDatasetId}`, {
+      const response = await fetch(`/api/section-planner?id=${selectedDatasetId}`, {
         method: "GET",
       });
 
@@ -2212,7 +2212,7 @@ const DataView = ({ courses: initialCourses, onBack }: { courses: Course[], onBa
     </div>
   );
 };
-export default function SectionSelectorPage() {
+export default function SectionPlannerPage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [view, setView] = useState<'upload' | 'data'>('upload');
 
@@ -2245,7 +2245,7 @@ export default function SectionSelectorPage() {
             <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            <h1 className="text-lg sm:text-2xl font-bold">UIU Section Selector</h1>
+            <h1 className="text-lg sm:text-2xl font-bold">UIU Section Planner</h1>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Smart course scheduling for university students
             </p>

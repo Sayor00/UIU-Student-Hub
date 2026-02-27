@@ -32,6 +32,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 
 interface CalendarEvent {
     _id?: string;
@@ -71,13 +72,14 @@ const categoryColors: Record<string, string> = {
 
 export default function AdminAcademicCalendarsPage() {
     const [calendars, setCalendars] = React.useState<AcademicCalendar[]>([]);
+    const { fmt } = useTimeFormat();
     const [loading, setLoading] = React.useState(true);
     const [deleteId, setDeleteId] = React.useState<string | null>(null);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
 
     const fetchCalendars = React.useCallback(async () => {
         try {
-            const res = await fetch("/api/admin/academic-calendars");
+            const res = await fetch("/api/admin/calendars");
             const data = await res.json();
             if (res.ok) setCalendars(data.calendars || []);
         } catch {
@@ -93,7 +95,7 @@ export default function AdminAcademicCalendarsPage() {
 
     const handleTogglePublish = async (cal: AcademicCalendar) => {
         try {
-            const res = await fetch(`/api/admin/academic-calendars/${cal._id}`, {
+            const res = await fetch(`/api/admin/calendars/${cal._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ published: !cal.published }),
@@ -110,7 +112,7 @@ export default function AdminAcademicCalendarsPage() {
     const handleDelete = async () => {
         if (!deleteId) return;
         try {
-            const res = await fetch(`/api/admin/academic-calendars/${deleteId}`, {
+            const res = await fetch(`/api/admin/calendars/${deleteId}`, {
                 method: "DELETE",
             });
             if (res.ok) {
@@ -139,13 +141,13 @@ export default function AdminAcademicCalendarsPage() {
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2">
                         <CalendarDays className="h-6 w-6 text-primary" />
-                        Academic Calendars
+                        Calendars
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Create and manage academic calendars with events for students
+                        Create and manage Calendars with events for students
                     </p>
                 </div>
-                <Link href="/admin/academic-calendars/new">
+                <Link href="/admin/calendars/new">
                     <Button className="gap-2">
                         <Plus className="h-4 w-4" />
                         New Calendar
@@ -159,9 +161,9 @@ export default function AdminAcademicCalendarsPage() {
             {calendars.length === 0 ? (
                 <div className="text-center py-16">
                     <CalendarDays className="h-12 w-12 mx-auto mb-3 text-muted-foreground/30" />
-                    <p className="font-medium text-muted-foreground">No academic calendars yet</p>
+                    <p className="font-medium text-muted-foreground">No Calendars yet</p>
                     <p className="text-sm text-muted-foreground mt-1">Create your first calendar to get started</p>
-                    <Link href="/admin/academic-calendars/new">
+                    <Link href="/admin/calendars/new">
                         <Button className="mt-4 gap-2">
                             <Plus className="h-4 w-4" /> Create Calendar
                         </Button>
@@ -222,7 +224,7 @@ export default function AdminAcademicCalendarsPage() {
                                                         <><Eye className="h-3.5 w-3.5" /> Publish</>
                                                     )}
                                                 </Button>
-                                                <Link href={`/admin/academic-calendars/${cal._id}/edit`}>
+                                                <Link href={`/admin/calendars/${cal._id}/edit`}>
                                                     <Button variant="outline" size="sm" className="gap-1.5">
                                                         <Pencil className="h-3.5 w-3.5" /> Edit
                                                     </Button>
@@ -255,7 +257,7 @@ export default function AdminAcademicCalendarsPage() {
                                             <Separator className="mb-4" />
                                             <div className="flex items-center justify-between mb-3">
                                                 <h3 className="text-sm font-semibold">Events Preview</h3>
-                                                <Link href={`/admin/academic-calendars/${cal._id}/edit`}>
+                                                <Link href={`/admin/calendars/${cal._id}/edit`}>
                                                     <Button size="sm" variant="outline" className="gap-1.5">
                                                         <ExternalLink className="h-3.5 w-3.5" /> Manage Events
                                                     </Button>
@@ -265,7 +267,7 @@ export default function AdminAcademicCalendarsPage() {
                                             {cal.events.length === 0 ? (
                                                 <p className="text-sm text-muted-foreground text-center py-6">
                                                     No events yet.{" "}
-                                                    <Link href={`/admin/academic-calendars/${cal._id}/edit`} className="text-primary underline">
+                                                    <Link href={`/admin/calendars/${cal._id}/edit`} className="text-primary underline">
                                                         Add events
                                                     </Link>
                                                 </p>
@@ -294,8 +296,8 @@ export default function AdminAcademicCalendarsPage() {
                                                                         {(event.startTime || event.endTime) && (
                                                                             <span className="flex items-center gap-1">
                                                                                 <Clock className="h-3 w-3" />
-                                                                                {event.startTime}
-                                                                                {event.endTime && ` - ${event.endTime}`}
+                                                                                {fmt(event.startTime)}
+                                                                                {event.endTime && ` - ${fmt(event.endTime)}`}
                                                                             </span>
                                                                         )}
                                                                     </div>
@@ -322,7 +324,7 @@ export default function AdminAcademicCalendarsPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Delete Calendar?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete this academic calendar and all its
+                            This will permanently delete this calendar and all its
                             events. This action cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>

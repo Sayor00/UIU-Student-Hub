@@ -4,6 +4,7 @@ import * as React from "react";
 import { Loader2, Trash2, Star, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useInView } from "react-intersection-observer";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   AlertDialog,
@@ -21,8 +22,9 @@ interface Review {
   userName: string;
   comment: string;
   overallRating: number;
-  courseTaken: string;
-  trimester: string;
+  courseTaken?: string;
+  trimester?: string;
+  courseHistory?: { courseCode: string; trimester: string }[];
   difficulty: string;
   facultyId: { name: string; initials: string; department: string } | null;
   createdAt: string;
@@ -32,31 +34,51 @@ export default function AdminReviewsPage() {
   const [reviews, setReviews] = React.useState<Review[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [page, setPage] = React.useState(1);
-  const [totalPages, setTotalPages] = React.useState(1);
+  const [hasMore, setHasMore] = React.useState(true);
+  const { ref, inView } = useInView();
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean;
     title: string;
     description: string;
     onConfirm: () => void;
-  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+  }>({ open: false, title: "", description: "", onConfirm: () => { } });
 
-  const fetchReviews = React.useCallback(async () => {
+  const fetchReviews = React.useCallback(async (pageNum: number) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/admin/reviews?page=${page}&limit=20`);
+      const res = await fetch(`/api/admin/reviews?page=${pageNum}&limit=20`);
       const data = await res.json();
-      setReviews(data.reviews || []);
-      setTotalPages(data.pagination?.totalPages || 1);
+      if (res.ok) {
+        if (pageNum === 1) {
+          setReviews(data.reviews || []);
+        } else {
+          setReviews((prev) => {
+            const existingIds = new Set(prev.map(item => item._id));
+            const uniqueNew = (data.reviews || []).filter((item: any) => !existingIds.has(item._id));
+            return [...prev, ...uniqueNew];
+          });
+        }
+        setHasMore(pageNum < (data.pagination?.totalPages || 1));
+      }
     } catch {
       toast.error("Failed to fetch reviews");
     } finally {
       setLoading(false);
     }
-  }, [page]);
+  }, []);
 
   React.useEffect(() => {
-    fetchReviews();
+    setPage(1);
+    fetchReviews(1);
   }, [fetchReviews]);
+
+  React.useEffect(() => {
+    if (inView && hasMore && !loading) {
+      const nextPage = page + 1;
+      setPage(nextPage);
+      fetchReviews(nextPage);
+    }
+  }, [inView, hasMore, loading, fetchReviews, page]);
 
   const handleDelete = (id: string) => {
     setConfirmDialog({
@@ -73,7 +95,8 @@ export default function AdminReviewsPage() {
             return;
           }
           toast.success("Review deleted");
-          fetchReviews();
+          setPage(1);
+          fetchReviews(1);
         } catch {
           toast.error("Something went wrong");
         }
@@ -90,7 +113,7 @@ export default function AdminReviewsPage() {
         </p>
       </div>
 
-      {loading ? (
+      {loading && page === 1 ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -129,7 +152,10 @@ export default function AdminReviewsPage() {
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      {review.courseTaken} &middot; {review.trimester} &middot;{" "}
+                      {review.courseHistory?.length
+                        ? review.courseHistory.map(c => `${c.courseCode} (${c.trimester})`).join(" • ")
+                        : `${review.courseTaken} · ${review.trimester}`}
+                      {" · "}
                       {new Date(review.createdAt).toLocaleDateString()}
                     </p>
                     <p className="text-sm mt-1 text-muted-foreground break-words">
@@ -150,28 +176,9 @@ export default function AdminReviewsPage() {
             </Card>
           ))}
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="flex justify-center gap-2 pt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Previous
-              </Button>
-              <span className="flex items-center text-sm text-muted-foreground">
-                Page {page} of {totalPages}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next
-              </Button>
+          {hasMore && reviews.length > 0 && !(loading && page === 1) && (
+            <div ref={ref} className="flex justify-center py-8">
+              {loading && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
             </div>
           )}
         </div>

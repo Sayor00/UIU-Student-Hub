@@ -10,6 +10,15 @@ export interface IAcademicCalendarEvent {
   endTime?: string;
   category: "registration" | "classes" | "exam" | "holiday" | "deadline" | "event" | "other";
   color?: string;
+  recurrenceGroupId?: string;
+  customFields?: { label: string; value: string }[];
+}
+
+export interface IAcademicCalendarTemplate {
+  _id?: string;
+  name: string;
+  category: string;
+  customFieldLabels: string[];
 }
 
 export interface IAcademicCalendar extends Document {
@@ -22,6 +31,7 @@ export interface IAcademicCalendar extends Document {
   startDate: Date;
   endDate: Date;
   events: IAcademicCalendarEvent[];
+  templates: IAcademicCalendarTemplate[];
   published: boolean;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -42,6 +52,17 @@ const AcademicCalendarEventSchema = new Schema<IAcademicCalendarEvent>(
       default: "other",
     },
     color: { type: String },
+    recurrenceGroupId: { type: String },
+    customFields: [{ label: { type: String }, value: { type: String } }],
+  },
+  { _id: true }
+);
+
+const AcademicCalendarTemplateSchema = new Schema<IAcademicCalendarTemplate>(
+  {
+    name: { type: String, required: true, trim: true },
+    category: { type: String, default: "other" },
+    customFieldLabels: [{ type: String }],
   },
   { _id: true }
 );
@@ -57,6 +78,7 @@ const AcademicCalendarSchema = new Schema<IAcademicCalendar>(
     startDate: { type: Date },
     endDate: { type: Date },
     events: [AcademicCalendarEventSchema],
+    templates: [AcademicCalendarTemplateSchema],
     published: { type: Boolean, default: false },
     createdBy: { type: Schema.Types.ObjectId, ref: "User", required: true },
   },

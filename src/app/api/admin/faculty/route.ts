@@ -13,10 +13,11 @@ export async function GET(req: NextRequest) {
   try {
     await dbConnect();
 
-    const { searchParams } = new URL(req.url);
+    const searchParams = new URL(req.url).searchParams;
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "20");
     const search = searchParams.get("search") || "";
+    const department = searchParams.get("department") || "";
 
     const query: any = {};
     if (search) {
@@ -25,6 +26,9 @@ export async function GET(req: NextRequest) {
         { initials: { $regex: search, $options: "i" } },
         { department: { $regex: search, $options: "i" } },
       ];
+    }
+    if (department && department !== "all") {
+      query.department = department;
     }
 
     const total = await Faculty.countDocuments(query);

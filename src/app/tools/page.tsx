@@ -32,8 +32,8 @@ const tools = [
     bg: "bg-blue-500/10",
   },
   {
-    href: "/tools/section-selector",
-    label: "Section Selector",
+    href: "/tools/section-planner",
+    label: "Section Planner",
     icon: CalendarDays,
     description:
       "Plan your class schedule by selecting sections. Visualize conflicts and build the perfect timetable.",
@@ -62,11 +62,11 @@ const tools = [
     bg: "bg-orange-500/10",
   },
   {
-    href: "/tools/academic-calendar",
-    label: "Academic Calendar",
+    href: "/tools/calendars",
+    label: "Calendars",
     icon: BookOpen,
     description:
-      "Interactive academic calendar with events, todos, and personal planning. Stay on track with your semester schedule.",
+      "Interactive Calendars with events, todos, and personal planning. Stay on track with your semester schedule.",
     tags: ["Calendar", "Events", "Planner", "Schedule"],
     color: "text-violet-500",
     bg: "bg-violet-500/10",

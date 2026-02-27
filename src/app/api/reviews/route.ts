@@ -96,8 +96,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       facultyId,
-      courseTaken,
-      trimester,
+      courseHistory,
       ratings,
       comment,
       difficulty,
@@ -105,11 +104,21 @@ export async function POST(request: NextRequest) {
     } = body;
 
     // Validation
-    if (!facultyId || !courseTaken || !trimester || !ratings || !comment || !difficulty || wouldTakeAgain === undefined) {
+    if (!facultyId || !courseHistory || !Array.isArray(courseHistory) || courseHistory.length === 0 || !ratings || !comment || !difficulty || wouldTakeAgain === undefined) {
       return NextResponse.json(
         { error: "All fields are required" },
         { status: 400 }
       );
+    }
+
+    // Validate each course entry
+    for (const entry of courseHistory) {
+      if (!entry.courseCode || !entry.trimester) {
+        return NextResponse.json(
+          { error: "Each course entry must have a course code and trimester" },
+          { status: 400 }
+        );
+      }
     }
 
     if (!ratings.teaching || !ratings.grading || !ratings.friendliness || !ratings.availability) {
@@ -179,8 +188,10 @@ export async function POST(request: NextRequest) {
       facultyId,
       userId,
       userName: anonymousName,
-      courseTaken: courseTaken.trim(),
-      trimester: trimester.trim(),
+      courseHistory: courseHistory.map((ch: any) => ({
+        courseCode: ch.courseCode.trim(),
+        trimester: ch.trimester.trim(),
+      })),
       ratings,
       overallRating: Math.round(overallRating * 10) / 10,
       comment: comment.trim(),
@@ -224,8 +235,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json();
     const {
       reviewId,
-      courseTaken,
-      trimester,
+      courseHistory,
       ratings,
       comment,
       difficulty,
@@ -252,13 +262,28 @@ export async function PUT(request: NextRequest) {
     const overallRating =
       (ratings.teaching + ratings.grading + ratings.friendliness + ratings.availability) / 4;
 
-    const anonymousName = body.anonymousName?.trim();
-    if (anonymousName && anonymousName.length >= 2 && anonymousName.length <= 30) {
-      review.userName = anonymousName;
+    // Anonymous name cannot be edited after initial creation
+
+    // Validate courseHistory
+    if (!courseHistory || !Array.isArray(courseHistory) || courseHistory.length === 0) {
+      return NextResponse.json(
+        { error: "You must provide at least one course and trimester." },
+        { status: 400 }
+      );
+    }
+    for (const entry of courseHistory) {
+      if (!entry.courseCode || !entry.trimester) {
+        return NextResponse.json(
+          { error: "Each course entry must have a course code and trimester" },
+          { status: 400 }
+        );
+      }
     }
 
-    review.courseTaken = courseTaken.trim();
-    review.trimester = trimester.trim();
+    review.courseHistory = courseHistory.map((ch: any) => ({
+      courseCode: ch.courseCode.trim(),
+      trimester: ch.trimester.trim(),
+    }));
     review.ratings = ratings;
     review.overallRating = Math.round(overallRating * 10) / 10;
     review.comment = comment.trim();
