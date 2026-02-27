@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAcademicContext } from "@/context/academic-context";
 import { parseStudentId, getTrimesterName } from "@/lib/trimesterUtils";
 import { AreaChart, Area, ResponsiveContainer, YAxis, XAxis, LabelList } from "recharts";
+import { useTimeFormat } from "@/hooks/useTimeFormat";
 import {
     autoSuggestCareers, getProgram, gradeToPoint, isPassingGrade, buildCareerRoadmap
 } from "@/lib/career-planner/helpers";
@@ -41,7 +42,7 @@ const categoryColors: Record<string, string> = {
 };
 
 interface RecentTool { href: string; label: string; visitedAt: string; }
-interface UpcomingEvent { _id?: string; title: string; startDate: string; date?: string; category: string; calendarTitle: string; calendarId: string; }
+interface UpcomingEvent { _id?: string; title: string; startDate: string; date?: string; startTime?: string; category: string; calendarTitle: string; calendarId: string; }
 
 function getTimeAgo(dateStr: string): string {
     const diff = Date.now() - new Date(dateStr).getTime();
@@ -55,6 +56,7 @@ function getTimeAgo(dateStr: string): string {
 export default function Dashboard({ userName }: { userName: string }) {
     const { data: session } = useSession();
     const academic = useAcademicContext();
+    const { fmt } = useTimeFormat();
 
     const [recentTools, setRecentTools] = React.useState<RecentTool[]>([]);
     const [upcomingEvents, setUpcomingEvents] = React.useState<UpcomingEvent[]>([]);
@@ -114,7 +116,14 @@ export default function Dashboard({ userName }: { userName: string }) {
                     }
                 }
 
-                events.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+                events.sort((a, b) => {
+                    const dateDiff = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+                    if (dateDiff !== 0) return dateDiff;
+                    if (a.startTime && !b.startTime) return -1;
+                    if (!a.startTime && b.startTime) return 1;
+                    if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+                    return 0;
+                });
                 setUpcomingEvents(events.slice(0, 8));
                 setCalendarDetails(calMap);
             } catch { }
@@ -489,6 +498,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                                                             <p className="text-xs font-medium truncate">{event.title}</p>
                                                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                                                                 <span>{eventDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                                                                {event.startTime && (<><span>·</span><span>{fmt(event.startTime)}</span></>)}
                                                                 <span>·</span>
                                                                 <span className="truncate">{event.calendarTitle}</span>
                                                             </div>

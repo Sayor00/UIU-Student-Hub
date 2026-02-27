@@ -1174,7 +1174,15 @@ export default function CalendarsPage() {
                 .map((e) => ({ ...e, startDate: e.date || e.startDate, source: activeUserCalendar.title }));
         }
         return events
-            .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
+            .sort((a, b) => {
+                const dateDiff = new Date(a.startDate).getTime() - new Date(b.startDate).getTime();
+                if (dateDiff !== 0) return dateDiff;
+                // Same date — sort by startTime (timed first, then ascending)
+                if (a.startTime && !b.startTime) return -1;
+                if (!a.startTime && b.startTime) return 1;
+                if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+                return 0;
+            })
             .slice(0, 5);
     }, [activeCalendar, activeUserCalendar, calendarType, today]);
 
