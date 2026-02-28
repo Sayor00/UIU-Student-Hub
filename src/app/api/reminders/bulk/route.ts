@@ -51,6 +51,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "No events provided" }, { status: 400 });
         }
 
+        // Safety: cancel any existing messages for this calendar before we overwrite them with new timings
+        if (process.env.QSTASH_TOKEN) {
+            const existing = await EventReminder.find({ userId, calendarId }).lean() as any[];
+            for (const r of existing) {
+                if (r?.timings?.length) {
+                    const msgIds = r.timings.map((t: any) => t.qstashMessageId).filter(Boolean);
+                    if (msgIds.length > 0) await cancelScheduledReminders(msgIds);
+                }
+            }
+        }
+
         const user = await User.findById(userId).select("name email preferences").lean() as any;
         const offsets = reminderOffsets || ["1d", "morning"];
         const next25h = Date.now() + 25 * 60 * 60 * 1000;
