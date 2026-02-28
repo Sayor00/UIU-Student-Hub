@@ -524,7 +524,9 @@ export default function Dashboard({ userName }: { userName: string }) {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                         {upcomingEvents.map((event, i) => {
                                             const eventDate = new Date(event.startDate);
-                                            const daysUntil = Math.ceil((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                                            const evDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+                                            const tDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                            const daysUntil = Math.round((evDay.getTime() - tDay.getTime()) / (1000 * 60 * 60 * 24));
                                             const dateStr = `${eventDate.getFullYear()}-${String(eventDate.getMonth() + 1).padStart(2, '0')}-${String(eventDate.getDate()).padStart(2, '0')}`;
                                             return (
                                                 <Link key={i} href={`/tools/calendars?calendar=${event.calendarId}&date=${dateStr}`}>

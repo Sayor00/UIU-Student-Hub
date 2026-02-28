@@ -448,6 +448,27 @@ export default function CalendarsPage() {
                             }
                         }
                     }
+
+                    if (!foundActive) {
+                        const savedType = localStorage.getItem("uiu_cal_last_type");
+                        const savedId = localStorage.getItem("uiu_cal_last_id");
+
+                        if (savedType === "academic" && savedId) {
+                            const cal = pubData.calendars?.find((c: any) => c._id === savedId);
+                            if (cal) {
+                                setActiveCalendar(cal);
+                                setCalendarType("academic");
+                                foundActive = true;
+                            }
+                        } else if (savedType === "personal" && savedId) {
+                            const cal = userData.calendars?.find((c: any) => c._id === savedId);
+                            if (cal) {
+                                setActiveUserCalendar(cal);
+                                setCalendarType("personal");
+                                foundActive = true;
+                            }
+                        }
+                    }
                 }
 
                 if (!foundActive && pubData.calendars?.length > 0) {
@@ -461,6 +482,19 @@ export default function CalendarsPage() {
         };
         fetchData();
     }, [isSignedIn]);
+
+    // Save active calendar to localStorage whenever it changes
+    React.useEffect(() => {
+        if (typeof window !== "undefined") {
+            if (calendarType === "academic" && activeCalendar?._id) {
+                localStorage.setItem("uiu_cal_last_type", "academic");
+                localStorage.setItem("uiu_cal_last_id", activeCalendar._id);
+            } else if (calendarType === "personal" && activeUserCalendar?._id) {
+                localStorage.setItem("uiu_cal_last_type", "personal");
+                localStorage.setItem("uiu_cal_last_id", activeUserCalendar._id);
+            }
+        }
+    }, [calendarType, activeCalendar, activeUserCalendar]);
 
     // Fetch comments when selected date or active calendar changes
     React.useEffect(() => {
@@ -2332,9 +2366,9 @@ export default function CalendarsPage() {
                                 <div className="space-y-2">
                                     {upcomingEvents.map((event, i) => {
                                         const eventDate = new Date(event.startDate);
-                                        const daysUntil = Math.ceil(
-                                            (eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-                                        );
+                                        const evDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+                                        const tDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                                        const daysUntil = Math.round((evDay.getTime() - tDay.getTime()) / (1000 * 60 * 60 * 24));
                                         return (
                                             <div
                                                 key={i}
