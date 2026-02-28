@@ -4,6 +4,7 @@ import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import UserCalendar from "@/models/UserCalendar";
 import AcademicCalendar from "@/models/AcademicCalendar";
+import DigestReminder from "@/models/DigestReminder";
 import { sendDailyDigestEmail } from "@/lib/send-reminder";
 
 async function handler(req: NextRequest) {
@@ -19,34 +20,47 @@ async function handler(req: NextRequest) {
         const user = await User.findById(userId).select("email name").lean() as any;
         if (!user?.email) return NextResponse.json({ error: "No user email" }, { status: 400 });
 
-        // Today's date boundary in UTC for exact match queries
-        const now = new Date();
-        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+        // 1. Fetch the user's DigestReminder settings to get their local timezone offset
+        const digest = await DigestReminder.findOne({ userId, calendarId }).lean() as any;
+        const tzOffset = digest?.timezoneOffset || 0; // Default to UTC if not found (e.g. Bangladesh is -360)
+
+        // 2. Compute "Today" in the User's local timezone
+        const nowMs = Date.now();
+        // JSON getTimezoneOffset is Local -> UTC in minutes, so Local = UTC - tzOffset
+        const userLocalNow = new Date(nowMs + (-tzOffset) * 60 * 1000);
+        const targetYear = userLocalNow.getUTCFullYear();
+        const targetMonth = userLocalNow.getUTCMonth();
+        const targetDate = userLocalNow.getUTCDate();
+
+        // Helper to check if a database event date falls on the target local day
+        const isToday = (dateVal: string | Date | undefined) => {
+            if (!dateVal) return false;
+            const d = new Date(dateVal);
+            const userEventTime = new Date(d.getTime() + (-tzOffset) * 60 * 1000);
+            return (
+                userEventTime.getUTCFullYear() === targetYear &&
+                userEventTime.getUTCMonth() === targetMonth &&
+                userEventTime.getUTCDate() === targetDate
+            );
+        };
 
         let calendarTitle = "Your Calendar";
         let calendarType = "personal";
         let todayEvents: any[] = [];
 
-        // 1. Check User Calendars
+        // 3. Check User Calendars
         const userCal = await UserCalendar.findOne({ _id: calendarId, userId }).lean() as any;
         if (userCal) {
             calendarTitle = userCal.title;
             calendarType = "personal";
-            todayEvents = userCal.events?.filter((e: any) => {
-                const ed = new Date(e.date || e.startDate);
-                return ed >= startOfDay && ed <= endOfDay;
-            }) || [];
+            todayEvents = userCal.events?.filter((e: any) => isToday(e.date || e.startDate)) || [];
         } else {
-            // 2. Check Academic Calendars
+            // 4. Check Academic Calendars
             const acaCal = await AcademicCalendar.findById(calendarId).lean() as any;
             if (acaCal) {
                 calendarTitle = acaCal.title;
                 calendarType = "academic";
-                todayEvents = acaCal.events?.filter((e: any) => {
-                    const ed = new Date(e.date || e.startDate);
-                    return ed >= startOfDay && ed <= endOfDay;
-                }) || [];
+                todayEvents = acaCal.events?.filter((e: any) => isToday(e.date || e.startDate)) || [];
             }
         }
 
