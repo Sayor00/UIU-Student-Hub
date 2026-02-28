@@ -116,6 +116,12 @@ A centralized hub for tracking academic timelines, exam schedules, and personal 
 - **Unified Calendar View** — toggle between **Academic** (public) and **Personal** (private) calendars
 - **Interactive Grid** — visual indicators for events, deadlines, and comments
 - **Smart Filtering** — filter by Program (e.g., Undergraduate, Graduate) and Trimester
+- **Real-Time Email Reminders (Upstash QStash)**
+  - Receive precise, real-time email notifications exactly when you need them.
+  - **Inline Timing Popovers** — set specific countdowns (15m, 1h, 1d) or custom numeric times (e.g., `45 minutes`, `12 hours`).
+  - **Daily Digests** — opt-in to receive a daily morning summary email for all events happening that day on a specific calendar.
+  - **Recurring Event Support** — apply a reminder to all future occurrences of a weekly class or meeting in one click.
+  - **Secure Webhooks** — powered defensively by Upstash QStash to bypass strict serverless function timeouts.
 - **Personalization:**
   - **Create custom calendars** for personal study plans or clubs
   - **Add private events**, todos, and notes directly on the calendar grid
@@ -293,6 +299,7 @@ Secure, email-verified authentication restricted to UIU students.
 
 | Technology                | Version | Purpose                            |
 | ------------------------- | ------- | ---------------------------------- |
+| **Upstash QStash**        | 2.x     | Real-time background job scheduling and webhooks |
 | **pdf2json**              | 4.0     | Server-side PDF text extraction    |
 | **jsPDF**                 | 4.1     | Client-side image-to-PDF generation|
 | **pdf-lib**               | 1.17    | Client-side native PDF merging     |
@@ -396,6 +403,10 @@ UIU-Student-Hub/
 │       ├── Faculty.ts               #   Faculty members
 │       ├── Review.ts                #   Faculty reviews
 │       ├── CGPARecord.ts            #   Saved CGPA calculations
+│       ├── AcademicCalendar.ts      #   Official UIU trimesters
+│       ├── UserCalendar.ts          #   Private/custom calendars
+│       ├── EventReminder.ts         #   Tracked precise email schedules
+│       ├── DigestReminder.ts        #   Tracked daily digest schedules
 │       ├── FacultyRequest.ts        #   Faculty addition requests
 │       └── Settings.ts              #   App settings (email domains)
 │
@@ -479,6 +490,27 @@ UIU-Student-Hub/
 | `trimesters`     | Array      | `[{ name, courses: [{ name, credit, grade, isRetake, previousGrade }] }]` |
 | `results`        | Array      | `[{ trimesterName, gpa, cgpa, trimesterCredits, totalCredits, earnedCredits }]` |
 
+### EventReminder
+
+| Field                | Type       | Description                            |
+| -------------------- | ---------- | -------------------------------------- |
+| `userId`             | ObjectId   | References User                        |
+| `calendarId`         | ObjectId   | The calendar this event belongs to     |
+| `eventId`            | String     | Sub-document ID of the single event    |
+| `timeReference`      | Date       | The core target date of the event      |
+| `timingTags`         | Array      | Human-readable active custom limits    |
+| `qstashMessageIds`   | Array      | Upstash Message IDs to use for deletion|
+
+### DigestReminder
+
+| Field                  | Type       | Description                            |
+| ---------------------- | ---------- | -------------------------------------- |
+| `userId`               | ObjectId   | References User                        |
+| `calendarId`           | ObjectId   | The calendar to digest                 |
+| `active`               | Boolean    | Whether the digest string is live      |
+| `timeString`           | String     | The hour parameter (e.g. `08:00`)      |
+| `qstashScheduleId`     | String     | Upstash Schedule ID to use for deletion|
+
 ### FacultyRequest
 
 | Field           | Type       | Description                             |
@@ -561,6 +593,16 @@ UIU-Student-Hub/
 | `POST` | `/api/upload`     | Public   | Upload and parse a PDF file           |
 | `GET`  | `/api/demo-pdf`   | Public   | Parse the bundled demo class routine  |
 
+### Reminders (Upstash QStash)
+
+| Method   | Endpoint                          | Auth   | Description                              |
+| -------- | --------------------------------- | ------ | ---------------------------------------- |
+| `POST`   | `/api/reminders`                  | User   | Construct and schedule specific QStash timings for an event |
+| `DELETE` | `/api/reminders`                  | User   | Delete saved timings and cancel QStash queue for an event |
+| `POST`   | `/api/reminders/digest`           | User   | Setup or disable calendar-level Daily Digests             |
+| `POST`   | `/api/reminders/bulk`             | User   | Apply reminder offsets across all events in a calendar    |
+| `POST`   | `/api/qstash/send-reminder`       | System | Verified Webhook consumer triggered by Upstash Servers    |
+
 ### Admin
 
 | Method   | Endpoint                              | Auth   | Description                              |
@@ -623,16 +665,23 @@ SMTP_PASSWORD=your-gmail-app-password
 
 # Admin notification email (optional — falls back to SMTP_EMAIL)
 ADMIN_EMAIL=admin@example.com
+
+# Upstash QStash (Real-Time Background Job Scheduling)
+QSTASH_TOKEN=your-qstash-token
+QSTASH_CURRENT_SIGNING_KEY=your-signing-key
+QSTASH_NEXT_SIGNING_KEY=your-next-signing-key
 ```
 
-| Variable         | Required | Description                                                  |
-| ---------------- | -------- | ------------------------------------------------------------ |
-| `MONGODB_URI`    | Yes      | MongoDB connection string                                    |
-| `NEXTAUTH_URL`   | Yes      | Base URL of the app (e.g., `http://localhost:3000`)          |
-| `NEXTAUTH_SECRET`| Yes      | Secret key for JWT signing (generate with `openssl rand -base64 32`) |
-| `SMTP_EMAIL`     | Yes      | Gmail address for sending emails                             |
-| `SMTP_PASSWORD`  | Yes      | Gmail App Password (NOT your regular password)               |
-| `ADMIN_EMAIL`    | No       | Email for admin notifications (defaults to `SMTP_EMAIL`)     |
+| Variable                     | Required | Description                                                  |
+| ---------------------------- | -------- | ------------------------------------------------------------ |
+| `MONGODB_URI`                | Yes      | MongoDB connection string                                    |
+| `NEXTAUTH_URL`               | Yes      | Base URL of the app (e.g., `http://localhost:3000`)          |
+| `NEXTAUTH_SECRET`            | Yes      | Secret key for JWT signing (generate with `openssl rand -base64 32`) |
+| `SMTP_EMAIL`                 | Yes      | Gmail address for sending emails                             |
+| `SMTP_PASSWORD`              | Yes      | Gmail App Password (NOT your regular password)               |
+| `QSTASH_TOKEN`               | Yes      | API Token to interface with Upstash Scheduling               |
+| `QSTASH_CURRENT_SIGNING_KEY` | Yes      | Used to verify incoming HTTP traffic dynamically sourced from Upstash limits |
+| `QSTASH_NEXT_SIGNING_KEY`    | Yes      | Rotating backup key required by Upstash verify function      |
 
 ### Running the App
 
