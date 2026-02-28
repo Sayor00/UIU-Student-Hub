@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongodb";
 import EventReminder from "@/models/EventReminder";
 import User from "@/models/User";
 import { sendReminderConfirmation } from "@/lib/send-reminder";
-import { scheduleReminders, cancelScheduledReminders } from "@/lib/qstash";
+import { computeSendAt, publishSingleReminder, cancelScheduledReminders } from "@/lib/qstash";
 
 // GET — fetch all reminders for the logged-in user
 export async function GET() {
@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
             }];
         }
 
+        const next25h = Date.now() + 25 * 60 * 60 * 1000;
         const savedReminders = [];
 
         for (const evt of eventsToProcess) {
@@ -111,8 +112,57 @@ export async function POST(req: NextRequest) {
             const currentEndTime = evt.endTime || eventEndTime;
             const currentCategory = evt.category || eventCategory;
 
-            // Upsert — update if exists, create if not
+            // Check if exists to know if we're updating or creating
             const existing = await EventReminder.findOne({ userId, calendarId, eventId: currentEventId || null });
+
+            // If updating, cancel old QStash messages first
+            if (existing && existing.timings?.length) {
+                const oldMsgIds = existing.timings.map((t: any) => t.qstashMessageId).filter(Boolean);
+                if (oldMsgIds.length > 0) await cancelScheduledReminders(oldMsgIds);
+            }
+
+            const offsetsToUse = reminderOffsets || ["1d", "morning"];
+            const timings: any[] = [];
+
+            for (const offset of offsetsToUse) {
+                const sendAtMs = computeSendAt(currentEventDate, currentStartTime, offset);
+                if (!sendAtMs || sendAtMs <= Date.now() + 10000) continue;
+
+                let isScheduled = false;
+                let qstashMessageId: string | undefined = undefined;
+
+                // JIT Scheduling: Fire now if it happens before the next cron job
+                if (sendAtMs <= next25h && process.env.QSTASH_TOKEN && userEmail) {
+                    const msgId = await publishSingleReminder({
+                        userId: userId.toString(),
+                        userEmail: userEmail,
+                        userName: userName,
+                        eventTitle: currentEventTitle,
+                        eventDate: currentEventDate,
+                        eventStartTime: currentStartTime,
+                        eventEndTime: currentEndTime,
+                        eventCategory: currentCategory,
+                        calendarTitle: calendarTitle || "Calendar",
+                        calendarId,
+                        calendarType: calendarType || "academic",
+                        offset,
+                        sendAt: sendAtMs
+                    });
+                    if (msgId) {
+                        isScheduled = true;
+                        qstashMessageId = msgId;
+                    }
+                }
+
+                timings.push({
+                    offset,
+                    sendAt: new Date(sendAtMs),
+                    isScheduled,
+                    qstashMessageId
+                });
+            }
+
+            // Upsert — update if exists, create if not
             const reminder = await EventReminder.findOneAndUpdate(
                 { userId, calendarId, eventId: currentEventId || null },
                 {
@@ -126,7 +176,8 @@ export async function POST(req: NextRequest) {
                     eventStartTime: currentStartTime,
                     eventEndTime: currentEndTime,
                     eventCategory: currentCategory,
-                    reminderOffsets: reminderOffsets || ["1d", "morning"],
+                    reminderOffsets: offsetsToUse,
+                    timings: timings,
                     enabled: true,
                 },
                 { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -134,7 +185,7 @@ export async function POST(req: NextRequest) {
 
             savedReminders.push(reminder);
 
-            // Send confirmation email + schedule QStash only for NEW reminders
+            // Send confirmation email ONLY for NEW reminders
             if (!existing && userEmail) {
                 try {
                     const evtDateObj = new Date(currentEventDate);
@@ -158,33 +209,8 @@ export async function POST(req: NextRequest) {
                             reminder.reminderOffsets
                         );
                     }
-
-                    // Schedule QStash messages for precise timing for ALL items
-                    if (process.env.QSTASH_TOKEN) {
-                        const msgIds = await scheduleReminders({
-                            userId: userId.toString(),
-                            userEmail: userEmail,
-                            userName: userName,
-                            eventTitle: currentEventTitle,
-                            eventDate: currentEventDate,
-                            eventStartTime: currentStartTime,
-                            eventEndTime: currentEndTime,
-                            eventCategory: currentCategory,
-                            calendarTitle: calendarTitle || "Calendar",
-                            calendarId,
-                            calendarType,
-                            reminderOffsets: reminder.reminderOffsets,
-                        });
-
-                        if (msgIds.length > 0) {
-                            await EventReminder.updateOne(
-                                { _id: reminder._id },
-                                { $set: { qstashMessageIds: msgIds } }
-                            );
-                        }
-                    }
                 } catch (emailErr) {
-                    console.error("Failed to send reminder confirmation or schedule QStash:", emailErr);
+                    console.error("Failed to send reminder confirmation:", emailErr);
                 }
             }
         }
@@ -218,10 +244,18 @@ export async function DELETE(req: NextRequest) {
 
         let deletedIds = [];
 
+        // Helper to cancel old messages via timings
+        const cleanTimings = async (r: any) => {
+            if (r?.timings?.length) {
+                const msgIds = r.timings.map((t: any) => t.qstashMessageId).filter(Boolean);
+                if (msgIds.length > 0) await cancelScheduledReminders(msgIds);
+            }
+        };
+
         // Cancel QStash messages and delete reminder(s)
         if (reminderId) {
             const r = await EventReminder.findOne({ _id: reminderId, userId }).lean() as any;
-            if (r?.qstashMessageIds?.length) await cancelScheduledReminders(r.qstashMessageIds);
+            await cleanTimings(r);
             await EventReminder.deleteOne({ _id: reminderId, userId });
             deletedIds = [r?.eventId].filter(Boolean);
         } else if (calendarId && eventId) {
@@ -258,7 +292,7 @@ export async function DELETE(req: NextRequest) {
                 }).lean() as any[];
 
                 for (const r of reminders) {
-                    if (r?.qstashMessageIds?.length) await cancelScheduledReminders(r.qstashMessageIds);
+                    await cleanTimings(r);
                 }
 
                 await EventReminder.deleteMany({
@@ -272,14 +306,14 @@ export async function DELETE(req: NextRequest) {
             } else {
                 // Delete single event reminder
                 const r = await EventReminder.findOne({ userId, calendarId, eventId }).lean() as any;
-                if (r?.qstashMessageIds?.length) await cancelScheduledReminders(r.qstashMessageIds);
+                await cleanTimings(r);
                 await EventReminder.deleteOne({ userId, calendarId, eventId });
                 deletedIds = [eventId];
             }
         } else if (calendarId) {
             const reminders = await EventReminder.find({ userId, calendarId }).lean() as any[];
             for (const r of reminders) {
-                if (r?.qstashMessageIds?.length) await cancelScheduledReminders(r.qstashMessageIds);
+                await cleanTimings(r);
             }
             await EventReminder.deleteMany({ userId, calendarId });
         } else {

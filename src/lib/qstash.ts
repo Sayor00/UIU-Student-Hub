@@ -7,21 +7,6 @@ export const qstash = new Client({
     baseUrl: isDev ? "http://127.0.0.1:8080" : undefined,
 });
 
-interface ScheduleReminderParams {
-    userId: string;
-    userEmail: string;
-    userName: string;
-    eventTitle: string;
-    eventDate: string;       // ISO date
-    eventStartTime?: string; // "HH:mm"
-    eventEndTime?: string;
-    eventCategory?: string;
-    calendarTitle: string;
-    calendarId: string;
-    calendarType: "academic" | "personal";
-    reminderOffsets: string[];
-}
-
 // Offset → milliseconds before event
 const offsetMs: Record<string, number> = {
     "15m": 15 * 60 * 1000,
@@ -46,12 +31,60 @@ function getEventTimestamp(eventDate: string, eventStartTime?: string): number {
     return d.getTime();
 }
 
+export interface SingleReminderParams {
+    userId: string;
+    userEmail: string;
+    userName: string;
+    eventTitle: string;
+    eventDate: string;       // ISO date
+    eventStartTime?: string; // "HH:mm"
+    eventEndTime?: string;
+    eventCategory?: string;
+    calendarTitle: string;
+    calendarId: string;
+    calendarType: "academic" | "personal";
+    offset: string;
+    sendAt: number;          // exact MS timestamp pre-calculated
+}
+
+export function computeSendAt(eventDate: string, eventStartTime: string | undefined, offset: string): number | null {
+    const eventTs = getEventTimestamp(eventDate, eventStartTime);
+    let sendAt: number | null = null;
+
+    if (offset === "morning") {
+        const d = new Date(eventDate);
+        d.setHours(8, 0, 0, 0);
+        sendAt = d.getTime();
+    } else if (offset.startsWith("@")) {
+        const timeStr = offset.substring(1);
+        const [h, m] = timeStr.split(":").map(Number);
+        const d = new Date(eventDate);
+        if (!isNaN(h) && !isNaN(m)) {
+            d.setHours(h, m, 0, 0);
+            sendAt = d.getTime();
+        }
+    } else {
+        let ms = offsetMs[offset];
+        if (!ms) {
+            const match = offset.match(/^(\d+)([mhd])$/);
+            if (match) {
+                const val = parseInt(match[1], 10);
+                const unit = match[2];
+                if (unit === "m") ms = val * 60 * 1000;
+                else if (unit === "h") ms = val * 60 * 60 * 1000;
+                else if (unit === "d") ms = val * 24 * 60 * 60 * 1000;
+            }
+        }
+        if (ms) sendAt = eventTs - ms;
+    }
+    return sendAt;
+}
+
 /**
- * Schedule QStash messages for each reminder offset.
- * Each message will hit /api/qstash/send-reminder at the exact time.
- * Returns array of QStash message IDs.
+ * Publish a single pre-calculated JIT QStash message.
+ * Returns the QStash message ID or null on failure.
  */
-export async function scheduleReminders(params: ScheduleReminderParams): Promise<string[]> {
+export async function publishSingleReminder(params: SingleReminderParams): Promise<string | null> {
     let baseUrl = process.env.NEXTAUTH_URL;
     if (!baseUrl) {
         baseUrl = process.env.VERCEL_URL
@@ -59,73 +92,30 @@ export async function scheduleReminders(params: ScheduleReminderParams): Promise
             : "http://localhost:3000";
     }
 
-    const eventTs = getEventTimestamp(params.eventDate, params.eventStartTime);
-    const now = Date.now();
-    const messageIds: string[] = [];
-
-    for (const offset of params.reminderOffsets) {
-        let sendAt: number;
-
-        if (offset === "morning") {
-            // 8 AM on the event day (in server timezone)
-            const d = new Date(params.eventDate);
-            d.setHours(8, 0, 0, 0);
-            sendAt = d.getTime();
-        } else if (offset.startsWith("@")) {
-            // Exact time of day on the event day (e.g., "@14:30")
-            const timeStr = offset.substring(1);
-            const [h, m] = timeStr.split(":").map(Number);
-            const d = new Date(params.eventDate);
-            if (!isNaN(h) && !isNaN(m)) {
-                d.setHours(h, m, 0, 0);
-                sendAt = d.getTime();
-            } else {
-                continue; // invalid time format
-            }
-        } else {
-            let ms = offsetMs[offset];
-            if (!ms) {
-                // Try to parse custom offset like "10m", "2h", "5d"
-                const match = offset.match(/^(\d+)([mhd])$/);
-                if (match) {
-                    const val = parseInt(match[1], 10);
-                    const unit = match[2];
-                    if (unit === "m") ms = val * 60 * 1000;
-                    else if (unit === "h") ms = val * 60 * 60 * 1000;
-                    else if (unit === "d") ms = val * 24 * 60 * 60 * 1000;
-                }
-            }
-            if (!ms) continue;
-            sendAt = eventTs - ms;
-        }
-
-        // Skip if the send time is in the past (allow down to 10s into the future for testing)
-        if (sendAt <= now + 10000) continue;
-
-        try {
-            const res = await qstash.publishJSON({
-                url: `${baseUrl}/api/qstash/send-reminder`,
-                body: {
-                    userId: params.userId,
-                    userEmail: params.userEmail,
-                    userName: params.userName,
-                    eventTitle: params.eventTitle,
-                    eventDate: params.eventDate,
-                    eventStartTime: params.eventStartTime,
-                    eventEndTime: params.eventEndTime,
-                    eventCategory: params.eventCategory,
-                    calendarTitle: params.calendarTitle,
-                    offset,
-                },
-                notBefore: Math.floor(sendAt / 1000), // unix seconds
-            });
-            messageIds.push(res.messageId);
-        } catch (err) {
-            console.error(`Failed to schedule QStash message for offset ${offset}:`, err);
-        }
+    try {
+        const res = await qstash.publishJSON({
+            url: `${baseUrl}/api/qstash/send-reminder`,
+            body: {
+                userId: params.userId,
+                userEmail: params.userEmail,
+                userName: params.userName,
+                eventTitle: params.eventTitle,
+                eventDate: params.eventDate,
+                eventStartTime: params.eventStartTime,
+                eventEndTime: params.eventEndTime,
+                eventCategory: params.eventCategory,
+                calendarTitle: params.calendarTitle,
+                calendarId: params.calendarId,
+                calendarType: params.calendarType,
+                offset: params.offset,
+            },
+            notBefore: Math.floor(params.sendAt / 1000), // unix seconds
+        });
+        return res.messageId;
+    } catch (err) {
+        console.error(`Failed to schedule QStash message for event ${params.eventTitle} at offset ${params.offset}:`, err);
+        return null;
     }
-
-    return messageIds;
 }
 
 /**

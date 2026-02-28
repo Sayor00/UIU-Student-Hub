@@ -71,12 +71,14 @@ export async function PATCH(
 
                     // Cancel QStash messages
                     for (const reminder of eventReminders) {
-                        if (reminder.qstashMessageIds && Array.isArray(reminder.qstashMessageIds)) {
-                            for (const msgId of reminder.qstashMessageIds) {
-                                try {
-                                    await qstash.messages.delete(msgId);
-                                } catch (e) {
-                                    console.error(`Failed to cancel QStash message ${msgId} for deleted event ${reminder.eventId}:`, e);
+                        if (reminder.timings && Array.isArray(reminder.timings)) {
+                            for (const t of reminder.timings) {
+                                if (t.qstashMessageId) {
+                                    try {
+                                        await qstash.messages.delete(t.qstashMessageId);
+                                    } catch (e) {
+                                        console.error(`Failed to cancel QStash message ${t.qstashMessageId} for deleted event ${reminder.eventId}:`, e);
+                                    }
                                 }
                             }
                         }
@@ -122,15 +124,17 @@ export async function DELETE(
         const { id } = await params;
         await dbConnect();
 
-        // 1. Fetch and cancel all associated event reminders
+        // 1. Fetch, cancel, and delete all associated EventReminders
         const eventReminders = await EventReminder.find({ calendarId: id });
         for (const reminder of eventReminders) {
-            if (reminder.qstashMessageIds && Array.isArray(reminder.qstashMessageIds)) {
-                for (const msgId of reminder.qstashMessageIds) {
-                    try {
-                        await qstash.messages.delete(msgId);
-                    } catch (e) {
-                        console.error(`Failed to cancel QStash message ${msgId} for deleted calendar:`, e);
+            if (reminder.timings && Array.isArray(reminder.timings)) {
+                for (const t of reminder.timings) {
+                    if (t.qstashMessageId) {
+                        try {
+                            await qstash.messages.delete(t.qstashMessageId);
+                        } catch (e) {
+                            console.error(`Failed to cancel QStash message ${t.qstashMessageId} during calendar deletion:`, e);
+                        }
                     }
                 }
             }
