@@ -32,6 +32,8 @@ import {
     Calendar as CalendarIcon,
     Clock,
     Repeat,
+    Bell,
+    BellRing,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { DatePickerWithInput } from "@/components/ui/date-picker-input";
@@ -55,8 +57,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
     Dialog,
+    DialogTrigger,
     DialogContent,
     DialogDescription,
     DialogHeader,
@@ -586,6 +590,291 @@ export default function CalendarsPage() {
     );
     // State for comment indicators (dates with comments)
     const [commentData, setCommentData] = React.useState<Record<string, { text: string; count: number }>>({});
+
+    // ─── Reminder State ───
+    const [reminderStore, setReminderStore] = React.useState<Record<string, string[]>>({});
+    const [calendarBell, setCalendarBell] = React.useState(false);
+    const [reminderLoading, setReminderLoading] = React.useState(false);
+    const [reminderPopoverEvent, setReminderPopoverEvent] = React.useState<string | null>(null); // eventId or "calendar"
+    const [selectedOffsets, setSelectedOffsets] = React.useState<string[]>([]);
+    const [exactTime, setExactTime] = React.useState<string>("");
+    const [customNumber, setCustomNumber] = React.useState("1");
+    const [customUnit, setCustomUnit] = React.useState("h");
+    const [applyToSeries, setApplyToSeries] = React.useState(true);
+    const [removeReminderAction, setRemoveReminderAction] = React.useState({ open: false, eventId: "", groupCount: 0, event: null as any });
+
+    // ─── Digest State ───
+    const [digestActive, setDigestActive] = React.useState(false);
+    const [digestTime, setDigestTime] = React.useState("08:00");
+    const [digestEmptyDays, setDigestEmptyDays] = React.useState(false);
+    const [digestLoading, setDigestLoading] = React.useState(false);
+
+    const TIMING_OPTIONS = [
+        { id: "15m", label: "15 min" },
+        { id: "30m", label: "30 min" },
+        { id: "1h", label: "1 hour" },
+        { id: "3h", label: "3 hours" },
+        { id: "morning", label: "Morning of" },
+        { id: "1d", label: "1 day" },
+        { id: "3d", label: "3 days" },
+        { id: "1w", label: "1 week" },
+    ];
+
+    // Fetch reminders for current calendar
+    React.useEffect(() => {
+        if (!isSignedIn) return;
+        const currentCalId = calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id;
+
+        const fetchReminders = async () => {
+            try {
+                const res = await fetch("/api/reminders");
+                const data = await res.json();
+                const store: Record<string, string[]> = {};
+                let hasCalBell = false;
+                for (const r of data.reminders || []) {
+                    store[`${r.calendarId}:${r.eventId || ""}`] = r.reminderOffsets || [];
+                    if (r.calendarId === currentCalId) hasCalBell = true;
+                }
+                setReminderStore(store);
+                setCalendarBell(hasCalBell);
+            } catch { }
+        };
+
+        const fetchDigestInfo = async () => {
+            if (!currentCalId) return;
+            try {
+                const res = await fetch(`/api/reminders/digest?calendarId=${currentCalId}`);
+                const data = await res.json();
+                if (data.digest && data.digest.enabled) {
+                    setDigestActive(true);
+                    setDigestTime(data.digest.time);
+                    setDigestEmptyDays(data.digest.notifyOnEmptyDays || false);
+                } else {
+                    setDigestActive(false);
+                    setDigestTime("08:00");
+                    setDigestEmptyDays(false);
+                }
+            } catch { }
+        };
+
+        fetchReminders();
+        fetchDigestInfo();
+    }, [isSignedIn, activeCalendar?._id, activeUserCalendar?._id, calendarType]);
+
+    const hasEventReminder = React.useCallback((calId: string, eventId: string) => {
+        return !!reminderStore[`${calId}:${eventId}`];
+    }, [reminderStore]);
+
+    const submitEventReminder = React.useCallback(async (event: any, offsets: string[]) => {
+        if (!isSignedIn) { toast.error("Sign in to set reminders"); return; }
+        if (offsets.length === 0) { toast.error("Select at least one timing"); return; }
+        const calId = calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id;
+        const calTitle = calendarType === "academic" ? activeCalendar?.title : activeUserCalendar?.title;
+        if (!calId) return;
+        const eventId = event._id as string;
+        const key = `${calId}:${eventId}`;
+
+        try {
+            const bodyPayload: any = {
+                calendarId: calId,
+                calendarType,
+                calendarTitle: calTitle,
+                eventId,
+                eventTitle: event.title,
+                eventDate: event.date || event.startDate,
+                eventStartTime: event.startTime,
+                eventEndTime: event.endTime,
+                eventCategory: event.category,
+                reminderOffsets: offsets,
+            };
+
+            if (event.recurrenceGroupId && applyToSeries) {
+                bodyPayload.applyToSeries = true;
+                bodyPayload.recurrenceGroupId = event.recurrenceGroupId;
+            }
+
+            const res = await fetch("/api/reminders", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(bodyPayload),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                if (data.reminders) {
+                    setReminderStore(prev => {
+                        const next = { ...prev };
+                        data.reminders.forEach((r: any) => {
+                            next[`${r.calendarId}:${r.eventId}`] = r.reminderOffsets || [];
+                        });
+                        return next;
+                    });
+                } else {
+                    setReminderStore(prev => ({ ...prev, [key]: offsets }));
+                }
+                setReminderPopoverEvent(null);
+                toast.success(bodyPayload.applyToSeries ? "Reminders set for full series" : "Reminder set! You'll get an email before this event");
+            } else {
+                toast.error("Failed to set reminder");
+            }
+        } catch { toast.error("Failed to set reminder"); }
+    }, [isSignedIn, calendarType, activeCalendar, activeUserCalendar, applyToSeries]);
+
+    const removeEventReminder = React.useCallback(async (event: any, applyToSeriesOverride?: boolean) => {
+        const calId = calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id;
+        if (!calId) return;
+        const eventId = event._id as string;
+        const key = `${calId}:${eventId}`;
+        const applyRemindersToSeries = applyToSeriesOverride ?? applyToSeries;
+
+        try {
+            let url = `/api/reminders?calendarId=${calId}&eventId=${eventId}`;
+            if (event.recurrenceGroupId && applyRemindersToSeries) {
+                url += `&applyToSeries=true&recurrenceGroupId=${event.recurrenceGroupId}`;
+            }
+
+            const res = await fetch(url, { method: "DELETE" });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.deletedIds) {
+                    setReminderStore(prev => {
+                        const next = { ...prev };
+                        data.deletedIds.forEach((id: string) => {
+                            delete next[`${calId}:${id}`];
+                        });
+                        return next;
+                    });
+                } else {
+                    setReminderStore(prev => {
+                        const n = { ...prev };
+                        delete n[key];
+                        return n;
+                    });
+                }
+                setReminderPopoverEvent(null);
+                toast.success(applyToSeries && event.recurrenceGroupId ? "Reminders removed for series" : "Reminder removed");
+            } else {
+                toast.error("Failed to remove reminder");
+            }
+        } catch { toast.error("Failed to remove reminder"); }
+    }, [calendarType, activeCalendar, activeUserCalendar, applyToSeries]);
+
+    const submitCalendarReminders = React.useCallback(async (offsets: string[]) => {
+        if (!isSignedIn) { toast.error("Sign in to set reminders"); return; }
+        if (offsets.length === 0) { toast.error("Select at least one timing"); return; }
+        const cal = calendarType === "academic" ? activeCalendar : activeUserCalendar;
+        if (!cal) return;
+        setReminderLoading(true);
+        try {
+            const events = (cal as any).events?.filter((e: any) => {
+                const d = new Date(e.date || e.startDate);
+                return d >= new Date(new Date().toDateString());
+            }) || [];
+            if (events.length === 0) { toast.info("No upcoming events to set reminders for"); setReminderLoading(false); return; }
+            await fetch("/api/reminders/bulk", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    calendarId: cal._id,
+                    calendarType,
+                    calendarTitle: cal.title,
+                    action: "subscribe",
+                    reminderOffsets: offsets,
+                    events: events.map((e: any) => ({
+                        eventId: e._id,
+                        title: e.title,
+                        date: e.date || e.startDate,
+                        startTime: e.startTime,
+                        endTime: e.endTime,
+                        category: e.category,
+                    })),
+                }),
+            });
+            setReminderStore(prev => {
+                const next = { ...prev };
+                for (const e of events) {
+                    next[`${cal._id}:${e._id}`] = offsets;
+                }
+                return next;
+            });
+            setCalendarBell(true);
+            setReminderPopoverEvent(null);
+            toast.success(`Reminders set for ${events.length} upcoming events!`);
+        } catch { toast.error("Failed to update reminders"); }
+        setReminderLoading(false);
+    }, [isSignedIn, calendarType, activeCalendar, activeUserCalendar]);
+
+    const removeCalendarReminders = React.useCallback(async () => {
+        const cal = calendarType === "academic" ? activeCalendar : activeUserCalendar;
+        if (!cal) return;
+        setReminderLoading(true);
+        try {
+            await fetch(`/api/reminders?calendarId=${cal._id}`, { method: "DELETE" });
+            setReminderStore(prev => {
+                const n = { ...prev };
+                for (const k of Object.keys(prev)) {
+                    if (k.startsWith(`${cal._id}:`)) delete n[k];
+                }
+                return n;
+            });
+            setCalendarBell(false);
+            setReminderPopoverEvent(null);
+            toast.success("All reminders removed for this calendar");
+        } catch { toast.error("Failed to remove reminders"); }
+        setReminderLoading(false);
+    }, [calendarType, activeCalendar, activeUserCalendar]);
+
+    const saveDigestReminder = React.useCallback(async () => {
+        if (!isSignedIn) { toast.error("Sign in to set reminders"); return; }
+        const calId = calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id;
+        const calTitle = calendarType === "academic" ? activeCalendar?.title : activeUserCalendar?.title;
+        if (!calId) return;
+
+        setDigestLoading(true);
+        try {
+            const tzOffset = new Date().getTimezoneOffset(); // e.g. -300 for EST
+            await fetch("/api/reminders/digest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "subscribe",
+                    calendarId: calId,
+                    calendarType,
+                    calendarTitle: calTitle,
+                    time: digestTime,
+                    timezoneOffset: tzOffset,
+                    notifyOnEmptyDays: digestEmptyDays,
+                }),
+            });
+            setDigestActive(true);
+            toast.success("Daily Digest saved!");
+        } catch {
+            toast.error("Failed to save Daily Digest");
+        }
+        setDigestLoading(false);
+    }, [isSignedIn, calendarType, activeCalendar, activeUserCalendar, digestTime, digestEmptyDays]);
+
+    const removeDigestReminder = React.useCallback(async () => {
+        const calId = calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id;
+        if (!calId) return;
+
+        setDigestLoading(true);
+        try {
+            await fetch("/api/reminders/digest", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "unsubscribe",
+                    calendarId: calId,
+                }),
+            });
+            setDigestActive(false);
+            toast.success("Daily Digest disabled");
+        } catch {
+            toast.error("Failed to disable Daily Digest");
+        }
+        setDigestLoading(false);
+    }, [calendarType, activeCalendar, activeUserCalendar]);
 
     // Fetch comment data for indicators
     React.useEffect(() => {
@@ -1166,11 +1455,11 @@ export default function CalendarsPage() {
         let events: (CalendarEvent & { source: string })[] = [];
         if (calendarType === "academic" && activeCalendar) {
             events = activeCalendar.events
-                .filter((e) => new Date(e.startDate) >= today)
+                .filter((e) => getEventStatus(e, today, new Date(e.startDate)) === "upcoming")
                 .map((e) => ({ ...e, source: activeCalendar.title }));
         } else if (calendarType === "personal" && activeUserCalendar) {
             events = activeUserCalendar.events
-                .filter((e) => new Date(e.date || e.startDate) >= today)
+                .filter((e) => getEventStatus(e, today, new Date(e.date || e.startDate)) === "upcoming")
                 .map((e) => ({ ...e, startDate: e.date || e.startDate, source: activeUserCalendar.title }));
         }
         return events
@@ -1568,25 +1857,224 @@ export default function CalendarsPage() {
                                         >
                                             <Plus className="h-3.5 w-3.5" /> Event
                                         </Button>
+                                    </>
+                                )}
+                                {isSignedIn && (calendarType === "academic" ? activeCalendar : activeUserCalendar) && (
+                                    <>
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => handlePinCalendar(activeUserCalendar._id)}
+                                            onClick={() => handlePinCalendar((calendarType === "academic" ? activeCalendar : activeUserCalendar)!._id)}
                                             className="gap-1.5"
                                         >
                                             <Pin className="h-3.5 w-3.5" />
                                         </Button>
+                                        <Dialog open={reminderPopoverEvent === "calendar-header"} onOpenChange={(o) => {
+                                            setReminderPopoverEvent(o ? "calendar-header" : null);
+                                            if (o) {
+                                                const calId = (calendarType === "academic" ? activeCalendar : activeUserCalendar)?._id;
+                                                const existingKey = Object.keys(reminderStore).find(k => k.startsWith(`${calId}:`));
+                                                setSelectedOffsets(existingKey ? reminderStore[existingKey] : []);
+                                            }
+                                        }}>
+                                            <DialogTrigger asChild>
+                                                <Button
+                                                    variant={calendarBell || digestActive ? "default" : "outline"}
+                                                    size="sm"
+                                                    className="gap-1.5"
+                                                    title={calendarBell || digestActive ? "Manage reminders" : "Set reminders for this calendar"}
+                                                >
+                                                    {calendarBell || digestActive ? <BellRing className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="w-[360px] p-5">
+                                                <DialogHeader className="mb-2">
+                                                    <DialogTitle className="flex items-center gap-2">🔔 Calendar Reminders</DialogTitle>
+                                                </DialogHeader>
+                                                <Tabs defaultValue="digest" className="w-full">
+                                                    <TabsList className="grid w-full grid-cols-2 mb-3">
+                                                        <TabsTrigger value="digest">Daily Digest</TabsTrigger>
+                                                        <TabsTrigger value="events">Before Events</TabsTrigger>
+                                                    </TabsList>
+
+                                                    <TabsContent value="digest" className="mt-0 space-y-3">
+                                                        <div className="space-y-1">
+                                                            <p className="text-xs text-muted-foreground leading-snug">Receive one email every day at a specific time with all your events for that day.</p>
+                                                        </div>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <Label className="text-xs font-medium">Time of day:</Label>
+                                                            <div className="w-28 text-muted-foreground"><TimePicker value={digestTime} onChange={setDigestTime} /></div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 py-2">
+                                                            <Switch checked={digestEmptyDays} onCheckedChange={setDigestEmptyDays} id="empty-days" />
+                                                            <Label htmlFor="empty-days" className="text-[11px] leading-tight text-muted-foreground cursor-pointer">Notify me on this schedule even if my calendar has 0 events today</Label>
+                                                        </div>
+                                                        {digestActive ? (
+                                                            <div className="flex gap-2 mt-2">
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px]"
+                                                                    onClick={saveDigestReminder}
+                                                                    disabled={digestLoading}
+                                                                >
+                                                                    {digestLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Bell className="h-3 w-3 mr-1" />}
+                                                                    Save Changes
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="destructive"
+                                                                    className="flex-none px-2 text-[11px]"
+                                                                    onClick={removeDigestReminder}
+                                                                    disabled={digestLoading}
+                                                                    title="Disable Daily Digest"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <Button size="sm" className="w-full mt-2 bg-amber-500 hover:bg-amber-600 text-white" onClick={saveDigestReminder} disabled={digestLoading}>
+                                                                Enable Daily Digest
+                                                            </Button>
+                                                        )}
+                                                    </TabsContent>
+
+                                                    <TabsContent value="events" className="mt-0">
+                                                        <p className="text-xs text-muted-foreground mb-3 leading-snug">Get emailed an exact amount of time before every upcoming event.</p>
+                                                        <div className="mb-4 mt-1 space-y-3">
+                                                            <Label className="text-xs font-medium text-muted-foreground block">Active Reminders</Label>
+                                                            <div className="flex flex-wrap gap-1.5 min-h-[24px]">
+                                                                {selectedOffsets.length === 0 && (
+                                                                    <span className="text-[11px] text-muted-foreground/50 italic">None set</span>
+                                                                )}
+                                                                {selectedOffsets.map((offset) => {
+                                                                    let label = offset;
+                                                                    if (offset === "morning") label = "Morning of event";
+                                                                    else if (offset.startsWith("@")) label = `At ${offset.substring(1)}`;
+                                                                    else {
+                                                                        const match = offset.match(/^(\d+)([mhd])$/);
+                                                                        if (match) {
+                                                                            const [_, val, unit] = match;
+                                                                            label = `${val} ${unit === "m" ? "min" : unit === "h" ? "hour" : "day"}${parseInt(val) > 1 ? "s" : ""} before`;
+                                                                        }
+                                                                    }
+                                                                    return (
+                                                                        <div key={offset} className="flex items-center gap-1 bg-amber-500/15 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                                                                            <span>{label}</span>
+                                                                            <button
+                                                                                onClick={() => setSelectedOffsets(prev => prev.filter(o => o !== offset))}
+                                                                                className="hover:text-amber-400 ml-0.5"
+                                                                            >
+                                                                                <X className="h-3 w-3" />
+                                                                            </button>
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            </div>
+
+                                                            <div className="h-px bg-white/10 w-full my-2" />
+
+                                                            <div className="space-y-2">
+                                                                <Label className="text-[11px] font-medium text-muted-foreground">Add exactly at time:</Label>
+                                                                <div className="flex gap-1.5 items-end">
+                                                                    <TimePicker value={exactTime} onChange={setExactTime} />
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="secondary"
+                                                                        className="h-10 px-3 text-xs shrink-0"
+                                                                        onClick={() => {
+                                                                            if (exactTime) {
+                                                                                const val = `@${exactTime}`;
+                                                                                if (!selectedOffsets.includes(val)) setSelectedOffsets(prev => [...prev, val]);
+                                                                                setExactTime("");
+                                                                            }
+                                                                        }}
+                                                                        disabled={!exactTime}
+                                                                    >
+                                                                        Add
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-2">
+                                                                <Label className="text-[11px] font-medium text-muted-foreground">Add relative time before:</Label>
+                                                                <div className="flex gap-1.5 items-center">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        className="flex h-8 w-16 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm shadow-black/5"
+                                                                        value={customNumber}
+                                                                        onChange={(e) => setCustomNumber(e.target.value)}
+                                                                    />
+                                                                    <Select value={customUnit} onValueChange={setCustomUnit}>
+                                                                        <SelectTrigger className="h-8 w-[100px] text-xs">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="m" className="text-xs">Minutes</SelectItem>
+                                                                            <SelectItem value="h" className="text-xs">Hours</SelectItem>
+                                                                            <SelectItem value="d" className="text-xs">Days</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="secondary"
+                                                                        className="h-8 px-3 text-xs shrink-0"
+                                                                        onClick={() => {
+                                                                            if (customNumber && customUnit) {
+                                                                                const val = `${customNumber}${customUnit}`;
+                                                                                if (!selectedOffsets.includes(val)) setSelectedOffsets(prev => [...prev, val]);
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        Add
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                        {calendarBell ? (
+                                                            <div className="flex gap-2 mt-4">
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px]"
+                                                                    onClick={() => {
+                                                                        if (selectedOffsets.length === 0) {
+                                                                            removeCalendarReminders();
+                                                                        } else {
+                                                                            submitCalendarReminders(selectedOffsets);
+                                                                        }
+                                                                    }}
+                                                                    disabled={reminderLoading}
+                                                                >
+                                                                    {reminderLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Bell className="h-3 w-3 mr-1" />}
+                                                                    Save Changes
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="destructive"
+                                                                    className="flex-none px-2 text-[11px]"
+                                                                    onClick={removeCalendarReminders}
+                                                                    disabled={reminderLoading}
+                                                                    title="Remove All Event Reminders"
+                                                                >
+                                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-white"
+                                                                onClick={() => submitCalendarReminders(selectedOffsets)}
+                                                                disabled={reminderLoading || selectedOffsets.length === 0}
+                                                            >
+                                                                {reminderLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Bell className="h-4 w-4 mr-1.5" />}
+                                                                Set Reminders
+                                                            </Button>
+                                                        )}
+                                                    </TabsContent>
+                                                </Tabs>
+                                            </DialogContent>
+                                        </Dialog>
                                     </>
-                                )}
-                                {isSignedIn && calendarType === "academic" && activeCalendar && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handlePinCalendar(activeCalendar._id)}
-                                        className="gap-1.5"
-                                    >
-                                        <Pin className="h-3.5 w-3.5" /> Pin
-                                    </Button>
                                 )}
                             </div>
                         </div>
@@ -2114,28 +2602,199 @@ export default function CalendarsPage() {
                                                         <div className="flex-1 min-w-0">
                                                             <div className="flex items-center justify-between">
                                                                 <p className={`text-sm font-medium leading-none ${isGone ? "line-through text-muted-foreground" : ""}`}>{event.title}</p>
-                                                                <div className="flex items-center gap-1.5">
+                                                                <div className="flex items-center gap-2">
                                                                     {status === "running" && (
-                                                                        <span className="flex items-center gap-1 text-[9px] font-semibold text-green-500 uppercase tracking-wider">
-                                                                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" /></span>
+                                                                        <span className="flex items-center gap-1 text-xs font-semibold text-green-500 uppercase tracking-wider">
+                                                                            <span className="relative flex h-2.5 w-2.5"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" /><span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500" /></span>
                                                                             Live
                                                                         </span>
                                                                     )}
                                                                     {status === "upcoming" && (
-                                                                        <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-wider">Upcoming</span>
+                                                                        <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider">Upcoming</span>
                                                                     )}
                                                                     {status === "gone" && (
-                                                                        <span className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Done</span>
+                                                                        <span className="text-xs font-semibold text-muted-foreground/60 uppercase tracking-wider">Done</span>
                                                                     )}
+                                                                    {isSignedIn && (() => {
+                                                                        const calId = (calendarType === "academic" ? activeCalendar?._id : activeUserCalendar?._id) || "";
+                                                                        const evtId = event._id as string;
+                                                                        const hasReminder = hasEventReminder(calId, evtId);
+                                                                        return (
+                                                                            <Dialog open={reminderPopoverEvent === evtId} onOpenChange={(o) => {
+                                                                                setReminderPopoverEvent(o ? evtId : null);
+                                                                                if (o) setSelectedOffsets(reminderStore[`${calId}:${evtId}`] || []);
+                                                                            }}>
+                                                                                <DialogTrigger asChild>
+                                                                                    <button
+                                                                                        onClick={(e) => e.stopPropagation()}
+                                                                                        className={`p-1 rounded-md transition-colors ${hasReminder
+                                                                                            ? "text-amber-500 hover:text-amber-400 bg-amber-500/10"
+                                                                                            : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                                                                            }`}
+                                                                                        title={hasReminder ? "Manage reminder" : "Set email reminder"}
+                                                                                    >
+                                                                                        {hasReminder ? <BellRing className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                                                                                    </button>
+                                                                                </DialogTrigger>
+                                                                                <DialogContent className="w-[360px] p-5" onClick={(e) => e.stopPropagation()}>
+                                                                                    <DialogHeader className="mb-2">
+                                                                                        <DialogTitle className="flex items-center gap-2">🔔 Event Reminder</DialogTitle>
+                                                                                        <DialogDescription className="truncate">{event.title}</DialogDescription>
+                                                                                    </DialogHeader>
+                                                                                    <div className="mb-4 mt-3 space-y-3">
+                                                                                        <Label className="text-xs font-medium text-muted-foreground block">Active Reminders</Label>
+                                                                                        <div className="flex flex-wrap gap-1.5 min-h-[24px]">
+                                                                                            {selectedOffsets.length === 0 && (
+                                                                                                <span className="text-[11px] text-muted-foreground/50 italic">None set</span>
+                                                                                            )}
+                                                                                            {selectedOffsets.map((offset) => {
+                                                                                                let label = offset;
+                                                                                                if (offset === "morning") label = "Morning of event";
+                                                                                                else if (offset.startsWith("@")) label = `At ${offset.substring(1)}`;
+                                                                                                else {
+                                                                                                    const match = offset.match(/^(\d+)([mhd])$/);
+                                                                                                    if (match) {
+                                                                                                        const [_, val, unit] = match;
+                                                                                                        label = `${val} ${unit === "m" ? "min" : unit === "h" ? "hour" : "day"}${parseInt(val) > 1 ? "s" : ""} before`;
+                                                                                                    }
+                                                                                                }
+                                                                                                return (
+                                                                                                    <div key={offset} className="flex items-center gap-1 bg-amber-500/15 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded-full text-[11px] font-medium">
+                                                                                                        <span>{label}</span>
+                                                                                                        <button
+                                                                                                            onClick={() => setSelectedOffsets(prev => prev.filter(o => o !== offset))}
+                                                                                                            className="hover:text-amber-400 ml-0.5"
+                                                                                                        >
+                                                                                                            <X className="h-3 w-3" />
+                                                                                                        </button>
+                                                                                                    </div>
+                                                                                                );
+                                                                                            })}
+                                                                                        </div>
+
+                                                                                        <div className="h-px bg-white/10 w-full my-2" />
+
+                                                                                        <div className="space-y-2">
+                                                                                            <Label className="text-[11px] font-medium text-muted-foreground">Add exactly at time:</Label>
+                                                                                            <div className="flex gap-1.5 items-end">
+                                                                                                <TimePicker value={exactTime} onChange={setExactTime} />
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="secondary"
+                                                                                                    className="h-10 px-3 text-xs shrink-0"
+                                                                                                    onClick={() => {
+                                                                                                        if (exactTime) {
+                                                                                                            const val = `@${exactTime}`;
+                                                                                                            if (!selectedOffsets.includes(val)) setSelectedOffsets(prev => [...prev, val]);
+                                                                                                            setExactTime("");
+                                                                                                        }
+                                                                                                    }}
+                                                                                                    disabled={!exactTime}
+                                                                                                >
+                                                                                                    Add
+                                                                                                </Button>
+                                                                                            </div>
+                                                                                        </div>
+
+                                                                                        <div className="space-y-2">
+                                                                                            <Label className="text-[11px] font-medium text-muted-foreground">Add relative time before:</Label>
+                                                                                            <div className="flex gap-1.5 items-center">
+                                                                                                <input
+                                                                                                    type="number"
+                                                                                                    min="1"
+                                                                                                    className="flex h-8 w-16 rounded-md border border-input bg-transparent px-2 py-1 text-xs shadow-sm shadow-black/5"
+                                                                                                    value={customNumber}
+                                                                                                    onChange={(e) => setCustomNumber(e.target.value)}
+                                                                                                />
+                                                                                                <Select value={customUnit} onValueChange={setCustomUnit}>
+                                                                                                    <SelectTrigger className="h-8 w-[100px] text-xs">
+                                                                                                        <SelectValue />
+                                                                                                    </SelectTrigger>
+                                                                                                    <SelectContent>
+                                                                                                        <SelectItem value="m" className="text-xs">Minutes</SelectItem>
+                                                                                                        <SelectItem value="h" className="text-xs">Hours</SelectItem>
+                                                                                                        <SelectItem value="d" className="text-xs">Days</SelectItem>
+                                                                                                    </SelectContent>
+                                                                                                </Select>
+                                                                                                <Button
+                                                                                                    size="sm"
+                                                                                                    variant="secondary"
+                                                                                                    className="h-8 px-3 text-xs shrink-0"
+                                                                                                    onClick={() => {
+                                                                                                        if (customNumber && customUnit) {
+                                                                                                            const val = `${customNumber}${customUnit}`;
+                                                                                                            if (!selectedOffsets.includes(val)) setSelectedOffsets(prev => [...prev, val]);
+                                                                                                        }
+                                                                                                    }}
+                                                                                                >
+                                                                                                    Add
+                                                                                                </Button>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {event.recurrenceGroupId && (
+                                                                                        <div className="flex items-center gap-2 mb-3 mt-1 pb-1">
+                                                                                            <Switch
+                                                                                                id={`apply-series-${event._id}`}
+                                                                                                checked={applyToSeries}
+                                                                                                onCheckedChange={setApplyToSeries}
+                                                                                                className="scale-75 origin-left"
+                                                                                            />
+                                                                                            <Label htmlFor={`apply-series-${event._id}`} className="text-[11px] font-medium leading-none cursor-pointer">
+                                                                                                Apply to all recurring events
+                                                                                            </Label>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    {hasReminder ? (
+                                                                                        <div className="flex gap-2">
+                                                                                            <Button
+                                                                                                size="sm"
+                                                                                                className="flex-1 text-white text-[11px] bg-amber-600 hover:bg-amber-700"
+                                                                                                onClick={() => {
+                                                                                                    if (selectedOffsets.length === 0) {
+                                                                                                        removeEventReminder(event);
+                                                                                                    } else {
+                                                                                                        submitEventReminder(event, selectedOffsets);
+                                                                                                    }
+                                                                                                }}
+                                                                                            >
+                                                                                                <Bell className="h-3 w-3 mr-1" />
+                                                                                                Save Changes
+                                                                                            </Button>
+                                                                                            <Button
+                                                                                                size="sm"
+                                                                                                variant="destructive"
+                                                                                                className="flex-none px-2 text-[11px]"
+                                                                                                onClick={() => removeEventReminder(event)}
+                                                                                                title="Remove All Reminders"
+                                                                                            >
+                                                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                                                            </Button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <Button
+                                                                                            size="sm"
+                                                                                            className="w-full bg-amber-500 hover:bg-amber-600 text-white text-xs"
+                                                                                            onClick={() => submitEventReminder(event, selectedOffsets)}
+                                                                                            disabled={selectedOffsets.length === 0}
+                                                                                        >
+                                                                                            <Bell className="h-3.5 w-3.5 mr-1.5" />
+                                                                                            Set Reminder
+                                                                                        </Button>
+                                                                                    )}
+                                                                                </DialogContent>
+                                                                            </Dialog>
+                                                                        );
+                                                                    })()}
                                                                     {calendarType === "personal" && (
-                                                                        <div className="hidden group-hover:flex gap-1">
+                                                                        <div className="flex gap-1">
                                                                             <button
                                                                                 onClick={() => {
                                                                                     setEditingEventId(event._id as string);
                                                                                     setEditEventForm({
                                                                                         title: event.title,
                                                                                         description: event.description || "",
-                                                                                        date: event.date || event.startDate, // Handle both structures
+                                                                                        date: event.date || event.startDate,
                                                                                         endDate: event.endDate || "",
                                                                                         startTime: event.startTime || "",
                                                                                         endTime: event.endTime || "",
@@ -2143,15 +2802,15 @@ export default function CalendarsPage() {
                                                                                     });
                                                                                     setEditEventCustomFields(event.customFields || []);
                                                                                 }}
-                                                                                className="text-muted-foreground hover:text-primary transition-colors"
+                                                                                className="p-1 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                                                                             >
-                                                                                <Edit2 className="h-3 w-3" />
+                                                                                <Edit2 className="h-4 w-4" />
                                                                             </button>
                                                                             <button
                                                                                 onClick={() => handleDeleteEvent(event._id as string)}
-                                                                                className="text-muted-foreground hover:text-destructive transition-colors"
+                                                                                className="p-1 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                                                                             >
-                                                                                <Trash2 className="h-3 w-3" />
+                                                                                <Trash2 className="h-4 w-4" />
                                                                             </button>
                                                                         </div>
                                                                     )}

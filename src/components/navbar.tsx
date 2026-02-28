@@ -136,13 +136,13 @@ export default function Navbar() {
             </Link>
 
             <a
-              href="https://www.uiu.ac.bd"
+              href="https://uiulinks.vercel.app/"
               target="_blank"
               rel="noopener noreferrer"
             >
               <Button variant="ghost" className="gap-2 group/nav">
                 <ExternalLink className="h-4 w-4 transition-transform duration-200 group-hover/nav:scale-110" />
-                UIU Website
+                LinkSphere
               </Button>
             </a>
 
@@ -344,16 +344,16 @@ export default function Navbar() {
                   </div>
                 </Link>
 
-                {/* UIU Website */}
+                {/* LinkSphere */}
                 <a
-                  href="https://www.uiu.ac.bd"
+                  href="https://uiulinks.vercel.app/"
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => setMobileOpen(false)}
                 >
                   <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm hover:bg-muted/50 hover:translate-x-1 transition-all duration-200">
                     <ExternalLink className="h-4 w-4" />
-                    UIU Website
+                    LinkSphere
                   </div>
                 </a>
 

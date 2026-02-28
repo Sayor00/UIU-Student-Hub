@@ -19,6 +19,8 @@ import {
   Clock,
   Target,
   Settings2,
+  Bell,
+  BellOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,7 @@ export default function PersonalInfoPage() {
   const [saving, setSaving] = React.useState(false);
   const academic = useAcademicContext();
   const [timeFormat, setTimeFormat] = React.useState<"12h" | "24h">("12h");
+  const [reminderEnabled, setReminderEnabled] = React.useState(true);
 
   // Load time format preference
   React.useEffect(() => {
@@ -65,6 +68,10 @@ export default function PersonalInfoPage() {
       .then((r) => r.json())
       .then((data) => {
         if (data?.preferences?.timeFormat) setTimeFormat(data.preferences.timeFormat);
+        if (data?.preferences?.reminderDefaults) {
+          const rd = data.preferences.reminderDefaults;
+          if (rd.enabled !== undefined) setReminderEnabled(rd.enabled);
+        }
       })
       .catch(() => { });
   }, [session?.user]);
@@ -82,6 +89,24 @@ export default function PersonalInfoPage() {
     } catch {
       toast.error("Failed to save preference");
     }
+  };
+
+  const saveReminderPref = async (patch: Record<string, any>) => {
+    try {
+      await fetch("/api/user/preferences", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reminderDefaults: patch }),
+      });
+      toast.success("Reminder preference saved");
+    } catch {
+      toast.error("Failed to save preference");
+    }
+  };
+
+  const handleReminderToggle = async (checked: boolean) => {
+    setReminderEnabled(checked);
+    await saveReminderPref({ enabled: checked });
   };
 
   const fetchProfile = React.useCallback(async () => {
@@ -395,6 +420,30 @@ export default function PersonalInfoPage() {
                 />
                 <span className={`text-xs font-medium ${timeFormat === "24h" ? "text-foreground" : "text-muted-foreground"}`}>24h</span>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Reminder Preferences */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    {reminderEnabled ? <Bell className="h-4 w-4 text-primary" /> : <BellOff className="h-4 w-4 text-muted-foreground" />}
+                    Email Reminders
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {reminderEnabled ? "You'll receive email reminders for calendar events" : "Email reminders are turned off"}
+                  </p>
+                </div>
+                <Switch checked={reminderEnabled} onCheckedChange={handleReminderToggle} />
+              </div>
+
+              {reminderEnabled && (
+                <p className="text-xs text-muted-foreground pl-6">
+                  You can set custom timing when enabling reminders on the calendar page.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>

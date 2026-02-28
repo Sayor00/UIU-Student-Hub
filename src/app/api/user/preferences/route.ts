@@ -72,6 +72,18 @@ export async function PATCH(req: NextRequest) {
             updateFields["preferences.timeFormat"] = data.timeFormat === "24h" ? "24h" : "12h";
         }
 
+        if (data.reminderDefaults !== undefined) {
+            if (data.reminderDefaults.offsets !== undefined) {
+                updateFields["preferences.reminderDefaults.offsets"] = data.reminderDefaults.offsets;
+            }
+            if (data.reminderDefaults.digestMode !== undefined) {
+                updateFields["preferences.reminderDefaults.digestMode"] = !!data.reminderDefaults.digestMode;
+            }
+            if (data.reminderDefaults.enabled !== undefined) {
+                updateFields["preferences.reminderDefaults.enabled"] = !!data.reminderDefaults.enabled;
+            }
+        }
+
         if (data.recentTool) {
             // Add or update a recent tool visit
             const user = await User.findById((session.user as any).id).select("preferences");

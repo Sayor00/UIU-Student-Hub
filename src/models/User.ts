@@ -14,6 +14,11 @@ export interface IUserPreferences {
   careerGoal?: string;
   targetCGPA?: number;
   timeFormat?: "12h" | "24h";
+  reminderDefaults?: {
+    offsets: string[];
+    digestMode: boolean;
+    enabled: boolean;
+  };
 }
 
 export interface IUser extends Document {
@@ -90,6 +95,11 @@ const UserSchema = new Schema<IUser>(
       careerGoal: { type: String },
       targetCGPA: { type: Number },
       timeFormat: { type: String, enum: ["12h", "24h"], default: "12h" },
+      reminderDefaults: {
+        offsets: { type: [String], default: ["1d", "morning"] },
+        digestMode: { type: Boolean, default: true },
+        enabled: { type: Boolean, default: true },
+      },
     },
   },
   {

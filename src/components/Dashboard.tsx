@@ -53,6 +53,41 @@ function getTimeAgo(dateStr: string): string {
     return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** Determine event temporal status relative to now. Pure client-side. */
+function getEventStatus(
+    event: { startTime?: string; endTime?: string; startDate?: string; date?: string; endDate?: string },
+    now: Date,
+    eventDate: Date
+): "gone" | "running" | "upcoming" | "allday" {
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const evDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+
+    // If the event's date is in the past (before today)
+    if (evDay < today) return "gone";
+    // If the event's date is in the future
+    if (evDay > today) return "upcoming";
+
+    // Same day — check times
+    if (!event.startTime) return "allday"; // No time set = all-day, no status
+
+    const [sh, sm] = event.startTime.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    if (event.endTime) {
+        const [eh, em] = event.endTime.split(":").map(Number);
+        const endMin = eh * 60 + em;
+        if (nowMin >= startMin && nowMin < endMin) return "running";
+        if (nowMin >= endMin) return "gone";
+        return "upcoming";
+    }
+
+    // No end time — treat as 1-hour event
+    if (nowMin >= startMin + 60) return "gone";
+    if (nowMin >= startMin) return "running";
+    return "upcoming";
+}
+
 export default function Dashboard({ userName }: { userName: string }) {
     const { data: session } = useSession();
     const academic = useAcademicContext();
@@ -99,7 +134,8 @@ export default function Dashboard({ userName }: { userName: string }) {
                 for (const cal of pubData.calendars || []) {
                     calMap[cal._id] = { title: cal.title };
                     for (const event of cal.events || []) {
-                        if (new Date(event.startDate) >= today) {
+                        const eventDate = new Date(event.startDate);
+                        if (getEventStatus(event, today, eventDate) === "upcoming") {
                             events.push({ ...event, calendarTitle: cal.title, calendarId: cal._id });
                         }
                     }
@@ -110,7 +146,7 @@ export default function Dashboard({ userName }: { userName: string }) {
                     calMap[cal._id] = { title: cal.title };
                     for (const event of cal.events || []) {
                         const eventDate = new Date(event.date || event.startDate);
-                        if (eventDate >= today) {
+                        if (getEventStatus(event, today, eventDate) === "upcoming") {
                             events.push({ ...event, startDate: event.date || event.startDate, calendarTitle: cal.title, calendarId: cal._id });
                         }
                     }
