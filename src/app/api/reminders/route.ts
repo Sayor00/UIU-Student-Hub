@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
                             userName,
                             [{
                                 title: applyToSeries ? `${currentEventTitle} (and all recurring events)` : currentEventTitle,
-                                date: evtDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+                                date: evtDateObj.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Dhaka" }),
                                 rawDate: currentEventDate,
                                 startTime: currentStartTime,
                                 calendarTitle: calendarTitle || "Calendar",

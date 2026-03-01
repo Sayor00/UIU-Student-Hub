@@ -73,7 +73,7 @@ async function handler(req: NextRequest) {
             return {
                 title: e.title,
                 rawDate: e.date || e.startDate,
-                date: d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
+                date: d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "Asia/Dhaka" }),
                 startTime: e.startTime,
                 endTime: e.endTime,
                 category: e.category,

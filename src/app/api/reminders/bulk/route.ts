@@ -144,7 +144,7 @@ export async function POST(req: NextRequest) {
                     const d = new Date(e.date || e.startDate);
                     return {
                         title: e.title,
-                        date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }),
+                        date: d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric", timeZone: "Asia/Dhaka" }),
                         rawDate: e.date || e.startDate,
                         startTime: e.startTime,
                         calendarTitle: calendarTitle || "Calendar",

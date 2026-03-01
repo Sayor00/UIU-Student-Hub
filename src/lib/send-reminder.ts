@@ -141,12 +141,26 @@ export async function sendReminderConfirmation(
 ) {
   const count = events.length;
   const offsetLabels: Record<string, string> = {
+    "15m": "15 minutes before",
+    "30m": "30 minutes before",
+    "1h": "1 hour before",
+    "3h": "3 hours before",
     "morning": "Morning of the event",
     "1d": "1 day before",
     "3d": "3 days before",
     "1w": "1 week before",
   };
-  const timingList = offsets.map(o => offsetLabels[o] || o).join(", ");
+  const timingList = offsets.map(o => {
+    if (offsetLabels[o]) return offsetLabels[o];
+    const match = o.match(/^(\d+)([mhd])$/);
+    if (match) {
+      const val = match[1];
+      const unit = match[2] === "m" ? "minutes" : match[2] === "h" ? "hours" : "days";
+      return `${val} ${unit} before`;
+    }
+    if (o.startsWith("@")) return `At ${o.substring(1)}`;
+    return o;
+  }).join(", ");
 
   const eventList = events.slice(0, 10).map(e => {
     const color = categoryColors[e.category || "other"] || "#6b7280";
@@ -234,7 +248,9 @@ export async function sendDailyDigestEmail(
   const count = events.length;
   const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3000";
   const calLink = `${baseUrl}/tools/calendars?calendar=${calendarId}`;
-  const today = new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+  // Use BDT (UTC+6) for the date header so it matches the user's local day
+  const bdtNow = new Date(Date.now() + 6 * 60 * 60 * 1000);
+  const today = bdtNow.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 
   let eventsHtml = "";
 

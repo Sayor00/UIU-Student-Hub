@@ -19,16 +19,21 @@ const offsetMs: Record<string, number> = {
     "morning": -1, // special: 8 AM on the event day
 };
 
+// UIU is in Bangladesh (UTC+6). Event times stored as "HH:mm" are in BDT.
+// Vercel servers run in UTC, so we must manually convert BDT → UTC.
+const BDT_OFFSET_MS = 6 * 60 * 60 * 1000;
+
 function getEventTimestamp(eventDate: string, eventStartTime?: string): number {
     const d = new Date(eventDate);
     if (eventStartTime) {
         const [h, m] = eventStartTime.split(":").map(Number);
-        d.setHours(h, m, 0, 0);
+        d.setUTCHours(h, m, 0, 0);
     } else {
-        // If no start time, default to 9 AM
-        d.setHours(9, 0, 0, 0);
+        // If no start time, default to 9 AM BDT
+        d.setUTCHours(9, 0, 0, 0);
     }
-    return d.getTime();
+    // Hours above represent BDT (UTC+6), subtract offset to get true UTC
+    return d.getTime() - BDT_OFFSET_MS;
 }
 
 export interface SingleReminderParams {
@@ -53,15 +58,15 @@ export function computeSendAt(eventDate: string, eventStartTime: string | undefi
 
     if (offset === "morning") {
         const d = new Date(eventDate);
-        d.setHours(8, 0, 0, 0);
-        sendAt = d.getTime();
+        d.setUTCHours(8, 0, 0, 0);
+        sendAt = d.getTime() - BDT_OFFSET_MS; // 8 AM BDT → UTC
     } else if (offset.startsWith("@")) {
         const timeStr = offset.substring(1);
         const [h, m] = timeStr.split(":").map(Number);
         const d = new Date(eventDate);
         if (!isNaN(h) && !isNaN(m)) {
-            d.setHours(h, m, 0, 0);
-            sendAt = d.getTime();
+            d.setUTCHours(h, m, 0, 0);
+            sendAt = d.getTime() - BDT_OFFSET_MS; // BDT → UTC
         }
     } else {
         let ms = offsetMs[offset];

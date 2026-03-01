@@ -149,3 +149,4 @@ test_scan_routes.mjs
 test_sections_probe.txt
 test_discovery_output.txt
 test_extract.js
+migrate_reminders.js
