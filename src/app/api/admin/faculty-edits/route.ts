@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
             .limit(limit)
             .populate("requestedBy", "name email")
             .populate("reviewedBy", "name email")
-            .populate("facultyId", "name initials department designation email phone office website github linkedin scholar bio")
+            .populate("facultyId", "name initials departments designation email phone office website github linkedin scholar bio")
             .lean();
 
         return NextResponse.json({

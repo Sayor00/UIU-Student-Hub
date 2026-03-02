@@ -1,10 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { Loader2, Search, Edit, Trash2, Check, X, Plus } from "lucide-react";
+import { Loader2, Search, Edit, Trash2, Check, X, Plus, Upload, User, FlipHorizontal, FlipVertical } from "lucide-react";
 import { toast } from "sonner";
+import { ImageViewer } from "@/components/image-viewer";
+import Cropper from 'react-easy-crop';
 import { Button } from "@/components/ui/button";
+import { Slider } from "@/components/ui/slider";
 import { useInView } from "react-intersection-observer";
+import { FacultyImageUploader } from "@/components/faculty-image-uploader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
@@ -125,7 +129,7 @@ interface Faculty {
   _id: string;
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -135,6 +139,7 @@ interface Faculty {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture?: string;
   isApproved: boolean;
   averageRating: number;
   totalReviews: number;
@@ -170,11 +175,25 @@ export default function AdminFacultyPage() {
   // Create dialog
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
   const [createForm, setCreateForm] = React.useState({
-    name: "", initials: "", department: "", designation: "Lecturer",
+    name: "", initials: "", departments: [] as string[], designation: "Lecturer",
     email: "", phone: "", office: "", website: "",
-    github: "", linkedin: "", scholar: "", bio: "",
+    github: "", linkedin: "", scholar: "", bio: "", profilePicture: "",
   });
   const [creating, setCreating] = React.useState(false);
+
+  // Image upload/crop state
+  const [cropSrc, setCropSrc] = React.useState("");
+  const [crop, setCrop] = React.useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = React.useState(1);
+  const [rotation, setRotation] = React.useState(0);
+  const [flip, setFlip] = React.useState({ horizontal: false, vertical: false });
+  const [croppedAreaPixels, setCroppedAreaPixels] = React.useState<any>(null);
+  const [uploadingImage, setUploadingImage] = React.useState(false);
+  const [uploadTarget, setUploadTarget] = React.useState<"edit" | "create">("edit");
+
+  // Full image viewer
+  const [viewerOpen, setViewerOpen] = React.useState(false);
+  const [viewerSrc, setViewerSrc] = React.useState("");
 
   // Initials uniqueness check (shared for create + edit)
   const initialsCheck = useUniquenessCheck(
@@ -182,6 +201,121 @@ export default function AdminFacultyPage() {
     "initials",
     1
   );
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // ─── Image crop utility ───
+  const getCroppedImg = async (
+    imageSrc: string,
+    pixelCrop: any
+  ): Promise<File | null> => {
+    const createImage = (url: string): Promise<HTMLImageElement> =>
+      new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener("load", () => resolve(image));
+        image.addEventListener("error", (error) => reject(error));
+        image.setAttribute("crossOrigin", "anonymous");
+        image.src = url;
+      });
+
+    const image = await createImage(imageSrc);
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    const rad = (pixelCrop.rotation || 0) * Math.PI / 180;
+    const bBoxWidth = Math.abs(Math.cos(rad) * image.width) + Math.abs(Math.sin(rad) * image.height);
+    const bBoxHeight = Math.abs(Math.sin(rad) * image.width) + Math.abs(Math.cos(rad) * image.height);
+    canvas.width = bBoxWidth;
+    canvas.height = bBoxHeight;
+    ctx.translate(bBoxWidth / 2, bBoxHeight / 2);
+    ctx.rotate(rad);
+    ctx.scale(flip.horizontal ? -1 : 1, flip.vertical ? -1 : 1);
+    ctx.translate(-image.width / 2, -image.height / 2);
+    ctx.drawImage(image, 0, 0);
+
+    const croppedCanvas = document.createElement("canvas");
+    const croppedCtx = croppedCanvas.getContext("2d");
+    if (!croppedCtx) return null;
+    croppedCanvas.width = pixelCrop.width;
+    croppedCanvas.height = pixelCrop.height;
+    croppedCtx.drawImage(canvas, pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height, 0, 0, pixelCrop.width, pixelCrop.height);
+
+    const targetSize = 500;
+    let finalWidth = pixelCrop.width;
+    let finalHeight = pixelCrop.height;
+    if (pixelCrop.width > targetSize) { finalWidth = targetSize; finalHeight = targetSize; }
+
+    const finalCanvas = document.createElement("canvas");
+    finalCanvas.width = finalWidth;
+    finalCanvas.height = finalHeight;
+    const finalCtx = finalCanvas.getContext("2d");
+    if (!finalCtx) return null;
+    finalCtx.imageSmoothingQuality = "high";
+    finalCtx.drawImage(croppedCanvas, 0, 0, pixelCrop.width, pixelCrop.height, 0, 0, finalWidth, finalHeight);
+
+    return new Promise((resolve) => {
+      finalCanvas.toBlob((blob) => {
+        if (!blob) { resolve(null); return; }
+        resolve(new File([blob], "faculty.webp", { type: "image/webp" }));
+      }, "image/webp", 0.85);
+    });
+  };
+
+  // ─── Handle image select ───
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>, target: "edit" | "create") => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
+      const reader = new FileReader();
+      reader.addEventListener("load", () => setCropSrc(reader.result?.toString() || ""));
+      reader.readAsDataURL(file);
+      setUploadTarget(target);
+      e.target.value = '';
+    }
+  };
+
+  // ─── Handle upload after crop ───
+  const handleUploadCrop = async (facultyId: string) => {
+    if (!croppedAreaPixels || !cropSrc) return;
+    setUploadingImage(true);
+    try {
+      const croppedFile = await getCroppedImg(cropSrc, { ...croppedAreaPixels, rotation });
+      if (!croppedFile) throw new Error("Could not construct cropped image");
+      const formData = new FormData();
+      formData.append("file", croppedFile);
+      const res = await fetch(`/api/admin/faculty/${facultyId}/profile-picture`, { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Failed to upload");
+      const data = await res.json();
+      toast.success("Profile picture updated!");
+      setCropSrc("");
+      setEditForm((prev: any) => ({ ...prev, profilePicture: data.url }));
+      // Refresh list
+      setPage(1);
+      fetchFaculty(1);
+    } catch {
+      toast.error("Failed to upload image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // ─── Handle remove ───
+  const handleImageRemove = async (facultyId: string) => {
+    setUploadingImage(true);
+    try {
+      const res = await fetch(`/api/admin/faculty/${facultyId}/profile-picture`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete");
+      toast.success("Profile picture removed");
+      setEditForm((prev: any) => ({ ...prev, profilePicture: "" }));
+      setPage(1);
+      fetchFaculty(1);
+    } catch {
+      toast.error("Failed to remove image");
+    } finally {
+      setUploadingImage(false);
+    }
+  };
 
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
@@ -241,15 +375,15 @@ export default function AdminFacultyPage() {
 
   const resetCreateForm = () => {
     setCreateForm({
-      name: "", initials: "", department: "", designation: "Lecturer",
+      name: "", initials: "", departments: [], designation: "Lecturer",
       email: "", phone: "", office: "", website: "",
-      github: "", linkedin: "", scholar: "", bio: "",
+      github: "", linkedin: "", scholar: "", bio: "", profilePicture: "",
     });
     initialsCheck.reset();
   };
 
   const handleCreate = async () => {
-    if (!createForm.name || !createForm.initials || !createForm.department) {
+    if (!createForm.name || !createForm.initials || !createForm.departments?.length) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -285,7 +419,7 @@ export default function AdminFacultyPage() {
     if (!selected) return;
 
     // Validate required fields and initials availability
-    if (!editForm.name || !editForm.initials || !editForm.department) {
+    if (!editForm.name || !editForm.initials || !(editForm.departments?.length > 0)) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -418,22 +552,40 @@ export default function AdminFacultyPage() {
             <Card key={f._id} className={!f.isApproved ? "opacity-60" : ""}>
               <CardContent className="py-3">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm">{f.name}</h3>
-                      <span className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
-                        {f.initials}
-                      </span>
-                      {!f.isApproved && (
-                        <span className="text-xs bg-red-500/10 text-red-600 px-2 py-0.5 rounded-full">
-                          Hidden
-                        </span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-bold overflow-hidden shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                      onClick={(e) => {
+                        if (f.profilePicture) {
+                          e.stopPropagation();
+                          setViewerSrc(f.profilePicture);
+                          setViewerOpen(true);
+                        }
+                      }}
+                    >
+                      {f.profilePicture ? (
+                        <img src={f.profilePicture} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        f.initials.charAt(0).toUpperCase()
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {f.department} &middot; {f.designation} &middot;{" "}
-                      {f.totalReviews} reviews &middot; {f.averageRating.toFixed(1)} avg
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{f.name}</h3>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded font-mono">
+                          {f.initials}
+                        </span>
+                        {!f.isApproved && (
+                          <span className="text-xs bg-red-500/10 text-red-600 px-2 py-0.5 rounded-full">
+                            Hidden
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {(f.departments || []).join(", ")} &middot; {f.designation} &middot;{" "}
+                        {f.totalReviews} reviews &middot; {f.averageRating.toFixed(1)} avg
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <Button
@@ -524,22 +676,29 @@ export default function AdminFacultyPage() {
                 label="Initials"
               />
             </div>
-            {/* Department */}
+            {/* Departments */}
             <div className="space-y-1.5">
-              <Label>Department *</Label>
-              <Select
-                value={editForm.department || ""}
-                onValueChange={(v) => setEditForm({ ...editForm, department: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UIU_DEPARTMENTS.map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Department(s) *</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-md border bg-background max-h-40 overflow-y-auto">
+                {(departments.length > 0 ? departments : UIU_DEPARTMENTS).map((d) => {
+                  const checked = (editForm.departments || []).includes(d);
+                  return (
+                    <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const current = editForm.departments || [];
+                          const next = checked ? current.filter((x: string) => x !== d) : [...current, d];
+                          setEditForm({ ...editForm, departments: next });
+                        }}
+                        className="accent-primary"
+                      />
+                      {d}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             {/* Designation */}
             <div className="space-y-1.5">
@@ -640,6 +799,14 @@ export default function AdminFacultyPage() {
                 onChange={(e) => setEditForm({ ...editForm, bio: e.target.value.slice(0, 500) })}
               />
             </div>
+            {/* Profile Picture */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Profile Picture</Label>
+              <FacultyImageUploader
+                value={editForm.profilePicture || ""}
+                onChange={(url) => setEditForm({ ...editForm, profilePicture: url })}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -717,22 +884,28 @@ export default function AdminFacultyPage() {
                 label="Initials"
               />
             </div>
-            {/* Department */}
+            {/* Departments */}
             <div className="space-y-1.5">
-              <Label>Department *</Label>
-              <Select
-                value={createForm.department}
-                onValueChange={(v) => setCreateForm({ ...createForm, department: v })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select department" />
-                </SelectTrigger>
-                <SelectContent>
-                  {UIU_DEPARTMENTS.map((d) => (
-                    <SelectItem key={d} value={d}>{d}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Department(s) *</Label>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-md border bg-background max-h-40 overflow-y-auto">
+                {(departments.length > 0 ? departments : UIU_DEPARTMENTS).map((d) => {
+                  const checked = createForm.departments.includes(d);
+                  return (
+                    <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => {
+                          const next = checked ? createForm.departments.filter(x => x !== d) : [...createForm.departments, d];
+                          setCreateForm({ ...createForm, departments: next });
+                        }}
+                        className="accent-primary"
+                      />
+                      {d}
+                    </label>
+                  );
+                })}
+              </div>
             </div>
             {/* Designation */}
             <div className="space-y-1.5">
@@ -833,6 +1006,14 @@ export default function AdminFacultyPage() {
                 onChange={(e) => setCreateForm({ ...createForm, bio: e.target.value.slice(0, 500) })}
               />
             </div>
+            {/* Profile Picture */}
+            <div className="space-y-1.5">
+              <Label className="text-xs">Profile Picture</Label>
+              <FacultyImageUploader
+                value={createForm.profilePicture}
+                onChange={(url) => setCreateForm({ ...createForm, profilePicture: url })}
+              />
+            </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
@@ -849,6 +1030,81 @@ export default function AdminFacultyPage() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Hidden file input for image upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => handleImageSelect(e, uploadTarget)}
+      />
+
+      {/* ── Crop Dialog ── */}
+      <Dialog open={!!cropSrc} onOpenChange={(open) => { if (!open) { setCropSrc(""); setRotation(0); setZoom(1); setFlip({ horizontal: false, vertical: false }); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Crop Profile Picture</DialogTitle>
+            <DialogDescription>Adjust the image, then click Save.</DialogDescription>
+          </DialogHeader>
+          <div className="relative w-full h-64 bg-muted rounded-lg overflow-hidden">
+            <Cropper
+              image={cropSrc}
+              crop={crop}
+              zoom={zoom}
+              rotation={rotation}
+              aspect={1}
+              cropShape="round"
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onRotationChange={setRotation}
+              onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
+              transform={[
+                `translate(${crop.x}px, ${crop.y}px)`,
+                `rotateZ(${rotation}deg)`,
+                `scale(${zoom})`,
+                `scaleX(${flip.horizontal ? -1 : 1})`,
+                `scaleY(${flip.vertical ? -1 : 1})`,
+              ].join(' ')}
+            />
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-10">Zoom</span>
+              <Slider value={[zoom]} min={1} max={3} step={0.1} onValueChange={([v]) => setZoom(v)} className="flex-1" />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-10">Rotate</span>
+              <Slider value={[rotation]} min={0} max={360} step={1} onValueChange={([v]) => setRotation(v)} className="flex-1" />
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" onClick={() => setFlip(f => ({ ...f, horizontal: !f.horizontal }))}>
+                <FlipHorizontal className="h-4 w-4 mr-1" /> Flip H
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setFlip(f => ({ ...f, vertical: !f.vertical }))}>
+                <FlipVertical className="h-4 w-4 mr-1" /> Flip V
+              </Button>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => { setCropSrc(""); setRotation(0); setZoom(1); setFlip({ horizontal: false, vertical: false }); }}>Cancel</Button>
+            <Button
+              onClick={() => { if (selected) handleUploadCrop(selected._id); }}
+              disabled={uploadingImage}
+            >
+              {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Full Image Viewer ── */}
+      <ImageViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        src={viewerSrc}
+        description="Pinch or scroll to zoom"
+      />
     </div>
   );
 }

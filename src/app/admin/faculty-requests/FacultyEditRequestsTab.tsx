@@ -5,6 +5,7 @@ import { Loader2, Check, X, Edit, Eye, ArrowRight, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useInView } from "react-intersection-observer";
+import { FacultyImageUploader } from "@/components/faculty-image-uploader";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -121,7 +122,7 @@ interface Faculty {
     _id: string;
     name: string;
     initials: string;
-    department: string;
+    departments: string[];
     designation: string;
     email: string;
     phone: string;
@@ -131,6 +132,7 @@ interface Faculty {
     linkedin: string;
     scholar: string;
     bio: string;
+    profilePicture?: string;
 }
 
 interface FacultyEditRequest {
@@ -138,7 +140,7 @@ interface FacultyEditRequest {
     facultyId: Faculty | null; // populated original faculty details
     name?: string;
     initials?: string;
-    department?: string;
+    departments?: string[];
     designation?: string;
     email?: string;
     phone?: string;
@@ -148,6 +150,7 @@ interface FacultyEditRequest {
     linkedin?: string;
     scholar?: string;
     bio?: string;
+    profilePicture?: string;
     status: string;
     adminNote: string;
     approvedEdits: Record<string, string> | null;
@@ -199,7 +202,7 @@ export default function FacultyEditsPage() {
     const [reviewDialogOpen, setReviewDialogOpen] = React.useState(false);
     const [actionLoading, setActionLoading] = React.useState(false);
     const [adminNote, setAdminNote] = React.useState("");
-    const [edits, setEdits] = React.useState<Record<string, string>>({});
+    const [edits, setEdits] = React.useState<Record<string, any>>({});
 
     // Details dialog
     const [detailsDialogOpen, setDetailsDialogOpen] = React.useState(false);
@@ -280,7 +283,7 @@ export default function FacultyEditsPage() {
         setEdits({
             name: req.name !== undefined ? req.name : original.name,
             initials: req.initials !== undefined ? req.initials : original.initials,
-            department: req.department !== undefined ? req.department : original.department,
+            departments: req.departments !== undefined ? req.departments : (original.departments || []),
             designation: req.designation !== undefined ? req.designation : original.designation,
             email: req.email !== undefined ? req.email : original.email || "",
             phone: req.phone !== undefined ? req.phone : original.phone || "",
@@ -290,6 +293,7 @@ export default function FacultyEditsPage() {
             linkedin: req.linkedin !== undefined ? req.linkedin : original.linkedin || "",
             scholar: req.scholar !== undefined ? req.scholar : original.scholar || "",
             bio: req.bio !== undefined ? req.bio : original.bio || "",
+            profilePicture: req.profilePicture !== undefined ? req.profilePicture : original.profilePicture || "",
         });
 
         initialsCheck.reset();
@@ -311,7 +315,7 @@ export default function FacultyEditsPage() {
         if (!selected) return;
 
         if (action === "approve") {
-            if (!edits.name || !edits.initials || !edits.department) {
+            if (!edits.name || !edits.initials || !(edits.departments?.length > 0)) {
                 toast.error("Please fill in all required fields");
                 return;
             }
@@ -493,7 +497,7 @@ export default function FacultyEditsPage() {
                                                 )}
                                             </div>
                                             <p className="text-sm text-muted-foreground">
-                                                {req.approvedEdits?.department || req.department || original.department} &middot; {req.approvedEdits?.designation || req.designation || original.designation}
+                                                {((req.approvedEdits?.departments as any) || req.departments || original.departments || []).join(", ")} &middot; {req.approvedEdits?.designation || req.designation || original.designation}
                                             </p>
                                             <p className="text-xs text-muted-foreground">
                                                 Requested by {req.requestedBy?.name || "Unknown"} &middot;{" "}
@@ -598,24 +602,31 @@ export default function FacultyEditsPage() {
                                 </div>
                             </div>
 
-                            {/* Department */}
+                            {/* Departments */}
                             <div className="space-y-1.5">
-                                <Label>Department *</Label>
+                                <Label>Department(s) *</Label>
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-xs text-muted-foreground">Original: {selected.facultyId?.department}</span>
-                                    <Select
-                                        value={edits.department || ""}
-                                        onValueChange={(v) => setEdits({ ...edits, department: v })}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select department" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {departments.map((d) => (
-                                                <SelectItem key={d} value={d}>{d}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <span className="text-xs text-muted-foreground">Original: {(selected.facultyId?.departments || []).join(", ")}</span>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-md border bg-background max-h-40 overflow-y-auto">
+                                        {departments.map((d) => {
+                                            const checked = (edits.departments || []).includes(d);
+                                            return (
+                                                <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={checked}
+                                                        onChange={() => {
+                                                            const current = edits.departments || [];
+                                                            const next = checked ? current.filter((x: string) => x !== d) : [...current, d];
+                                                            setEdits({ ...edits, departments: next });
+                                                        }}
+                                                        className="accent-primary"
+                                                    />
+                                                    {d}
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             </div>
 
@@ -698,6 +709,16 @@ export default function FacultyEditsPage() {
                                     className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
                                     value={edits.bio || ""}
                                     onChange={(e) => setEdits({ ...edits, bio: e.target.value.slice(0, 500) })}
+                                />
+                            </div>
+
+                            {/* Profile Picture */}
+                            <div className="space-y-1.5">
+                                <Label className="text-xs">Profile Picture</Label>
+                                <span className="block text-[10px] text-muted-foreground truncate">Orig: {selected.facultyId?.profilePicture || "—"}</span>
+                                <FacultyImageUploader
+                                    value={edits.profilePicture || ""}
+                                    onChange={(url) => setEdits({ ...edits, profilePicture: url })}
                                 />
                             </div>
 
@@ -798,10 +819,10 @@ export default function FacultyEditsPage() {
                                     finalApproved={detailsRequest.approvedEdits?.initials}
                                 />
                                 <ChangedField
-                                    label="Department"
-                                    original={detailsRequest.facultyId?.department}
-                                    proposed={detailsRequest.department}
-                                    finalApproved={detailsRequest.approvedEdits?.department}
+                                    label="Departments"
+                                    original={(detailsRequest.facultyId?.departments || []).join(", ")}
+                                    proposed={detailsRequest.departments ? detailsRequest.departments.join(", ") : undefined}
+                                    finalApproved={detailsRequest.approvedEdits?.departments ? (Array.isArray(detailsRequest.approvedEdits.departments) ? detailsRequest.approvedEdits.departments.join(", ") : detailsRequest.approvedEdits.departments) : undefined}
                                 />
                                 <ChangedField
                                     label="Designation"
@@ -869,6 +890,37 @@ export default function FacultyEditsPage() {
                                 proposed={detailsRequest.bio}
                                 finalApproved={detailsRequest.approvedEdits?.bio}
                             />
+
+                            {/* Profile Picture */}
+                            {(detailsRequest.facultyId?.profilePicture || detailsRequest.profilePicture || detailsRequest.approvedEdits?.profilePicture) && (
+                                <>
+                                    <Separator />
+                                    <div className="space-y-1.5">
+                                        <p className="text-xs font-medium text-muted-foreground">Profile Picture</p>
+                                        <div className="flex items-center gap-4">
+                                            {detailsRequest.facultyId?.profilePicture && (
+                                                <div className="text-center">
+                                                    <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-border mx-auto">
+                                                        <img src={detailsRequest.facultyId.profilePicture} alt="Original" className="h-full w-full object-cover" />
+                                                    </div>
+                                                    <span className="text-[10px] text-muted-foreground">Original</span>
+                                                </div>
+                                            )}
+                                            {(detailsRequest.approvedEdits?.profilePicture || detailsRequest.profilePicture) && (
+                                                <>
+                                                    <ArrowRight className="h-4 w-4 text-primary shrink-0" />
+                                                    <div className="text-center">
+                                                        <div className="h-16 w-16 rounded-full overflow-hidden border-2 border-primary mx-auto">
+                                                            <img src={detailsRequest.approvedEdits?.profilePicture || detailsRequest.profilePicture} alt="Proposed" className="h-full w-full object-cover" />
+                                                        </div>
+                                                        <span className="text-[10px] text-primary">{detailsRequest.approvedEdits?.profilePicture ? "Approved" : "Proposed"}</span>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
 
                             {/* Admin note */}
                             {detailsRequest.adminNote && (

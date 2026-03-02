@@ -46,6 +46,8 @@ export const authOptions: NextAuthOptions = {
           role: user.role,
           permissions: (user as any).permissions || [],
           studentId: user.studentId, // Add studentId
+          profilePicture: user.profilePicture, // Add profilePicture
+          showProfilePicture: user.preferences?.showProfilePicture, // Add showProfilePicture
         };
       },
     }),
@@ -63,17 +65,21 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role;
         token.permissions = (user as any).permissions || [];
         token.studentId = (user as any).studentId;
+        token.profilePicture = (user as any).profilePicture;
+        token.showProfilePicture = (user as any).showProfilePicture;
       }
 
       // Always refresh studentId from DB (it may have been updated via profile)
       if (token.id) {
         try {
           await dbConnect();
-          const dbUser = await User.findById(token.id).select("studentId role permissions").lean();
+          const dbUser = await User.findById(token.id).select("studentId role permissions profilePicture preferences").lean();
           if (dbUser) {
             token.studentId = (dbUser as any).studentId || token.studentId;
             token.role = (dbUser as any).role || token.role;
             token.permissions = (dbUser as any).permissions || token.permissions || [];
+            token.profilePicture = (dbUser as any).profilePicture || token.profilePicture;
+            token.showProfilePicture = (dbUser as any).preferences?.showProfilePicture ?? token.showProfilePicture;
           }
         } catch {
           // Silently fail — use cached token values
@@ -88,6 +94,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role;
         (session.user as any).permissions = token.permissions || [];
         (session.user as any).studentId = token.studentId;
+        (session.user as any).profilePicture = token.profilePicture;
+        (session.user as any).showProfilePicture = token.showProfilePicture;
       }
       return session;
     },

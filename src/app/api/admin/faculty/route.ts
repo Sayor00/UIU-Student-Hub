@@ -3,6 +3,13 @@ import { requireAdmin } from "@/lib/admin";
 import dbConnect from "@/lib/mongodb";
 import Faculty from "@/models/Faculty";
 
+/** Normalize department input — accepts string, array, or comma-separated string → string[] */
+function normalizeDepartments(input: any): string[] {
+  if (Array.isArray(input)) return input.map((d: string) => d.trim()).filter(Boolean);
+  if (typeof input === "string" && input.trim()) return input.split(",").map(d => d.trim()).filter(Boolean);
+  return [];
+}
+
 // GET all faculty for admin (including unapproved)
 export async function GET(req: NextRequest) {
   const session = await requireAdmin();
@@ -24,11 +31,11 @@ export async function GET(req: NextRequest) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { initials: { $regex: search, $options: "i" } },
-        { department: { $regex: search, $options: "i" } },
+        { departments: { $regex: search, $options: "i" } },
       ];
     }
     if (department && department !== "all") {
-      query.department = department;
+      query.departments = department;
     }
 
     const total = await Faculty.countDocuments(query);
@@ -62,13 +69,15 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
-      name, initials, department, designation,
-      email, phone, office, website, github, linkedin, scholar, bio,
+      name, initials, department, departments, designation,
+      email, phone, office, website, github, linkedin, scholar, bio, profilePicture,
     } = body;
 
-    if (!name || !initials || !department) {
+    const depts = normalizeDepartments(departments || department);
+
+    if (!name || !initials || depts.length === 0) {
       return NextResponse.json(
-        { error: "Name, initials, and department are required" },
+        { error: "Name, initials, and at least one department are required" },
         { status: 400 }
       );
     }
@@ -85,7 +94,7 @@ export async function POST(req: NextRequest) {
     const faculty = await Faculty.create({
       name: name.trim(),
       initials: initials.trim(),
-      department: department.trim(),
+      departments: depts,
       designation: designation?.trim() || "Lecturer",
       email: email?.trim() || "",
       phone: phone?.trim() || "",
@@ -95,6 +104,7 @@ export async function POST(req: NextRequest) {
       linkedin: linkedin?.trim() || "",
       scholar: scholar?.trim() || "",
       bio: bio?.trim() || "",
+      profilePicture: profilePicture?.trim() || "",
       addedBy: (session.user as any).id,
       isApproved: true,
     });

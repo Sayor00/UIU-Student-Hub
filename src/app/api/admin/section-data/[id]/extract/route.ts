@@ -115,9 +115,22 @@ export async function POST(
         }
         const uniqueCourses = Array.from(uniqueCoursesMap.values());
 
-        const uniqueFacultiesMap = new Map();
+        const uniqueFacultiesMap = new Map<string, { name: string; initials: string; email: string; departments: string[] }>();
         for (const f of extractedFaculties) {
-            uniqueFacultiesMap.set(f.initials, f);
+            const existing = uniqueFacultiesMap.get(f.initials);
+            if (existing) {
+                // Merge departments
+                if (f.department && !existing.departments.includes(f.department)) {
+                    existing.departments.push(f.department);
+                }
+            } else {
+                uniqueFacultiesMap.set(f.initials, {
+                    name: f.name,
+                    initials: f.initials,
+                    email: f.email,
+                    departments: f.department ? [f.department] : [],
+                });
+            }
         }
         const uniqueFaculties = Array.from(uniqueFacultiesMap.values());
 
@@ -182,7 +195,7 @@ export async function POST(
             await Course.bulkWrite(courseOps);
         }
 
-        // 3. Upsert Faculties
+        // 3. Upsert Faculties — merge departments into existing records
         const facultyOps = uniqueFaculties.map(f => ({
             updateOne: {
                 filter: { initials: f.initials },
@@ -190,10 +203,12 @@ export async function POST(
                     $set: {
                         name: f.name,
                     },
+                    $addToSet: {
+                        departments: { $each: f.departments },
+                    },
                     $setOnInsert: {
                         initials: f.initials,
                         email: f.email,
-                        department: f.department,
                         addedBy: adminUserId,
                         isApproved: true,
                     }

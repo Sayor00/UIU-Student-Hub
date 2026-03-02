@@ -6,6 +6,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/toaster";
 import Navbar from "@/components/navbar";
 import { AcademicProvider } from "@/context/academic-context";
+import { StudentIdGuard } from "@/components/student-id-guard";
 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -43,7 +44,9 @@ export default async function RootLayout({
                   <div className="absolute top-[60%] right-[10%] w-[250px] sm:w-[450px] h-[250px] sm:h-[450px] bg-orange-400/25 rounded-full blur-[80px] sm:blur-[100px] dark:bg-orange-400/18" />
                 </div>
                 <Navbar />
-                <main className="flex-1">{children}</main>
+                <StudentIdGuard>
+                  <main className="flex-1">{children}</main>
+                </StudentIdGuard>
                 <footer className="border-t py-4 sm:py-6 text-center text-xs sm:text-sm text-muted-foreground">
                   <div className="container mx-auto px-4 flex flex-col items-center gap-1">
                     <p>

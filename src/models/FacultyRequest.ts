@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IFacultyRequest extends Document {
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -13,6 +13,7 @@ export interface IFacultyRequest extends Document {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture: string;
   requestedBy: mongoose.Types.ObjectId;
   status: "pending" | "approved" | "declined";
   adminNote: string;
@@ -35,10 +36,13 @@ const FacultyRequestSchema = new Schema<IFacultyRequest>(
       required: [true, "Faculty initials are required"],
       trim: true,
     },
-    department: {
-      type: String,
-      required: [true, "Department is required"],
-      trim: true,
+    departments: {
+      type: [{ type: String, trim: true }],
+      required: [true, "At least one department is required"],
+      validate: {
+        validator: (v: string[]) => Array.isArray(v) && v.length > 0,
+        message: "At least one department is required",
+      },
     },
     designation: {
       type: String,
@@ -53,6 +57,7 @@ const FacultyRequestSchema = new Schema<IFacultyRequest>(
     linkedin: { type: String, trim: true, default: "" },
     scholar: { type: String, trim: true, default: "" },
     bio: { type: String, trim: true, default: "" },
+    profilePicture: { type: String, trim: true, default: "" },
     requestedBy: {
       type: Schema.Types.ObjectId,
       ref: "User",

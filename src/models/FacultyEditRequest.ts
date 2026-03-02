@@ -4,7 +4,7 @@ export interface IFacultyEditRequest extends Document {
     facultyId: mongoose.Types.ObjectId;
     name?: string;
     initials?: string;
-    department?: string;
+    departments?: string[];
     designation?: string;
     email?: string;
     phone?: string;
@@ -14,6 +14,7 @@ export interface IFacultyEditRequest extends Document {
     linkedin?: string;
     scholar?: string;
     bio?: string;
+    profilePicture?: string;
     requestedBy: mongoose.Types.ObjectId;
     status: "pending" | "approved" | "declined";
     adminNote: string;
@@ -33,7 +34,7 @@ const FacultyEditRequestSchema = new Schema<IFacultyEditRequest>(
         },
         name: { type: String, trim: true },
         initials: { type: String, trim: true },
-        department: { type: String, trim: true },
+        departments: { type: [{ type: String, trim: true }] },
         designation: { type: String, trim: true },
         email: { type: String, trim: true },
         phone: { type: String, trim: true },
@@ -43,6 +44,7 @@ const FacultyEditRequestSchema = new Schema<IFacultyEditRequest>(
         linkedin: { type: String, trim: true },
         scholar: { type: String, trim: true },
         bio: { type: String, trim: true },
+        profilePicture: { type: String, trim: true },
         requestedBy: {
             type: Schema.Types.ObjectId,
             ref: "User",

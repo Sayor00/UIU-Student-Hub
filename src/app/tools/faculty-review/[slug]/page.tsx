@@ -37,6 +37,8 @@ import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useInView } from "react-intersection-observer";
+import { ImageViewer } from "@/components/image-viewer";
+import { FacultyImageUploader } from "@/components/faculty-image-uploader";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,7 +96,7 @@ interface Faculty {
   _id: string;
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -104,6 +106,7 @@ interface Faculty {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture?: string;
   averageRating: number;
   totalReviews: number;
   ratingBreakdown: {
@@ -353,6 +356,10 @@ export default function FacultyDetailPage() {
   const [editingReview, setEditingReview] = React.useState<Review | null>(null);
   const [reviewDetailOpen, setReviewDetailOpen] = React.useState<Review | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+
+  // === Image Viewer State ===
+  const [viewerOpen, setViewerOpen] = React.useState(false);
+
   const [deleteReviewId, setDeleteReviewId] = React.useState<string | null>(null);
 
   // Review form
@@ -372,7 +379,7 @@ export default function FacultyDetailPage() {
   const [editFacultyOpen, setEditFacultyOpen] = React.useState(false);
   const [editFacultyLoading, setEditFacultyLoading] = React.useState(false);
   const [editFacultyForm, setEditFacultyForm] = React.useState({
-    name: "", initials: "", department: "", designation: "", email: "", phone: "", office: "", website: "", github: "", linkedin: "", scholar: "", bio: ""
+    name: "", initials: "", departments: [] as string[], designation: "", email: "", phone: "", office: "", website: "", github: "", linkedin: "", scholar: "", bio: "", profilePicture: ""
   });
   const editInitialsCheck = useUniquenessCheck("/api/faculty/check-initials", "initials", 1);
 
@@ -393,7 +400,7 @@ export default function FacultyDetailPage() {
     try {
       const [triRes, deptRes] = await Promise.all([
         fetch("/api/admin/trimesters").catch(() => null),
-        fetch("/api/admin/departments").catch(() => null),
+        fetch("/api/departments").catch(() => null),
       ]);
       if (triRes?.ok) {
         const tData = await triRes.json();
@@ -669,8 +676,8 @@ export default function FacultyDetailPage() {
 
   /* ─── Submit Edit Suggestion ─── */
   const handleSuggestEdit = async () => {
-    if (!editFacultyForm.name || !editFacultyForm.initials || !editFacultyForm.department) {
-      toast.error("Name, Initials, and Department are required");
+    if (!editFacultyForm.name || !editFacultyForm.initials || !(editFacultyForm.departments?.length > 0)) {
+      toast.error("Name, Initials, and at least one Department are required");
       return;
     }
 
@@ -768,19 +775,27 @@ export default function FacultyDetailPage() {
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
               <div className="flex items-start gap-4">
-                <div className={`flex h-16 w-16 items-center justify-center rounded-2xl border-2 text-2xl font-bold ${faculty.totalReviews > 0 ? getRatingBg(faculty.averageRating) : "bg-muted/50 border-border"
-                  }`}>
-                  {faculty.totalReviews > 0 ? (
-                    <span className={getRatingColor(faculty.averageRating)}>{faculty.averageRating.toFixed(1)}</span>
+                <div
+                  className={`flex h-16 w-16 items-center justify-center rounded-full overflow-hidden border-2 border-border shrink-0 ${faculty.profilePicture ? 'cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all' : ''}`}
+                  onClick={() => {
+                    if (faculty.profilePicture) setViewerOpen(true);
+                  }}
+                >
+                  {faculty.profilePicture ? (
+                    <img src={faculty.profilePicture} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="text-muted-foreground text-sm">N/A</span>
+                    <span className="text-primary text-2xl font-bold bg-primary/10 h-full w-full flex items-center justify-center">
+                      {faculty.initials.charAt(0).toUpperCase()}
+                    </span>
                   )}
                 </div>
                 <div>
                   <CardTitle className="text-xl sm:text-2xl">{faculty.name}</CardTitle>
                   <div className="flex flex-wrap items-center gap-2 mt-1.5">
                     <Badge variant="secondary">{faculty.initials}</Badge>
-                    <Badge variant="outline">{faculty.department}</Badge>
+                    {(faculty.departments || []).map((d) => (
+                      <Badge key={d} variant="outline">{d}</Badge>
+                    ))}
                     <Badge variant="outline" className="text-muted-foreground">{faculty.designation}</Badge>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
@@ -804,7 +819,7 @@ export default function FacultyDetailPage() {
                       setEditFacultyForm({
                         name: faculty.name,
                         initials: faculty.initials,
-                        department: faculty.department,
+                        departments: faculty.departments || [],
                         designation: faculty.designation,
                         email: faculty.email || "",
                         phone: faculty.phone || "",
@@ -814,6 +829,7 @@ export default function FacultyDetailPage() {
                         linkedin: faculty.linkedin || "",
                         scholar: faculty.scholar || "",
                         bio: faculty.bio || "",
+                        profilePicture: faculty.profilePicture || "",
                       });
                       editInitialsCheck.reset();
                     }
@@ -868,22 +884,29 @@ export default function FacultyDetailPage() {
                           />
                         )}
                       </div>
-                      {/* Department */}
+                      {/* Departments */}
                       <div className="space-y-1.5">
-                        <Label>Department *</Label>
-                        <Select
-                          value={editFacultyForm.department}
-                          onValueChange={(v) => setEditFacultyForm({ ...editFacultyForm, department: v })}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select department" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {departments.map((d) => (
-                              <SelectItem key={d} value={d}>{d}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Label>Department(s) *</Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-md border bg-background max-h-40 overflow-y-auto">
+                          {(departments.length > 0 ? departments : ["CSE", "EEE", "CE", "BBA", "Economics", "English", "Mathematics", "Physics", "Pharmacy", "Law", "BSDS", "General Education"]).map((d) => {
+                            const checked = (editFacultyForm.departments || []).includes(d);
+                            return (
+                              <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => {
+                                    const current = editFacultyForm.departments || [];
+                                    const next = checked ? current.filter(x => x !== d) : [...current, d];
+                                    setEditFacultyForm({ ...editFacultyForm, departments: next });
+                                  }}
+                                  className="accent-primary"
+                                />
+                                {d}
+                              </label>
+                            );
+                          })}
+                        </div>
                       </div>
                       {/* Designation */}
                       <div className="space-y-1.5">
@@ -969,6 +992,14 @@ export default function FacultyDetailPage() {
                           onChange={(e) => setEditFacultyForm({ ...editFacultyForm, bio: e.target.value.slice(0, 500) })}
                         />
                       </div>
+                    </div>
+                    {/* Profile Picture */}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Profile Picture</Label>
+                      <FacultyImageUploader
+                        value={editFacultyForm.profilePicture}
+                        onChange={(url) => setEditFacultyForm({ ...editFacultyForm, profilePicture: url })}
+                      />
                     </div>
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setEditFacultyOpen(false)}>
@@ -1440,6 +1471,15 @@ export default function FacultyDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Image Viewer */}
+      <ImageViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        src={faculty?.profilePicture || ""}
+        title="Profile Picture"
+        description="Pinch or scroll to zoom"
+      />
     </div>
   );
 

@@ -7,6 +7,13 @@ import FacultyRequest from "@/models/FacultyRequest";
 import Faculty from "@/models/Faculty";
 import { sendAdminNotificationEmail } from "@/lib/email";
 
+/** Normalize department input → string[] */
+function normalizeDepartments(input: any): string[] {
+  if (Array.isArray(input)) return input.map((d: string) => d.trim()).filter(Boolean);
+  if (typeof input === "string" && input.trim()) return input.split(",").map(d => d.trim()).filter(Boolean);
+  return [];
+}
+
 // GET faculty requests
 export async function GET(req: NextRequest) {
   const session = await requireAdmin();
@@ -67,6 +74,7 @@ export async function POST(req: NextRequest) {
       name,
       initials,
       department,
+      departments,
       designation,
       email,
       phone,
@@ -78,9 +86,11 @@ export async function POST(req: NextRequest) {
       bio,
     } = body;
 
-    if (!name || !initials || !department) {
+    const depts = normalizeDepartments(departments || department);
+
+    if (!name || !initials || depts.length === 0) {
       return NextResponse.json(
-        { error: "Name, initials, and department are required" },
+        { error: "Name, initials, and at least one department are required" },
         { status: 400 }
       );
     }
@@ -114,7 +124,7 @@ export async function POST(req: NextRequest) {
     const request = await FacultyRequest.create({
       name: name.trim(),
       initials: initials.trim(),
-      department: department.trim(),
+      departments: depts,
       designation: designation?.trim() || "Lecturer",
       email: email?.trim() || "",
       phone: phone?.trim() || "",
@@ -134,7 +144,7 @@ export async function POST(req: NextRequest) {
         `
         <h3 style="color: #1a1a1a; margin: 0 0 12px 0;">New Faculty Addition Request</h3>
         <p><strong>Faculty:</strong> ${name} (${initials})</p>
-        <p><strong>Department:</strong> ${department}</p>
+        <p><strong>Department(s):</strong> ${depts.join(", ")}</p>
         <p><strong>Requested by:</strong> ${session.user.name} (${session.user.email})</p>
         <p style="margin-top: 16px;">
           <a href="${new URL(req.url).origin}/admin/faculty-requests" 

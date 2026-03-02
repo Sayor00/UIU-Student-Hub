@@ -231,8 +231,12 @@ export default function Navbar() {
                     variant="ghost"
                     className="gap-2 rounded-full border px-3"
                   >
-                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold">
-                      {session.user?.name?.charAt(0).toUpperCase() || "U"}
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold overflow-hidden shrink-0">
+                      {(session.user as any)?.profilePicture ? (
+                        <img src={(session.user as any).profilePicture} alt="Profile" className="h-full w-full object-cover" />
+                      ) : (
+                        session.user?.name?.charAt(0).toUpperCase() || "U"
+                      )}
                     </div>
                     <span className="hidden sm:inline text-sm">
                       {session.user?.name}

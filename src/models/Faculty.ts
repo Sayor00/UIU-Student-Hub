@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 export interface IFaculty extends Document {
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -13,6 +13,7 @@ export interface IFaculty extends Document {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture: string;
   addedBy: mongoose.Types.ObjectId;
   isApproved: boolean;
   averageRating: number;
@@ -40,10 +41,13 @@ const FacultySchema = new Schema<IFaculty>(
       trim: true,
       unique: true,
     },
-    department: {
-      type: String,
-      required: [true, "Department is required"],
-      trim: true,
+    departments: {
+      type: [{ type: String, trim: true }],
+      required: [true, "At least one department is required"],
+      validate: {
+        validator: (v: string[]) => Array.isArray(v) && v.length > 0,
+        message: "At least one department is required",
+      },
     },
     designation: {
       type: String,
@@ -58,6 +62,7 @@ const FacultySchema = new Schema<IFaculty>(
     linkedin: { type: String, trim: true, default: "" },
     scholar: { type: String, trim: true, default: "" },
     bio: { type: String, trim: true, default: "" },
+    profilePicture: { type: String, trim: true, default: "" },
     addedBy: {
       type: Schema.Types.ObjectId,
       ref: "User",
@@ -90,7 +95,7 @@ const FacultySchema = new Schema<IFaculty>(
 );
 
 // Text index for search
-FacultySchema.index({ name: "text", initials: "text", department: "text" });
+FacultySchema.index({ name: "text", initials: "text", departments: "text" });
 
 const Faculty: Model<IFaculty> =
   mongoose.models.Faculty || mongoose.model<IFaculty>("Faculty", FacultySchema);

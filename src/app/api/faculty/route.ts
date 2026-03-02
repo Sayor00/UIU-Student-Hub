@@ -6,6 +6,13 @@ import Faculty from "@/models/Faculty";
 import FacultyRequest from "@/models/FacultyRequest";
 import { sendAdminNotificationEmail } from "@/lib/email";
 
+/** Normalize department input — accepts string, array, or comma-separated string → string[] */
+function normalizeDepartments(input: any): string[] {
+  if (Array.isArray(input)) return input.map((d: string) => d.trim()).filter(Boolean);
+  if (typeof input === "string" && input.trim()) return input.split(",").map(d => d.trim()).filter(Boolean);
+  return [];
+}
+
 // GET all faculty with search, filter, sort
 export async function GET(request: NextRequest) {
   try {
@@ -25,12 +32,12 @@ export async function GET(request: NextRequest) {
       query.$or = [
         { name: { $regex: search, $options: "i" } },
         { initials: { $regex: search, $options: "i" } },
-        { department: { $regex: search, $options: "i" } },
+        { departments: { $regex: search, $options: "i" } },
       ];
     }
 
     if (department) {
-      query.department = department;
+      query.departments = department;
     }
 
     const sortOptions: any = {};
@@ -52,8 +59,14 @@ export async function GET(request: NextRequest) {
       .limit(limit)
       .lean();
 
-    // Get distinct departments for filter
-    const departments = await Faculty.distinct("department", { isApproved: true });
+    // Get distinct departments for filter — flatten arrays
+    const allDepts = await Faculty.aggregate([
+      { $match: { isApproved: true } },
+      { $unwind: "$departments" },
+      { $group: { _id: "$departments" } },
+      { $sort: { _id: 1 } },
+    ]);
+    const departments = allDepts.map((d: any) => d._id);
 
     return NextResponse.json({
       faculty,
@@ -90,11 +103,13 @@ export async function POST(request: NextRequest) {
     await dbConnect();
 
     const body = await request.json();
-    const { name, initials, department, designation, email, phone, office, website, github, linkedin, scholar, bio } = body;
+    const { name, initials, department, departments, designation, email, phone, office, website, github, linkedin, scholar, bio, profilePicture } = body;
 
-    if (!name || !initials || !department) {
+    const depts = normalizeDepartments(departments || department);
+
+    if (!name || !initials || depts.length === 0) {
       return NextResponse.json(
-        { error: "Name, initials, and department are required" },
+        { error: "Name, initials, and at least one department are required" },
         { status: 400 }
       );
     }
@@ -128,7 +143,7 @@ export async function POST(request: NextRequest) {
     const facultyRequest = await FacultyRequest.create({
       name: name.trim(),
       initials: initials.trim(),
-      department: department.trim(),
+      departments: depts,
       designation: designation?.trim() || "Lecturer",
       email: email?.trim() || "",
       phone: phone?.trim() || "",
@@ -138,6 +153,7 @@ export async function POST(request: NextRequest) {
       linkedin: linkedin?.trim() || "",
       scholar: scholar?.trim() || "",
       bio: bio?.trim() || "",
+      profilePicture: profilePicture?.trim() || "",
       requestedBy: (session.user as any).id,
     });
 
@@ -148,7 +164,7 @@ export async function POST(request: NextRequest) {
         `
         <h3 style="color: #1a1a1a; margin: 0 0 12px 0;">New Faculty Addition Request</h3>
         <p><strong>Faculty:</strong> ${name} (${initials})</p>
-        <p><strong>Department:</strong> ${department}</p>
+        <p><strong>Department(s):</strong> ${depts.join(", ")}</p>
         <p><strong>Requested by:</strong> ${session.user.name} (${session.user.email})</p>
         <p style="margin-top: 16px;">
           <a href="${process.env.NEXTAUTH_URL || new URL(request.url).origin}/admin/faculty-requests?tab=add" 

@@ -14,6 +14,7 @@ export interface IUserPreferences {
   careerGoal?: string;
   targetCGPA?: number;
   timeFormat?: "12h" | "24h";
+  showProfilePicture?: boolean;
   reminderDefaults?: {
     offsets: string[];
     digestMode: boolean;
@@ -26,6 +27,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   studentId?: string;
+  profilePicture?: string;
   role: "user" | "admin";
   permissions: string[];
   emailVerified: boolean;
@@ -58,6 +60,9 @@ const UserSchema = new Schema<IUser>(
     studentId: {
       type: String,
       trim: true,
+    },
+    profilePicture: {
+      type: String,
     },
     role: {
       type: String,
@@ -95,6 +100,7 @@ const UserSchema = new Schema<IUser>(
       careerGoal: { type: String },
       targetCGPA: { type: Number },
       timeFormat: { type: String, enum: ["12h", "24h"], default: "12h" },
+      showProfilePicture: { type: Boolean, default: true },
       reminderDefaults: {
         offsets: { type: [String], default: ["1d", "morning"] },
         digestMode: { type: Boolean, default: true },

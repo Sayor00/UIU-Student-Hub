@@ -23,9 +23,9 @@ export async function POST(req: NextRequest) {
 
     const { name, email, password, studentId } = await req.json();
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password || !studentId) {
       return NextResponse.json(
-        { error: "Name, email, and password are required" },
+        { error: "Name, email, student ID, and password are required" },
         { status: 400 }
       );
     }
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate student ID (numeric only)
-    if (studentId && !validateStudentId(studentId)) {
+    if (!validateStudentId(studentId)) {
       return NextResponse.json(
         { error: "Student ID must contain only numbers" },
         { status: 400 }
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
-      studentId: studentId || undefined,
+      studentId: studentId,
       emailVerified: false,
       verificationCode,
       verificationExpires: new Date(Date.now() + 10 * 60 * 1000), // 10 min

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { Loader2, Search, Shield, ShieldOff, Trash2, Bot } from "lucide-react";
 import { toast } from "sonner";
+import { ImageViewer } from "@/components/image-viewer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -16,6 +17,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useInView } from "react-intersection-observer";
 
 interface UserItem {
@@ -26,6 +33,7 @@ interface UserItem {
   permissions?: string[];
   emailVerified: boolean;
   studentId?: string;
+  profilePicture?: string;
   createdAt: string;
 }
 
@@ -36,6 +44,8 @@ export default function AdminUsersPage() {
   const [page, setPage] = React.useState(1);
   const [hasMore, setHasMore] = React.useState(true);
   const { ref, inView } = useInView();
+  const [viewerOpen, setViewerOpen] = React.useState(false);
+  const [viewerSrc, setViewerSrc] = React.useState("");
   const [confirmDialog, setConfirmDialog] = React.useState<{
     open: boolean;
     title: string;
@@ -205,33 +215,51 @@ export default function AdminUsersPage() {
             <Card key={user._id}>
               <CardContent className="py-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm">{user.name}</h3>
-                      {user.role === "admin" && (
-                        <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
-                          Admin
-                        </span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-semibold overflow-hidden shrink-0 cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                      onClick={(e) => {
+                        if (user.profilePicture) {
+                          e.stopPropagation();
+                          setViewerSrc(user.profilePicture);
+                          setViewerOpen(true);
+                        }
+                      }}
+                    >
+                      {user.profilePicture ? (
+                        <img src={user.profilePicture} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        user.name.charAt(0).toUpperCase()
                       )}
-                      {(user.permissions || []).includes("bot_access") && (
-                        <span className="text-xs bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">
-                          🤖 Bot
-                        </span>
-                      )}
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${user.emailVerified
-                          ? "bg-green-500/10 text-green-600"
-                          : "bg-yellow-500/10 text-yellow-600"
-                          }`}
-                      >
-                        {user.emailVerified ? "Verified" : "Unverified"}
-                      </span>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user.email}
-                      {user.studentId && ` · ID: ${user.studentId}`}
-                      {` · Joined ${new Date(user.createdAt).toLocaleDateString()}`}
-                    </p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{user.name}</h3>
+                        {user.role === "admin" && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            Admin
+                          </span>
+                        )}
+                        {(user.permissions || []).includes("bot_access") && (
+                          <span className="text-xs bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full">
+                            🤖 Bot
+                          </span>
+                        )}
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full ${user.emailVerified
+                            ? "bg-green-500/10 text-green-600"
+                            : "bg-yellow-500/10 text-yellow-600"
+                            }`}
+                        >
+                          {user.emailVerified ? "Verified" : "Unverified"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user.email}
+                        {user.studentId && ` · ID: ${user.studentId}`}
+                        {` · Joined ${new Date(user.createdAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0 flex-wrap">
                     <Button
@@ -301,6 +329,13 @@ export default function AdminUsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Full Image Viewer */}
+      <ImageViewer
+        open={viewerOpen}
+        onOpenChange={setViewerOpen}
+        src={viewerSrc}
+        description="Pinch or scroll to zoom"
+      />
     </div>
   );
 }

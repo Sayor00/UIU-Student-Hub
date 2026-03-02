@@ -23,6 +23,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useInView } from "react-intersection-observer";
+import { FacultyImageUploader } from "@/components/faculty-image-uploader";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +56,7 @@ interface Faculty {
   _id: string;
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -65,6 +66,7 @@ interface Faculty {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture?: string;
   averageRating: number;
   totalReviews: number;
   ratingBreakdown: {
@@ -249,7 +251,7 @@ export default function FacultyReviewPage() {
   const [newFaculty, setNewFaculty] = React.useState({
     name: "",
     initials: "",
-    department: "",
+    departments: [] as string[],
     designation: "Lecturer",
     email: "",
     phone: "",
@@ -259,6 +261,7 @@ export default function FacultyReviewPage() {
     linkedin: "",
     scholar: "",
     bio: "",
+    profilePicture: "",
   });
   const initialsCheck = useUniquenessCheck(
     "/api/faculty/check-initials",
@@ -295,7 +298,6 @@ export default function FacultyReviewPage() {
           });
         }
         setHasMore(pageNum < data.pagination.totalPages);
-        if (pageNum === 1) setDepartments(data.departments || []);
       }
     } catch {
       /* empty */
@@ -303,6 +305,16 @@ export default function FacultyReviewPage() {
       setLoading(false);
     }
   }, [searchQuery, filterDept, sortBy, sortOrder]);
+
+  // Fetch admin-configured departments on mount
+  React.useEffect(() => {
+    fetch("/api/departments")
+      .then(res => res.json())
+      .then(data => {
+        if (data.departments?.length) setDepartments(data.departments);
+      })
+      .catch(() => { });
+  }, []);
 
   // Reset page to 1 when filters change
   React.useEffect(() => {
@@ -321,7 +333,7 @@ export default function FacultyReviewPage() {
 
   /* ─── Add Faculty ─── */
   const handleAddFaculty = async () => {
-    if (!newFaculty.name || !newFaculty.initials || !newFaculty.department) {
+    if (!newFaculty.name || !newFaculty.initials || !newFaculty.departments?.length) {
       toast.error("Please fill in all required fields");
       return;
     }
@@ -347,7 +359,7 @@ export default function FacultyReviewPage() {
         setNewFaculty({
           name: "",
           initials: "",
-          department: "",
+          departments: [],
           designation: "Lecturer",
           email: "",
           phone: "",
@@ -357,6 +369,7 @@ export default function FacultyReviewPage() {
           linkedin: "",
           scholar: "",
           bio: "",
+          profilePicture: "",
         });
         initialsCheck.reset();
         setPage(1);
@@ -447,26 +460,28 @@ export default function FacultyReviewPage() {
                     label="Initials"
                   />
                 </div>
-                {/* Department */}
+                {/* Departments */}
                 <div className="space-y-1.5">
-                  <Label>Department *</Label>
-                  <Select
-                    value={newFaculty.department}
-                    onValueChange={(v) =>
-                      setNewFaculty({ ...newFaculty, department: v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {UIU_DEPARTMENTS.map((d) => (
-                        <SelectItem key={d} value={d}>
+                  <Label>Department(s) *</Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-md border bg-background max-h-40 overflow-y-auto">
+                    {(departments.length > 0 ? departments : UIU_DEPARTMENTS).map((d) => {
+                      const checked = newFaculty.departments.includes(d);
+                      return (
+                        <label key={d} className="flex items-center gap-1.5 text-xs cursor-pointer hover:bg-muted rounded px-1 py-0.5">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              const next = checked ? newFaculty.departments.filter(x => x !== d) : [...newFaculty.departments, d];
+                              setNewFaculty({ ...newFaculty, departments: next });
+                            }}
+                            className="accent-primary"
+                          />
                           {d}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
                 {/* Designation */}
                 <div className="space-y-1.5">
@@ -594,6 +609,14 @@ export default function FacultyReviewPage() {
                         bio: e.target.value.slice(0, 500),
                       })
                     }
+                  />
+                </div>
+                {/* Profile Picture */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Profile Picture</Label>
+                  <FacultyImageUploader
+                    value={newFaculty.profilePicture}
+                    onChange={(url) => setNewFaculty({ ...newFaculty, profilePicture: url })}
                   />
                 </div>
               </div>
@@ -772,25 +795,16 @@ export default function FacultyReviewPage() {
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    {/* Rating Circle */}
-                    <div
-                      className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-sm font-bold ${faculty.totalReviews > 0
-                        ? getRatingBg(faculty.averageRating)
-                        : "bg-muted/50 border-border"
-                        }`}
-                    >
-                      {faculty.totalReviews > 0 ? (
-                        <span
-                          className={getRatingColor(faculty.averageRating)}
-                        >
-                          {faculty.averageRating.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">
-                          N/A
-                        </span>
-                      )}
-                    </div>
+                    {/* Avatar */}
+                    {faculty.profilePicture ? (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full overflow-hidden border border-border">
+                        <img src={faculty.profilePicture} alt="" className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-lg font-bold border border-border">
+                        {faculty.initials.charAt(0).toUpperCase()}
+                      </div>
+                    )}
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">
@@ -806,7 +820,7 @@ export default function FacultyReviewPage() {
                         </Badge>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        {faculty.department} · {faculty.designation}
+                        {(faculty.departments || []).join(", ")} · {faculty.designation}
                       </p>
 
                       {/* Stars + review count */}

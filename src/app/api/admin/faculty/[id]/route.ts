@@ -23,7 +23,7 @@ export async function PATCH(
     const allowedFields = [
       "name",
       "initials",
-      "department",
+      "departments",
       "designation",
       "email",
       "phone",
@@ -33,13 +33,18 @@ export async function PATCH(
       "linkedin",
       "scholar",
       "bio",
+      "profilePicture",
       "isApproved",
     ];
 
     const update: any = {};
     for (const key of allowedFields) {
       if (body[key] !== undefined) {
-        update[key] = typeof body[key] === "string" ? body[key].trim() : body[key];
+        if (key === "departments" && Array.isArray(body[key])) {
+          update[key] = body[key].map((d: string) => d.trim()).filter(Boolean);
+        } else {
+          update[key] = typeof body[key] === "string" ? body[key].trim() : body[key];
+        }
       }
     }
 

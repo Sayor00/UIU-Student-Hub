@@ -127,7 +127,7 @@ interface FacultyRequest {
   _id: string;
   name: string;
   initials: string;
-  department: string;
+  departments: string[];
   designation: string;
   email: string;
   phone: string;
@@ -137,6 +137,7 @@ interface FacultyRequest {
   linkedin: string;
   scholar: string;
   bio: string;
+  profilePicture?: string;
   status: string;
   adminNote: string;
   approvedEdits: Record<string, string> | null;

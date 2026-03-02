@@ -79,6 +79,8 @@ export async function GET() {
         role: user.role,
         emailVerified: user.emailVerified,
         createdAt: user.createdAt,
+        profilePicture: user.profilePicture,
+        showProfilePicture: user.preferences?.showProfilePicture ?? true,
       },
       academicSummary,
       reviews: reviews.map((r: any) => ({

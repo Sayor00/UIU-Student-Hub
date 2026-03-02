@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         await dbConnect();
 
         const body = await request.json();
-        const { facultyId, name, initials, department, designation, email, phone, office, website, github, linkedin, scholar, bio } = body;
+        const { facultyId, name, initials, departments, designation, email, phone, office, website, github, linkedin, scholar, bio, profilePicture } = body;
 
         if (!facultyId) {
             return NextResponse.json(
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             facultyId,
             name: name?.trim(),
             initials: initials?.trim(),
-            department: department?.trim(),
+            departments: Array.isArray(departments) ? departments.map((d: string) => d.trim()).filter(Boolean) : undefined,
             designation: designation?.trim(),
             email: email?.trim() || "",
             phone: phone?.trim() || "",
@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
             linkedin: linkedin?.trim() || "",
             scholar: scholar?.trim() || "",
             bio: bio?.trim() || "",
+            profilePicture: profilePicture?.trim() || "",
             requestedBy: (session.user as any).id,
         });
 

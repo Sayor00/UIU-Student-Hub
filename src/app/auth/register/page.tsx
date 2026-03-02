@@ -39,7 +39,7 @@ export default function RegisterPage() {
       .then((data) => {
         if (data.domains) setAllowedDomains(data.domains);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Redirect if already logged in
@@ -186,8 +186,7 @@ export default function RegisterPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="studentId">
-                  Student ID{" "}
-                  <span className="text-muted-foreground">(Optional)</span>
+                  Student ID
                 </Label>
                 <div className="relative">
                   <Hash className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -200,6 +199,7 @@ export default function RegisterPage() {
                     className="pl-9"
                     inputMode="numeric"
                     pattern="[0-9]*"
+                    required
                   />
                 </div>
               </div>
