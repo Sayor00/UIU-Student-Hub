@@ -1706,9 +1706,9 @@ export default function CalendarsPage() {
                     <CardContent className="p-4">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
                             {/* Row 1 (Mobile/Tablet): Tabs + Actions */}
-                            <div className="flex items-center justify-between w-full lg:w-auto">
+                            <div className="flex items-center justify-between w-full lg:w-auto flex-wrap gap-3">
                                 {/* Calendar Type Tabs */}
-                                <div className="flex gap-2">
+                                <div className="flex flex-wrap gap-2">
                                     <Button
                                         variant={calendarType === "academic" ? "default" : "outline"}
                                         size="sm"
@@ -1732,7 +1732,7 @@ export default function CalendarsPage() {
                                 </div>
 
                                 {/* Actions (Mobile/Tablet Only) */}
-                                <div className="flex lg:hidden gap-2">
+                                <div className="flex flex-wrap lg:hidden gap-2">
                                     {isSignedIn && calendarType === "personal" && activeUserCalendar && (
                                         <>
                                             <Button
@@ -1756,21 +1756,51 @@ export default function CalendarsPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() => handlePinCalendar(activeUserCalendar._id)}
-                                                className="h-9 w-9 p-0"
+                                                className="h-9 w-9 p-0 shrink-0"
                                             >
                                                 <Pin className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant={calendarBell || digestActive ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => {
+                                                    setReminderPopoverEvent("calendar-header");
+                                                    const calId = activeUserCalendar?._id;
+                                                    const existingKey = Object.keys(reminderStore).find((k) => k.startsWith(`${calId}:`));
+                                                    setSelectedOffsets(existingKey ? reminderStore[existingKey] : []);
+                                                }}
+                                                className="h-9 w-9 p-0 shrink-0"
+                                                title={calendarBell || digestActive ? "Manage reminders" : "Set reminders for this calendar"}
+                                            >
+                                                {calendarBell || digestActive ? <BellRing className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
                                             </Button>
                                         </>
                                     )}
                                     {isSignedIn && calendarType === "academic" && activeCalendar && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handlePinCalendar(activeCalendar._id)}
-                                            className="h-9 w-9 p-0"
-                                        >
-                                            <Pin className="h-4 w-4" />
-                                        </Button>
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handlePinCalendar(activeCalendar._id)}
+                                                className="h-9 w-9 p-0 shrink-0"
+                                            >
+                                                <Pin className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant={calendarBell || digestActive ? "default" : "outline"}
+                                                size="sm"
+                                                onClick={() => {
+                                                    setReminderPopoverEvent("calendar-header");
+                                                    const calId = activeCalendar?._id;
+                                                    const existingKey = Object.keys(reminderStore).find((k) => k.startsWith(`${calId}:`));
+                                                    setSelectedOffsets(existingKey ? reminderStore[existingKey] : []);
+                                                }}
+                                                className="h-9 w-9 p-0 shrink-0"
+                                                title={calendarBell || digestActive ? "Manage reminders" : "Set reminders for this calendar"}
+                                            >
+                                                {calendarBell || digestActive ? <BellRing className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+                                            </Button>
+                                        </>
                                     )}
                                 </div>
                             </div>
