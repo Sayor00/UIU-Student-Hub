@@ -290,7 +290,16 @@ export default function ChatPage() {
         try {
             const res = await fetch("/api/chat/conversations");
             const data = await res.json();
-            if (res.ok) setConversations(data.conversations || []);
+            if (res.ok) {
+                const convs = data.conversations || [];
+                if (activeConvIdRef.current) {
+                    setConversations(convs.map((c: any) =>
+                        c._id === activeConvIdRef.current ? { ...c, unreadCount: 0 } : c
+                    ));
+                } else {
+                    setConversations(convs);
+                }
+            }
         } catch { } finally { setLoading(false); }
     }, []);
 
@@ -383,6 +392,11 @@ export default function ChatPage() {
             activeConvIdRef.current = activeConv._id;
             localStorage.setItem(LAST_CONV_KEY, activeConv._id);
 
+            // Optimistically clear unread count for the newly active conversation
+            setConversations((prev) =>
+                prev.map((c) => c._id === activeConv._id ? { ...c, unreadCount: 0 } : c)
+            );
+
             // Reset all fetch state
             isFirstLoadRef.current = true;
             lastPollIdsRef.current = "";
@@ -442,15 +456,22 @@ export default function ChatPage() {
         }
     }, [inView, hasMore, activeConv?._id, nextCursor, fetchMessages]);
 
-    // Polling for new messages (3s)
+    // Polling for active chat messages (3s)
     React.useEffect(() => {
         if (!activeConv?._id) return;
         pollIntervalRef.current = setInterval(() => {
             fetchMessages(activeConv._id);
-            fetchConversations();
         }, 3000);
         return () => { if (pollIntervalRef.current) clearInterval(pollIntervalRef.current); };
-    }, [activeConv?._id, fetchMessages, fetchConversations]);
+    }, [activeConv?._id, fetchMessages]);
+
+    // Polling for conversations (badges/presence) globally (3s)
+    React.useEffect(() => {
+        const interval = setInterval(() => {
+            fetchConversations();
+        }, 3000);
+        return () => clearInterval(interval);
+    }, [fetchConversations]);
 
     // Presence heartbeat (30s)
     React.useEffect(() => {
@@ -1297,7 +1318,8 @@ export default function ChatPage() {
 
     if (!session) return null;
 
-    const myMember = activeConv?.members.find((m) => m.userId === userId);
+    const latestActiveConv = activeConv ? (conversations.find((c) => c._id === activeConv._id) || activeConv) : null;
+    const myMember = latestActiveConv?.members.find((m) => m.userId === userId);
     const isAdmin = myMember?.role === "admin";
 
     /* ═══ RENDER ═══ */
@@ -1409,32 +1431,32 @@ export default function ChatPage() {
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
                                 <div className="relative">
-                                    {convAvatar(activeConv, userId) ? (
-                                        <img src={convAvatar(activeConv, userId)!} alt="" className="h-10 w-10 rounded-full object-cover" />
+                                    {convAvatar(latestActiveConv!, userId) ? (
+                                        <img src={convAvatar(latestActiveConv!, userId)!} alt="" className="h-10 w-10 rounded-full object-cover" />
                                     ) : (
-                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${activeConv.type === "group" ? "bg-primary/10 text-primary" : "bg-muted"}`}>
-                                            {activeConv.type === "group" ? <Users className="h-4 w-4" /> : convInitial(activeConv, userId)}
+                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${latestActiveConv!.type === "group" ? "bg-primary/10 text-primary" : "bg-muted"}`}>
+                                            {latestActiveConv!.type === "group" ? <Users className="h-4 w-4" /> : convInitial(latestActiveConv!, userId)}
                                         </div>
                                     )}
-                                    {activeConv.type === "private" && getOtherMember(activeConv, userId)?.isOnline && (
+                                    {latestActiveConv!.type === "private" && getOtherMember(latestActiveConv!, userId)?.isOnline && (
                                         <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
                                     )}
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-sm truncate">{convDisplayName(activeConv, userId)}</p>
+                                    <p className="font-semibold text-sm truncate">{convDisplayName(latestActiveConv!, userId)}</p>
                                     <p className="text-xs text-muted-foreground">
-                                        {activeConv.type === "group"
-                                            ? `${activeConv.members.length} members · ${activeConv.members.filter((m) => m.isOnline).length} online`
-                                            : getOtherMember(activeConv, userId)?.isOnline
+                                        {latestActiveConv!.type === "group"
+                                            ? `${latestActiveConv!.members.length} members · ${latestActiveConv!.members.filter((m) => m.isOnline).length} online`
+                                            : getOtherMember(latestActiveConv!, userId)?.isOnline
                                                 ? "Active now"
-                                                : getOtherMember(activeConv, userId)?.lastSeen
-                                                    ? `Last seen ${timeAgo(getOtherMember(activeConv, userId)!.lastSeen!)}`
+                                                : getOtherMember(latestActiveConv!, userId)?.lastSeen
+                                                    ? `Last seen ${timeAgo(getOtherMember(latestActiveConv!, userId)!.lastSeen!)}`
                                                     : "Offline"}
-                                        {activeConv.isAnonymous && " · 🎭 Anonymous"}
+                                        {latestActiveConv!.isAnonymous && " · 🎭 Anonymous"}
                                     </p>
                                 </div>
-                                {activeConv.type === "group" && (
-                                    <Button variant="ghost" size="icon" onClick={() => { setGroupSettingsOpen(true); setEditGroupName(activeConv.name || ""); }}>
+                                {latestActiveConv!.type === "group" && (
+                                    <Button variant="ghost" size="icon" onClick={() => { setGroupSettingsOpen(true); setEditGroupName(latestActiveConv!.name || ""); }}>
                                         <Settings className="h-4 w-4" />
                                     </Button>
                                 )}
@@ -1480,6 +1502,7 @@ export default function ChatPage() {
                                         );
                                         const otherMemberIds = activeConv.members.filter((m) => m.userId !== userId).map((m) => m.userId);
                                         const seenByOthers = !isPending && isMe && msg.readBy?.some((r) => otherMemberIds.includes(r));
+                                        const isDelivered = !isPending && isMe && !seenByOthers && activeConv.members.some(m => m.userId !== userId && m.lastSeen && new Date(m.lastSeen).getTime() >= new Date(msg.createdAt).getTime());
                                         const isDeleted = msg.deletedForAll;
                                         const swipeOffset = swipeOffsets[msg._id] || 0;
 
@@ -1630,7 +1653,8 @@ export default function ChatPage() {
                                                                 ) : isSending ? <Clock className="h-3 w-3 text-muted-foreground animate-pulse" /> : null}
                                                                 {isFailed && <AlertCircle className="h-3 w-3 text-destructive" />}
                                                                 {!isPending && seenByOthers && <CheckCheck className="h-3 w-3 text-blue-400" />}
-                                                                {!isPending && !seenByOthers && <Check className="h-3 w-3 text-muted-foreground" />}
+                                                                {!isPending && !seenByOthers && isDelivered && <CheckCheck className="h-3 w-3 text-muted-foreground" />}
+                                                                {!isPending && !seenByOthers && !isDelivered && <Check className="h-3 w-3 text-muted-foreground" />}
                                                                 {msg._status === "sent" && <Check className="h-3 w-3 text-muted-foreground" />}
                                                             </span>
                                                         )}
