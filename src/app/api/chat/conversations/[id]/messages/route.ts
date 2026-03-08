@@ -30,6 +30,7 @@ export async function GET(
         "members.userId": userId,
     })
         .select("_id isAnonymous members")
+        .populate("members.userId", "name")
         .lean();
 
     if (!conversation) {
@@ -87,9 +88,9 @@ export async function GET(
     // Map typing user IDs to names from conversation members
     const typingNames = typingUsers.map((t: any) => {
         const member = (conversation as any).members.find(
-            (m: any) => m.userId.toString() === t.userId.toString()
+            (m: any) => m.userId?._id?.toString() === t.userId.toString() || m.userId?.toString() === t.userId.toString()
         );
-        return member?.anonymousName || null;
+        return member?.anonymousName || (member?.userId as any)?.name || null;
     });
 
     // Transform deletedForAll messages — replace content with deletion marker

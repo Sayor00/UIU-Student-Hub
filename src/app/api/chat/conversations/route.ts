@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
         const membersEnriched = conv.members.map((m: any) => {
             const user = userMap.get(m.userId.toString());
             const presence = presenceMap.get(m.userId.toString());
+            const isOnlineStatus = presence?.isOnline && presence?.lastSeen && (Date.now() - new Date(presence.lastSeen).getTime() < 60000);
             return {
                 ...m,
                 user: user
@@ -78,7 +79,7 @@ export async function GET(req: NextRequest) {
                         studentId: (user as any).studentId,
                     }
                     : null,
-                isOnline: presence?.isOnline || false,
+                isOnline: !!isOnlineStatus,
                 lastSeen: presence?.lastSeen || null,
             };
         });

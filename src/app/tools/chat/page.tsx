@@ -488,12 +488,20 @@ export default function ChatPage() {
     }, [addMemberSearch]);
 
     /* ── Actions ── */
+    const lastTypingTime = React.useRef<number>(0);
     const sendTyping = React.useCallback(() => {
         if (!activeConv?._id) return;
-        fetch(`/api/chat/conversations/${activeConv._id}/typing`, { method: "POST" }).catch(() => { });
+
+        const now = Date.now();
+        if (now - lastTypingTime.current > 2000) {
+            lastTypingTime.current = now;
+            fetch(`/api/chat/conversations/${activeConv._id}/typing`, { method: "POST" }).catch(() => { });
+        }
+
         if (typingTimeout.current) clearTimeout(typingTimeout.current);
         typingTimeout.current = setTimeout(() => {
             fetch(`/api/chat/conversations/${activeConv._id}/typing`, { method: "DELETE" }).catch(() => { });
+            lastTypingTime.current = 0;
         }, 3000);
     }, [activeConv?._id]);
 
