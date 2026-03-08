@@ -346,16 +346,16 @@ export default function ChatPage() {
                 /* ── INITIAL LOAD: set everything ── */
                 isFirstLoadRef.current = false;
                 const msgs = data.messages || [];
-                lastPollIdsRef.current = msgs.map((m: any) => m._id).join(",");
+                lastPollIdsRef.current = msgs.map((m: any) => `${m._id}-${m.readBy?.length || 0}-${m.reactions?.length || 0}-${!!m.deletedForAll}-${!!m.edited}`).join(",");
                 setMessages(msgs);
                 setHasMore(data.hasMore ?? false);
                 setNextCursor(data.nextCursor ?? null);
 
             } else {
                 /* ── POLLING: only update if messages changed ── */
-                const newIds = (data.messages || []).map((m: any) => m._id).join(",");
-                if (newIds !== lastPollIdsRef.current) {
-                    lastPollIdsRef.current = newIds;
+                const newHash = (data.messages || []).map((m: any) => `${m._id}-${m.readBy?.length || 0}-${m.reactions?.length || 0}-${!!m.deletedForAll}-${!!m.edited}`).join(",");
+                if (newHash !== lastPollIdsRef.current) {
+                    lastPollIdsRef.current = newHash;
                     setMessages(data.messages || []);
                     // Clean up "sent" pending messages — real versions now in the server response
                     setPendingMessages((prev) => prev.filter((p) => p._status !== "sent"));
