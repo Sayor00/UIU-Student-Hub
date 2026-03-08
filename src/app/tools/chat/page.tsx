@@ -272,6 +272,7 @@ export default function ChatPage() {
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
     const { ref: loadMoreRef, inView } = useInView({ threshold: 0 });
     const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const editorRef = React.useRef<any>(null);
     const typingTimeout = React.useRef<NodeJS.Timeout | null>(null);
     const pollIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const presenceIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -1767,7 +1768,16 @@ export default function ChatPage() {
                                                     <motion.div initial={{ height: 0, opacity: 0, y: 20 }} animate={{ height: "auto", opacity: 1, y: 0 }} exit={{ height: 0, opacity: 0, y: 20 }}
                                                         className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-[28px] relative w-full shadow-xl mb-2">
                                                         <MediaPicker
-                                                            onEmojiSelect={(emoji) => setInputText((t) => t + emoji)}
+                                                            onEmojiSelect={(emoji) => {
+                                                                if (editorRef.current) {
+                                                                    editorRef.current.chain().focus().command(({ tr }: any) => {
+                                                                        tr.insertText(emoji);
+                                                                        return true;
+                                                                    }).run();
+                                                                } else {
+                                                                    setInputText((t) => t + emoji);
+                                                                }
+                                                            }}
                                                             onGifSelect={(url) => {
                                                                 sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] });
                                                                 setShowEmoji(false);
@@ -1829,8 +1839,12 @@ export default function ChatPage() {
                                                     onChange={setInputText}
                                                     onSubmit={() => editingMsg ? saveEdit() : sendMessage()}
                                                     onTyping={sendTyping}
-                                                    editorRef={inputRef}
-                                                    placeholder="Type a message..."
+                                                    editorRef={editorRef}
+                                                    placeholder={
+                                                        activeConv.type === "group"
+                                                            ? `Message ${activeConv.name || "Group"}...`
+                                                            : `Message ${convDisplayName(activeConv, userId)}...`
+                                                    }
                                                 />
 
                                                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={voice.start}>

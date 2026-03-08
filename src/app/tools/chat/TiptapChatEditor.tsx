@@ -22,6 +22,7 @@ interface TiptapChatEditorProps {
     onChange: (html: string) => void;
     onSubmit: () => void;
     onTyping?: () => void;
+    onBlur?: () => void;
     placeholder?: string;
     editorRef?: React.MutableRefObject<ReturnType<typeof useEditor> | null>;
 }
@@ -35,6 +36,7 @@ export default function TiptapChatEditor({
     onChange,
     onSubmit,
     onTyping,
+    onBlur,
     placeholder = "Type a message...",
     editorRef,
 }: TiptapChatEditorProps) {
@@ -51,9 +53,11 @@ export default function TiptapChatEditor({
     const onSubmitRef = React.useRef(onSubmit);
     const onChangeRef = React.useRef(onChange);
     const onTypingRef = React.useRef(onTyping);
+    const onBlurRef = React.useRef(onBlur);
     React.useEffect(() => { onSubmitRef.current = onSubmit; }, [onSubmit]);
     React.useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
     React.useEffect(() => { onTypingRef.current = onTyping; }, [onTyping]);
+    React.useEffect(() => { onBlurRef.current = onBlur; }, [onBlur]);
 
     const ChatKeymap = React.useMemo(() =>
         Extension.create({
@@ -93,19 +97,32 @@ export default function TiptapChatEditor({
             attributes: { class: "outline-none min-h-[36px] max-h-[120px] overflow-y-auto text-sm px-3 py-2 break-all whitespace-pre-wrap" },
         },
         onUpdate: ({ editor: e }) => { onChangeRef.current(e.getHTML()); onTypingRef.current?.(); },
+        onBlur: () => { onBlurRef.current?.(); },
     });
 
     React.useEffect(() => { if (editorRef) editorRef.current = editor; }, [editor, editorRef]);
 
     const lastExternalValue = React.useRef(value);
     React.useEffect(() => {
-        if (!editor) return;
-        if (value !== lastExternalValue.current) {
+        if (!editor || value === undefined) return;
+
+        // Only force a setContent if the parent explicitly cleared the input
+        // or if the external value is completely out of sync with what Tiptap knows.
+        // Tiptap's onUpdate handles the normal typing flow naturally.
+        if (value === "") {
+            lastExternalValue.current = "";
+            editor.commands.setContent("");
+        } else if (value !== lastExternalValue.current) {
             lastExternalValue.current = value;
-            if (editor.getHTML() !== value) editor.commands.setContent(value || "");
+            if (editor.getHTML() !== value) {
+                // If we must force an update from outside, try to preserve cursor
+                const { from, to } = editor.state.selection;
+                editor.commands.setContent(value);
+                // Restore cursor if possible
+                try { editor.commands.setTextSelection({ from, to }); } catch { }
+            }
         }
     }, [value, editor]);
-    React.useEffect(() => { lastExternalValue.current = value; }, [value]);
 
     /* ── Context menu handlers ── */
     const handleContextMenu = React.useCallback((e: React.MouseEvent) => {
