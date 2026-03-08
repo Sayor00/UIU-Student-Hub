@@ -90,7 +90,7 @@ export default function TiptapChatEditor({
         ],
         content: value || "",
         editorProps: {
-            attributes: { class: "outline-none min-h-[36px] max-h-[120px] overflow-y-auto text-sm px-3 py-2" },
+            attributes: { class: "outline-none min-h-[36px] max-h-[120px] overflow-y-auto text-sm px-3 py-2 break-all whitespace-pre-wrap" },
         },
         onUpdate: ({ editor: e }) => { onChangeRef.current(e.getHTML()); onTypingRef.current?.(); },
     });

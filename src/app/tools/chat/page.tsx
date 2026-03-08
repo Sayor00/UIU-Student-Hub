@@ -30,6 +30,7 @@ import { EMOJI_LIST, STICKER_URLS, GIF_URLS } from "./constants";
 import MessageContextMenu, { ConversationContextMenu } from "./MessageContextMenu";
 import ContextMenuBase, { type ContextMenuItem } from "./ContextMenuBase";
 import VoiceMessagePlayer, { RecordingWaveform } from "./VoiceMessagePlayer";
+import MediaPicker from "@/components/chat/MediaPicker";
 import type {
     ChatConversation, ChatMessage, ChatMember, ChatUser, Attachment,
 } from "./types";
@@ -361,6 +362,7 @@ export default function ChatPage() {
                 }
                 // Never touch hasMore/nextCursor from polling
             }
+            // Update typing names every poll regardless of new messages
             setTypingNames(data.typing?.filter(Boolean) || []);
 
         } catch { } finally {
@@ -1502,7 +1504,7 @@ export default function ChatPage() {
 
                                                 <div
                                                     data-message-id={msg._id}
-                                                    className={`max-w-[75%] ${isMe ? "items-end" : "items-start"} flex flex-col`}
+                                                    className={`max-w-[75%] min-w-0 ${isMe ? "items-end" : "items-start"} flex flex-col`}
                                                     onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }}
                                                     onTouchStart={(e) => !selectMode && handleTouchStart(e, msg)}
                                                     onTouchMove={!selectMode ? handleTouchMove : undefined}
@@ -1534,7 +1536,7 @@ export default function ChatPage() {
                                                                     ? `bg-primary text-primary-foreground rounded-br-md ${isSending ? "opacity-70" : ""}`
                                                                     : "bg-muted rounded-bl-md"
                                                                 }`}>
-                                                                {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
+                                                                {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                                 {msg.type === "image" && msg.attachments?.[0] && (
                                                                     <img src={msg.attachments[0].url} alt="" className="rounded-lg max-w-full max-h-64 cursor-pointer" onClick={() => setViewFile({ url: msg.attachments[0].url, name: msg.attachments[0].name || "image", mimeType: msg.attachments[0].mimeType || "image/jpeg" })} />
                                                                 )}
@@ -1727,75 +1729,68 @@ export default function ChatPage() {
                                     ) : (
                                         <>
                                             {/* Picker rows */}
+                                            {/* Unified Full-Blown Media Picker (Emoji, Sticker, GIF) */}
                                             <AnimatePresence>
                                                 {showEmoji && (
-                                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden">
-                                                        <div className="flex flex-wrap gap-1 p-2 rounded-lg bg-muted/50 max-h-24 overflow-y-auto">
-                                                            {EMOJI_LIST.map((e) => (
-                                                                <button key={e} onClick={() => setInputText((t) => t + e)} className="text-lg hover:scale-125 transition-transform p-0.5">{e}</button>
-                                                            ))}
-                                                        </div>
-                                                    </motion.div>
-                                                )}
-                                                {showStickers && (
-                                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden">
-                                                        <div className="grid grid-cols-8 gap-1 p-2 rounded-lg bg-muted/50 max-h-32 overflow-y-auto">
-                                                            {STICKER_URLS.map((url) => (
-                                                                <button key={url} onClick={() => sendMessage({ type: "sticker", text: "Sticker", attachments: [{ url, name: "sticker", size: 0, mimeType: "image/gif" }] })}
-                                                                    className="hover:scale-110 transition-transform"><img src={url} alt="" className="h-10 w-10" /></button>
-                                                            ))}
-                                                        </div>
-                                                    </motion.div>
-                                                )}
-                                                {showGifs && (
-                                                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                                        className="overflow-hidden">
-                                                        <div className="grid grid-cols-3 gap-1 p-2 rounded-lg bg-muted/50 max-h-40 overflow-y-auto">
-                                                            {GIF_URLS.map((url) => (
-                                                                <button key={url} onClick={() => sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] })}
-                                                                    className="hover:scale-105 transition-transform rounded-lg overflow-hidden"><img src={url} alt="" className="w-full h-20 object-cover" /></button>
-                                                            ))}
-                                                        </div>
+                                                    <motion.div initial={{ height: 0, opacity: 0, y: 20 }} animate={{ height: "auto", opacity: 1, y: 0 }} exit={{ height: 0, opacity: 0, y: 20 }}
+                                                        className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-[28px] relative w-full shadow-xl mb-2">
+                                                        <MediaPicker
+                                                            onEmojiSelect={(emoji) => setInputText((t) => t + emoji)}
+                                                            onGifSelect={(url) => {
+                                                                sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] });
+                                                                setShowEmoji(false);
+                                                            }}
+                                                            onStickerSelect={(url) => {
+                                                                sendMessage({ type: "sticker", text: "Sticker", attachments: [{ url, name: "sticker", size: 0, mimeType: "image/gif" }] });
+                                                                setShowEmoji(false);
+                                                            }}
+                                                        />
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
 
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex items-center gap-1.5 w-full min-w-0">
                                                 {/* Attachment menu */}
-                                                <div className="relative">
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setShowAttach(!showAttach); setShowEmoji(false); setShowStickers(false); setShowGifs(false); }}>
-                                                        <Paperclip className="h-4 w-4" />
+                                                {/* Unified Plus Menu */}
+                                                <div className="relative flex-shrink-0">
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setShowAttach(!showAttach); setShowEmoji(false); }}>
+                                                        <Plus className="h-5 w-5" />
                                                     </Button>
                                                     <AnimatePresence>
                                                         {showAttach && (
-                                                            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
-                                                                className="absolute bottom-12 left-0 bg-popover border rounded-xl shadow-lg p-2 space-y-1 z-50 min-w-[140px]">
+                                                            <motion.div initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                                                                className="absolute bottom-12 left-0 bg-popover border rounded-xl shadow-lg p-2 space-y-1 z-50 min-w-[160px]">
                                                                 {[
-                                                                    { icon: ImageIcon, label: "Image", accept: "image/*", type: "image" },
-                                                                    { icon: Video, label: "Video", accept: "video/*", type: "video" },
-                                                                    { icon: FileText, label: "File", accept: "*/*", type: "file" },
-                                                                    { icon: Music, label: "Audio", accept: "audio/*", type: "audio" },
+                                                                    { icon: ImageIcon, label: "Image", accept: "image/*", type: "image", action: "file" },
+                                                                    { icon: Video, label: "Video", accept: "video/*", type: "video", action: "file" },
+                                                                    { icon: FileText, label: "File", accept: "*/*", type: "file", action: "file" },
+                                                                    { icon: Music, label: "Audio", accept: "audio/*", type: "audio", action: "file" },
                                                                 ].map((item) => (
                                                                     <label key={item.type} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer text-sm transition-colors">
                                                                         <item.icon className="h-4 w-4" /> {item.label}
                                                                         <input type="file" accept={item.accept} className="hidden" onChange={(e) => { handleFileSelect(e, item.type); setShowAttach(false); }} />
                                                                     </label>
                                                                 ))}
+
+                                                                <button onClick={() => { setPollOpen(true); setShowAttach(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer text-sm transition-colors text-left">
+                                                                    <BarChart3 className="h-4 w-4" /> Poll
+                                                                </button>
                                                             </motion.div>
                                                         )}
                                                     </AnimatePresence>
                                                 </div>
 
-                                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setShowEmoji(!showEmoji); setShowAttach(false); setShowStickers(false); setShowGifs(false); }}>
-                                                    <Smile className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => {
+                                                    const isAnyOpen = showEmoji || showStickers || showGifs;
+                                                    if (isAnyOpen) {
+                                                        setShowEmoji(false); setShowStickers(false); setShowGifs(false);
+                                                    } else {
+                                                        setShowEmoji(true); setShowAttach(false);
+                                                    }
+                                                }}>
+                                                    <Smile className="h-5 w-5" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" className="h-9 w-9 text-[10px]" onClick={() => { setShowStickers(!showStickers); setShowEmoji(false); setShowAttach(false); setShowGifs(false); }}>
-                                                    <StickerIcon className="h-4 w-4" />
-                                                </Button>
-                                                <button onClick={() => { setShowGifs(!showGifs); setShowEmoji(false); setShowAttach(false); setShowStickers(false); }}
-                                                    className="h-9 px-2 text-xs font-bold text-muted-foreground hover:text-foreground transition-colors">GIF</button>
+
 
                                                 <TiptapChatEditor
                                                     value={inputText}
@@ -1806,9 +1801,6 @@ export default function ChatPage() {
                                                     placeholder="Type a message..."
                                                 />
 
-                                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => setPollOpen(true)}>
-                                                    <BarChart3 className="h-4 w-4" />
-                                                </Button>
                                                 <Button variant="ghost" size="icon" className="h-9 w-9" onClick={voice.start}>
                                                     <Mic className="h-4 w-4" />
                                                 </Button>
@@ -2181,4 +2173,5 @@ export default function ChatPage() {
         </div>
     );
 }
+
 
