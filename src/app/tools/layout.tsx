@@ -14,6 +14,7 @@ const allTools = [
     { href: "/tools/routine-builder", label: "Routine Builder" },
     { href: "/tools/career-planner", label: "Career Planner" },
     { href: "/tools/question-bank", label: "Question Bank" },
+    { href: "/tools/chat", label: "Chat" },
 ];
 
 export default function ToolsLayout({
