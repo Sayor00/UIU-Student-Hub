@@ -201,7 +201,6 @@ export default function ChatPage() {
 
     // localStorage-backed drafts & pending messages
     const DRAFTS_KEY = "chat_drafts";
-    const LAST_CONV_KEY = "chat_last_conv";
     const PENDING_MSGS_KEY = "chat_pending_msgs";
 
     // Load pending messages on mount
@@ -311,15 +310,31 @@ export default function ChatPage() {
 
     React.useEffect(() => { if (userId) fetchConversations(); }, [userId, fetchConversations]);
 
-    // Auto-select last active conversation on page load
+    // Sync active conversation with URL on page load and history changes
     React.useEffect(() => {
-        if (conversations.length > 0 && !activeConv) {
-            const lastId = localStorage.getItem(LAST_CONV_KEY);
-            if (lastId) {
-                const found = conversations.find((c) => c._id === lastId);
-                if (found) setActiveConv(found);
+        if (conversations.length === 0) return;
+
+        const syncFromUrl = () => {
+            const urlId = new URLSearchParams(window.location.search).get('c');
+            if (urlId) {
+                const found = conversations.find((c) => c._id === urlId);
+                if (found && found._id !== activeConv?._id) {
+                    setActiveConv(found);
+                    setMobileShowChat(true);
+                } else if (found && !mobileShowChat && window.innerWidth < 768) {
+                    // Safety check for mobile: if activeConv was already set but mobile view wasn't open
+                    setMobileShowChat(true);
+                }
+            } else if (activeConv) {
+                setActiveConv(null);
+                setMobileShowChat(false);
             }
-        }
+        };
+
+        syncFromUrl(); // initial sync
+
+        window.addEventListener('popstate', syncFromUrl);
+        return () => window.removeEventListener('popstate', syncFromUrl);
     }, [conversations, activeConv]);
 
     /* ── Fetch messages ── */
@@ -396,7 +411,6 @@ export default function ChatPage() {
         if (activeConv?._id) {
             prevConvIdRef.current = activeConv._id;
             activeConvIdRef.current = activeConv._id;
-            localStorage.setItem(LAST_CONV_KEY, activeConv._id);
 
             // Optimistically clear unread count for the newly active conversation
             setConversations((prev) =>
@@ -894,6 +908,7 @@ export default function ChatPage() {
             (c) => c.type === "private" && c.members.some((m) => m.userId === targetUserId)
         );
         if (existing) {
+            window.history.pushState({}, '', '?c=' + existing._id);
             setActiveConv(existing);
             setMobileShowChat(true);
             return;
@@ -912,6 +927,7 @@ export default function ChatPage() {
                     return [data.conversation, ...prev];
                 });
                 setActiveConv(data.conversation);
+                window.history.pushState({}, '', '?c=' + data.conversation._id);
                 setMobileShowChat(true);
             } else {
                 toast.error(data.error || "Failed to start chat");
@@ -1342,6 +1358,7 @@ export default function ChatPage() {
                 setUserSearch("");
                 fetchConversations();
                 setActiveConv(data.conversation);
+                window.history.pushState({}, '', '?c=' + data.conversation._id);
                 setMobileShowChat(true);
             } else { toast.error(data.error || "Failed"); }
         } catch { toast.error("Network error"); } finally { setCreating(false); }
@@ -1351,6 +1368,7 @@ export default function ChatPage() {
         if (!activeConv?._id) return;
         try {
             await fetch(`/api/chat/conversations/${activeConv._id}`, { method: "DELETE" });
+            window.history.pushState({}, '', window.location.pathname);
             setActiveConv(null);
             setGroupSettingsOpen(false);
             setMobileShowChat(false);
@@ -1397,7 +1415,7 @@ export default function ChatPage() {
 
     /* ═══ RENDER ═══ */
     return (
-        <div className="w-full h-[calc(100vh-4rem)] flex flex-col bg-transparent p-2 md:p-3 lg:p-4">
+        <div className="w-full h-[calc(100dvh-4rem)] flex flex-col bg-transparent p-2 md:p-3 lg:p-4">
             <style>{`footer { display: none !important; }`}</style>
             {/* Main layout */}
             <div className="flex flex-1 w-full overflow-hidden bg-transparent gap-2 lg:gap-3">
@@ -1447,7 +1465,11 @@ export default function ChatPage() {
                                 const other = conv.type === "private" ? getOtherMember(conv, userId) : null;
                                 return (
                                     <button key={conv._id}
-                                        onClick={() => { setActiveConv(conv); setMobileShowChat(true); }}
+                                        onClick={() => {
+                                            window.history.pushState({}, '', '?c=' + conv._id);
+                                            setActiveConv(conv);
+                                            setMobileShowChat(true);
+                                        }}
                                         onContextMenu={(e) => { e.preventDefault(); setConvContextMenu({ conv, position: { x: e.clientX, y: e.clientY } }); }}
                                         className={`w-[calc(100%-0.5rem)] md:w-[calc(100%-1rem)] mx-1 md:mx-2 my-0.5 flex items-center gap-3 p-2 md:p-3 rounded-xl md:rounded-2xl text-left transition-all duration-200 ${isActive ? "bg-primary/15 shadow-sm" : "hover:bg-muted"}`}
                                     >
@@ -1505,7 +1527,7 @@ export default function ChatPage() {
                         <>
                             {/* Chat header */}
                             <div className="flex items-center gap-3 p-3 mx-2 mt-2 md:mx-4 md:mt-4 rounded-2xl md:rounded-3xl border border-white/20 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-3xl z-10 shadow-sm absolute top-0 left-0 right-0">
-                                <button className="md:hidden text-muted-foreground hover:text-foreground/90" onClick={() => setMobileShowChat(false)}>
+                                <button className="md:hidden text-muted-foreground hover:text-foreground/90" onClick={() => window.history.back()}>
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
                                 <div className="relative">
@@ -1552,7 +1574,7 @@ export default function ChatPage() {
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 pt-24 md:p-6 md:pt-28 flex flex-col-reverse"
+                            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto overflow-x-hidden p-4 pt-24 md:p-6 md:pt-28 flex flex-col-reverse"
                                 onContextMenu={(e) => {
                                     // Only show chat-area context menu if right-click is NOT on a message bubble
                                     const target = e.target as HTMLElement;
@@ -1604,9 +1626,12 @@ export default function ChatPage() {
                                         return (
                                             <div
                                                 key={msg._id}
-                                                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative ${selectMode && selectedMsgIds.has(msg._id) ? "bg-white/5 rounded-lg" : ""}`}
-                                                style={{ transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined, transition: swipeOffset > 0 ? 'none' : 'transform 0.2s ease-out' }}
+                                                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative ${selectMode && selectedMsgIds.has(msg._id) ? "bg-white/5 rounded-lg" : ""} touch-pan-y`}
+                                                style={{ transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined, transition: swipeOffset > 0 ? 'transform 0.1s ease-out' : 'transform 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.1)' }}
                                                 onClick={() => selectMode && !isPending && toggleSelectMsg(msg._id)}
+                                                onTouchStart={(e) => !selectMode && handleTouchStart(e, msg)}
+                                                onTouchMove={!selectMode ? handleTouchMove : undefined}
+                                                onTouchEnd={() => !selectMode && handleTouchEnd(msg)}
                                             >
                                                 {/* Select mode checkbox */}
                                                 {selectMode && !isPending && (
@@ -1627,9 +1652,6 @@ export default function ChatPage() {
                                                     data-message-id={msg._id}
                                                     className={`max-w-[75%] min-w-0 ${isMe ? "items-end" : "items-start"} flex flex-col`}
                                                     onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }}
-                                                    onTouchStart={(e) => !selectMode && handleTouchStart(e, msg)}
-                                                    onTouchMove={!selectMode ? handleTouchMove : undefined}
-                                                    onTouchEnd={() => !selectMode && handleTouchEnd(msg)}
                                                 >
                                                     {!isMe && activeConv.type === "group" && <span className="text-[10px] text-muted-foreground mb-0.5 ml-1">{msg.senderName}</span>}
 
@@ -1983,40 +2005,42 @@ export default function ChatPage() {
                         </>
                     )}
                 </motion.div>
-            </div>
+            </div >
 
             {/* ── Mention Context Menu Popup ── */}
-            {mentionCtxMenu && (
-                <>
-                    <div className="fixed inset-0 z-[9998]" onClick={() => setMentionCtxMenu(null)} />
-                    <div
-                        className="fixed z-[9999] min-w-[180px] rounded-xl bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/40 py-1.5 px-1.5 flex flex-col gap-0.5"
-                        style={{ top: mentionCtxMenu.position.y + 8, left: mentionCtxMenu.position.x }}
-                    >
-                        {mentionCtxMenu.userId !== userId && (
+            {
+                mentionCtxMenu && (
+                    <>
+                        <div className="fixed inset-0 z-[9998]" onClick={() => setMentionCtxMenu(null)} />
+                        <div
+                            className="fixed z-[9999] min-w-[180px] rounded-xl bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/40 py-1.5 px-1.5 flex flex-col gap-0.5"
+                            style={{ top: mentionCtxMenu.position.y + 8, left: mentionCtxMenu.position.x }}
+                        >
+                            {mentionCtxMenu.userId !== userId && (
+                                <button
+                                    onClick={() => startPrivateChatWithUser(mentionCtxMenu.userId)}
+                                    className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground hover:bg-white/10 text-left"
+                                >
+                                    <MessageCircle className="h-4 w-4 opacity-70" />
+                                    Send private message
+                                </button>
+                            )}
                             <button
-                                onClick={() => startPrivateChatWithUser(mentionCtxMenu.userId)}
+                                onClick={() => {
+                                    const mentionEl = document.querySelector(`span[data-id="${mentionCtxMenu.userId}"]`);
+                                    const name = mentionEl?.textContent?.replace('@', '') || mentionCtxMenu.userId;
+                                    navigator.clipboard.writeText(name).then(() => toast.success('Name copied!'));
+                                    setMentionCtxMenu(null);
+                                }}
                                 className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground hover:bg-white/10 text-left"
                             >
-                                <MessageCircle className="h-4 w-4 opacity-70" />
-                                Send private message
+                                <CopyIcon className="h-4 w-4 opacity-70" />
+                                Copy name
                             </button>
-                        )}
-                        <button
-                            onClick={() => {
-                                const mentionEl = document.querySelector(`span[data-id="${mentionCtxMenu.userId}"]`);
-                                const name = mentionEl?.textContent?.replace('@', '') || mentionCtxMenu.userId;
-                                navigator.clipboard.writeText(name).then(() => toast.success('Name copied!'));
-                                setMentionCtxMenu(null);
-                            }}
-                            className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground hover:bg-white/10 text-left"
-                        >
-                            <CopyIcon className="h-4 w-4 opacity-70" />
-                            Copy name
-                        </button>
-                    </div>
-                </>
-            )}
+                        </div>
+                    </>
+                )
+            }
 
             {/* ── New Chat Dialog ── */}
             <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
@@ -2126,11 +2150,17 @@ export default function ChatPage() {
                                             <div className="relative">
                                                 {m.user?.profilePicture ? <img src={m.user.profilePicture} alt="" className="h-8 w-8 rounded-full object-cover" />
                                                     : <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold">{(m.user?.name || "?").charAt(0)}</div>}
-                                                {m.isOnline && <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-popover" />}
+                                                {m.isOnline ? (
+                                                    <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 border-2 border-popover" />
+                                                ) : m.lastSeen ? (
+                                                    <span className="absolute -bottom-1 -right-2 px-1 py-[1px] rounded bg-muted/80 backdrop-blur-md border border-border/50 text-[9px] font-medium text-muted-foreground shadow-sm leading-none flex items-center justify-center">
+                                                        {timeAgo(m.lastSeen)}
+                                                    </span>
+                                                ) : null}
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium truncate">{activeConv.isAnonymous ? m.anonymousName || m.user?.name : m.user?.name || "User"}</p>
-                                                <p className="text-[10px] text-muted-foreground">{m.role === "admin" ? "Admin" : "Member"} · {m.isOnline ? "Online" : "Offline"}</p>
+                                                <p className="text-[10px] text-muted-foreground">{m.role === "admin" ? "Admin" : "Member"} · {m.isOnline ? "Active now" : m.lastSeen ? `Last seen ${timeAgo(m.lastSeen)}` : "Offline"}</p>
                                             </div>
                                             {isAdmin && m.userId !== userId && (
                                                 <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => updateGroup({ removeMemberIds: [m.userId] })}>
@@ -2187,50 +2217,56 @@ export default function ChatPage() {
             </Dialog>
 
             {/* ── Context Menu Portals ── */}
-            {contextMenu && activeConv && (
-                <MessageContextMenu
-                    message={contextMenu.message}
-                    isMe={contextMenu.message.senderId === userId}
-                    isGroup={activeConv.type === "group"}
-                    position={contextMenu.position}
-                    onClose={() => setContextMenu(null)}
-                    onReply={(msg) => setReplyToMessages((prev) => prev.some((m) => m._id === msg._id) ? prev : [...prev, msg])}
-                    onCopy={copyMessageText}
-                    onDelete={(msg) => { setSingleDeleteMsg(msg); setDeleteModalOpen(true); }}
-                    onReact={reactToMessage}
-                    onEdit={startEdit}
-                    onSelect={enterSelectMode}
-                    onForward={(msg) => { setForwardMsgIds([msg._id]); setForwardOpen(true); }}
-                />
-            )}
-            {convContextMenu && (
-                <ConversationContextMenu
-                    position={convContextMenu.position}
-                    conversationType={convContextMenu.conv.type}
-                    onClose={() => setConvContextMenu(null)}
-                    onClearChat={() => clearChat(convContextMenu.conv._id)}
-                    onDeleteConversation={() => deleteConversation(convContextMenu.conv._id)}
-                />
-            )}
-            {chatAreaCtxMenu && (
-                <ContextMenuBase
-                    position={chatAreaCtxMenu}
-                    onClose={() => setChatAreaCtxMenu(null)}
-                    items={[
-                        {
-                            label: "Select messages",
-                            icon: <CheckSquare className="h-4 w-4" />,
-                            onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); },
-                        },
-                        {
-                            label: "Close chat",
-                            icon: <X className="h-4 w-4" />,
-                            onClick: () => { setActiveConv(null); setChatAreaCtxMenu(null); },
-                        },
-                    ]}
-                    minWidth={180}
-                />
-            )}
+            {
+                contextMenu && activeConv && (
+                    <MessageContextMenu
+                        message={contextMenu.message}
+                        isMe={contextMenu.message.senderId === userId}
+                        isGroup={activeConv.type === "group"}
+                        position={contextMenu.position}
+                        onClose={() => setContextMenu(null)}
+                        onReply={(msg) => setReplyToMessages((prev) => prev.some((m) => m._id === msg._id) ? prev : [...prev, msg])}
+                        onCopy={copyMessageText}
+                        onDelete={(msg) => { setSingleDeleteMsg(msg); setDeleteModalOpen(true); }}
+                        onReact={reactToMessage}
+                        onEdit={startEdit}
+                        onSelect={enterSelectMode}
+                        onForward={(msg) => { setForwardMsgIds([msg._id]); setForwardOpen(true); }}
+                    />
+                )
+            }
+            {
+                convContextMenu && (
+                    <ConversationContextMenu
+                        position={convContextMenu.position}
+                        conversationType={convContextMenu.conv.type}
+                        onClose={() => setConvContextMenu(null)}
+                        onClearChat={() => clearChat(convContextMenu.conv._id)}
+                        onDeleteConversation={() => deleteConversation(convContextMenu.conv._id)}
+                    />
+                )
+            }
+            {
+                chatAreaCtxMenu && (
+                    <ContextMenuBase
+                        position={chatAreaCtxMenu}
+                        onClose={() => setChatAreaCtxMenu(null)}
+                        items={[
+                            {
+                                label: "Select messages",
+                                icon: <CheckSquare className="h-4 w-4" />,
+                                onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); },
+                            },
+                            {
+                                label: "Close chat",
+                                icon: <X className="h-4 w-4" />,
+                                onClick: () => { setActiveConv(null); setChatAreaCtxMenu(null); },
+                            },
+                        ]}
+                        minWidth={180}
+                    />
+                )
+            }
 
             {/* ── Delete Confirmation Dialog ── */}
             <Dialog open={deleteModalOpen} onOpenChange={(open) => { setDeleteModalOpen(open); if (!open) setSingleDeleteMsg(null); }}>
@@ -2362,16 +2398,18 @@ export default function ChatPage() {
             </Dialog>
 
             {/* Universal File Viewer */}
-            {viewFile && (
-                <FileViewer
-                    open={!!viewFile}
-                    onClose={() => setViewFile(null)}
-                    url={viewFile.url}
-                    name={viewFile.name}
-                    mimeType={viewFile.mimeType}
-                />
-            )}
-        </div>
+            {
+                viewFile && (
+                    <FileViewer
+                        open={!!viewFile}
+                        onClose={() => setViewFile(null)}
+                        url={viewFile.url}
+                        name={viewFile.name}
+                        mimeType={viewFile.mimeType}
+                    />
+                )
+            }
+        </div >
     );
 }
 
