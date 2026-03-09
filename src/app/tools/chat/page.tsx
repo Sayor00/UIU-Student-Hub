@@ -1325,38 +1325,39 @@ export default function ChatPage() {
 
     /* ═══ RENDER ═══ */
     return (
-        <div className="container mx-auto px-4 py-6 max-w-7xl">
-            {/* Header */}
-            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 mb-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                    <MessageCircle className="h-6 w-6 text-primary" />
-                </div>
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Chat</h1>
-                    <p className="text-sm text-muted-foreground">Message fellow UIU students</p>
-                </div>
-            </motion.div>
-
+        <div className="w-full h-[calc(100vh-4rem)] flex flex-col bg-transparent p-2 md:p-3 lg:p-4">
+            <style>{`footer { display: none !important; }`}</style>
             {/* Main layout */}
-            <div className="flex gap-4 h-[calc(100vh-12rem)]">
+            <div className="flex flex-1 w-full overflow-hidden bg-transparent gap-2 lg:gap-3">
                 {/* ── Sidebar ── */}
                 <motion.div
                     initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                    className={`w-full md:w-80 shrink-0 flex flex-col rounded-xl border bg-card/50 backdrop-blur-sm overflow-hidden ${mobileShowChat ? "hidden md:flex" : "flex"}`}
+                    className={`w-full md:w-80 lg:w-96 shrink-0 flex flex-col bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-2xl md:rounded-3xl border border-white/30 dark:border-white/10 shadow-sm shadow-black/5 dark:shadow-none relative overflow-hidden ${mobileShowChat ? "hidden md:flex" : "flex"}`}
                 >
                     {/* Sidebar header */}
-                    <div className="p-3 space-y-2 border-b">
+                    <div className="p-3 mx-2 mt-2 md:mx-4 md:mt-4 mb-2 space-y-3 rounded-2xl md:rounded-3xl border border-white/20 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-3xl z-10 shadow-sm shrink-0">
+                        <div className="flex items-center justify-between mb-1">
+                            <div className="flex items-center gap-2">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 hidden md:flex">
+                                    <MessageCircle className="h-4 w-4 text-primary" />
+                                </div>
+                                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 md:hidden">
+                                    <MessageCircle className="h-5 w-5 text-primary" />
+                                </div>
+                                <h2 className="text-xl font-bold tracking-tight text-foreground/90">Chats</h2>
+                            </div>
+                            <div className="flex gap-1">
+                                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={() => setNewChatOpen(true)} title="New Chat">
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full hover:bg-muted" onClick={() => setNewGroupOpen(true)} title="New Group">
+                                    <Users className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Search conversations..." className="pl-9 h-9" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
-                        </div>
-                        <div className="flex gap-2">
-                            <Button size="sm" className="flex-1 gap-1.5 h-8 text-xs" onClick={() => setNewChatOpen(true)}>
-                                <Plus className="h-3.5 w-3.5" /> New Chat
-                            </Button>
-                            <Button size="sm" variant="outline" className="flex-1 gap-1.5 h-8 text-xs" onClick={() => setNewGroupOpen(true)}>
-                                <Users className="h-3.5 w-3.5" /> New Group
-                            </Button>
+                            <Input placeholder="Search messages..." className="pl-9 h-10 border-none bg-muted/50 rounded-full placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-primary/50" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
                         </div>
                     </div>
 
@@ -1376,19 +1377,23 @@ export default function ChatPage() {
                                     <button key={conv._id}
                                         onClick={() => { setActiveConv(conv); setMobileShowChat(true); }}
                                         onContextMenu={(e) => { e.preventDefault(); setConvContextMenu({ conv, position: { x: e.clientX, y: e.clientY } }); }}
-                                        className={`w-full flex items-center gap-3 p-3 text-left transition-all duration-150 hover:bg-accent/50 ${isActive ? "bg-primary/10 border-r-2 border-primary" : ""}`}
+                                        className={`w-[calc(100%-0.5rem)] md:w-[calc(100%-1rem)] mx-1 md:mx-2 my-0.5 flex items-center gap-3 p-2 md:p-3 rounded-xl md:rounded-2xl text-left transition-all duration-200 ${isActive ? "bg-primary/15 shadow-sm" : "hover:bg-muted"}`}
                                     >
                                         <div className="relative shrink-0">
                                             {convAvatar(conv, userId) ? (
-                                                <img src={convAvatar(conv, userId)!} alt="" className="h-10 w-10 rounded-full object-cover" />
+                                                <img src={convAvatar(conv, userId)!} alt="" className="h-11 w-11 rounded-full object-cover" />
                                             ) : (
-                                                <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${conv.type === "group" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                                <div className={`h-11 w-11 rounded-full flex items-center justify-center text-sm font-semibold ${conv.type === "group" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
                                                     {conv.type === "group" ? <Users className="h-4 w-4" /> : convInitial(conv, userId)}
                                                 </div>
                                             )}
-                                            {other?.isOnline && (
+                                            {other?.isOnline ? (
                                                 <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
-                                            )}
+                                            ) : other?.lastSeen ? (
+                                                <span className="absolute -bottom-1 -right-2 px-1 py-[1px] rounded bg-muted/80 backdrop-blur-md border border-border/50 text-[9px] font-medium text-muted-foreground shadow-sm leading-none flex items-center justify-center">
+                                                    {timeAgo(other.lastSeen)}
+                                                </span>
+                                            ) : null}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center justify-between">
@@ -1416,36 +1421,36 @@ export default function ChatPage() {
                 {/* ── Chat Area ── */}
                 <motion.div
                     initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
-                    className={`flex-1 flex flex-col rounded-xl border bg-card/50 backdrop-blur-sm overflow-hidden ${!mobileShowChat ? "hidden md:flex" : "flex"}`}
+                    className={`flex-1 flex flex-col bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-2xl md:rounded-3xl border border-white/30 dark:border-white/10 shadow-sm shadow-black/5 dark:shadow-none overflow-hidden relative ${!mobileShowChat ? "hidden md:flex" : "flex"}`}
                 >
                     {!activeConv ? (
                         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-                            <MessageCircle className="h-16 w-16 mb-4 opacity-20" />
-                            <p className="font-medium text-lg">Select a conversation</p>
+                            <MessageCircle className="h-16 w-16 mb-4 opacity-20 text-foreground" />
+                            <p className="font-medium text-lg text-foreground/80">Select a conversation</p>
                             <p className="text-sm mt-1">or start a new chat</p>
                         </div>
                     ) : (
                         <>
                             {/* Chat header */}
-                            <div className="flex items-center gap-3 p-3 border-b">
-                                <button className="md:hidden" onClick={() => setMobileShowChat(false)}>
+                            <div className="flex items-center gap-3 p-3 mx-2 mt-2 md:mx-4 md:mt-4 rounded-2xl md:rounded-3xl border border-white/20 dark:border-white/10 bg-white/5 dark:bg-black/10 backdrop-blur-3xl z-10 shadow-sm absolute top-0 left-0 right-0">
+                                <button className="md:hidden text-muted-foreground hover:text-foreground/90" onClick={() => setMobileShowChat(false)}>
                                     <ArrowLeft className="h-5 w-5" />
                                 </button>
                                 <div className="relative">
                                     {convAvatar(latestActiveConv!, userId) ? (
-                                        <img src={convAvatar(latestActiveConv!, userId)!} alt="" className="h-10 w-10 rounded-full object-cover" />
+                                        <img src={convAvatar(latestActiveConv!, userId)!} alt="" className="h-11 w-11 rounded-full object-cover ring-2 ring-border" />
                                     ) : (
-                                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-semibold ${latestActiveConv!.type === "group" ? "bg-primary/10 text-primary" : "bg-muted"}`}>
-                                            {latestActiveConv!.type === "group" ? <Users className="h-4 w-4" /> : convInitial(latestActiveConv!, userId)}
+                                        <div className={`h-11 w-11 rounded-full flex items-center justify-center text-sm font-bold ring-2 ring-border ${latestActiveConv!.type === "group" ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground"}`}>
+                                            {latestActiveConv!.type === "group" ? <Users className="h-5 w-5" /> : convInitial(latestActiveConv!, userId)}
                                         </div>
                                     )}
                                     {latestActiveConv!.type === "private" && getOtherMember(latestActiveConv!, userId)?.isOnline && (
-                                        <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-card" />
+                                        <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-green-500 border-2 border-background" />
                                     )}
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                    <p className="font-semibold text-sm truncate">{convDisplayName(latestActiveConv!, userId)}</p>
-                                    <p className="text-xs text-muted-foreground">
+                                <div className="flex-1 min-w-0 ml-1">
+                                    <p className="font-bold text-base tracking-tight truncate text-foreground/90">{convDisplayName(latestActiveConv!, userId)}</p>
+                                    <p className="text-xs text-muted-foreground font-medium tracking-wide">
                                         {latestActiveConv!.type === "group"
                                             ? `${latestActiveConv!.members.length} members · ${latestActiveConv!.members.filter((m) => m.isOnline).length} online`
                                             : getOtherMember(latestActiveConv!, userId)?.isOnline
@@ -1457,14 +1462,14 @@ export default function ChatPage() {
                                     </p>
                                 </div>
                                 {latestActiveConv!.type === "group" && (
-                                    <Button variant="ghost" size="icon" onClick={() => { setGroupSettingsOpen(true); setEditGroupName(latestActiveConv!.name || ""); }}>
-                                        <Settings className="h-4 w-4" />
+                                    <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full h-9 w-9" onClick={() => { setGroupSettingsOpen(true); setEditGroupName(latestActiveConv!.name || ""); }}>
+                                        <Settings className="h-5 w-5" />
                                     </Button>
                                 )}
                             </div>
 
                             {/* Messages — flex-col-reverse anchors content to bottom, eliminating scroll flash */}
-                            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 flex flex-col-reverse"
+                            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 pt-24 md:p-6 md:pt-28 flex flex-col-reverse"
                                 onContextMenu={(e) => {
                                     // Only show chat-area context menu if right-click is NOT on a message bubble
                                     const target = e.target as HTMLElement;
@@ -1515,15 +1520,15 @@ export default function ChatPage() {
                                         return (
                                             <div
                                                 key={msg._id}
-                                                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative ${selectMode && selectedMsgIds.has(msg._id) ? "bg-primary/5 rounded-lg" : ""}`}
+                                                className={`flex ${isMe ? "justify-end" : "justify-start"} group relative ${selectMode && selectedMsgIds.has(msg._id) ? "bg-white/5 rounded-lg" : ""}`}
                                                 style={{ transform: swipeOffset > 0 ? `translateX(${swipeOffset}px)` : undefined, transition: swipeOffset > 0 ? 'none' : 'transform 0.2s ease-out' }}
                                                 onClick={() => selectMode && !isPending && toggleSelectMsg(msg._id)}
                                             >
                                                 {/* Select mode checkbox */}
                                                 {selectMode && !isPending && (
                                                     <div className={`flex items-center mr-2 shrink-0 ${isMe ? "order-last ml-2 mr-0" : ""}`}>
-                                                        <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${selectedMsgIds.has(msg._id) ? "bg-primary border-primary" : "border-muted-foreground/40 hover:border-primary/60"}`}>
-                                                            {selectedMsgIds.has(msg._id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                                                        <div className={`h-5 w-5 rounded border-2 flex items-center justify-center transition-all cursor-pointer ${selectedMsgIds.has(msg._id) ? "bg-orange-500 border-orange-500" : "border-white/40 hover:border-orange-500/60"}`}>
+                                                            {selectedMsgIds.has(msg._id) && <Check className="h-3 w-3 text-white" />}
                                                         </div>
                                                     </div>
                                                 )}
@@ -1562,11 +1567,11 @@ export default function ChatPage() {
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            <div className={`rounded-2xl px-3.5 py-2 text-sm ${isFailed
-                                                                ? "bg-destructive/20 text-destructive-foreground rounded-br-md border border-destructive/30"
+                                                            <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-sm ${isFailed
+                                                                ? "bg-destructive/20 text-destructive rounded-br-sm border border-destructive/30"
                                                                 : isMe
-                                                                    ? `bg-primary text-primary-foreground rounded-br-md ${isSending ? "opacity-70" : ""}`
-                                                                    : "bg-muted rounded-bl-md"
+                                                                    ? `bg-primary text-primary-foreground rounded-br-sm border border-primary/50 ${isSending ? "opacity-70" : ""}`
+                                                                    : "bg-muted/80 backdrop-blur-md border border-border text-foreground rounded-bl-sm"
                                                                 }`}>
                                                                 {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                                 {msg.type === "image" && msg.attachments?.[0] && (
@@ -1741,10 +1746,10 @@ export default function ChatPage() {
                                     </Button>
                                 </div>
                             ) : (
-                                <div className="p-3 border-t space-y-2">
+                                <div className="px-2 pb-2 pt-0 md:px-4 md:pb-3 md:pt-0 bg-transparent mt-auto relative z-20">
                                     {voice.recording ? (
-                                        <div className="flex items-center gap-3">
-                                            <span className="flex items-center gap-2 text-sm text-destructive shrink-0">
+                                        <div className="flex items-center gap-2 w-full min-w-0 bg-white/5 dark:bg-black/10 backdrop-blur-3xl border border-white/20 dark:border-white/10 rounded-full p-1.5 shadow-sm relative z-30 mb-0">
+                                            <span className="flex items-center gap-2 text-sm text-destructive shrink-0 ml-2">
                                                 {voice.paused
                                                     ? <Pause className="h-3 w-3 text-destructive" />
                                                     : <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
@@ -1753,11 +1758,15 @@ export default function ChatPage() {
                                                 {voice.paused && <span className="text-[10px] text-muted-foreground ml-0.5">Paused</span>}
                                             </span>
                                             <RecordingWaveform stream={voice.paused ? null : voice.stream} />
-                                            <Button size="sm" variant="ghost" onClick={voice.cancel}><X className="h-4 w-4" /></Button>
-                                            <Button size="sm" variant="ghost" onClick={voice.togglePause}>
-                                                {voice.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                                            <Button size="icon" variant="ghost" className="h-9 w-9 text-muted-foreground hover:text-foreground rounded-full" onClick={voice.cancel}>
+                                                <X className="h-5 w-5" />
                                             </Button>
-                                            <Button size="sm" onClick={sendVoice}><Send className="h-4 w-4" /></Button>
+                                            <Button size="icon" variant="ghost" className="h-9 w-9 text-primary hover:text-primary/80 rounded-full" onClick={voice.togglePause}>
+                                                {voice.paused ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
+                                            </Button>
+                                            <Button size="icon" className="h-9 w-9 rounded-full" onClick={sendVoice}>
+                                                <Send className="h-4 w-4" />
+                                            </Button>
                                         </div>
                                     ) : (
                                         <>
@@ -1791,11 +1800,11 @@ export default function ChatPage() {
                                                 )}
                                             </AnimatePresence>
 
-                                            <div className="flex items-center gap-1.5 w-full min-w-0">
+                                            <div className="flex items-center gap-1 w-full min-w-0 bg-white/5 dark:bg-black/10 backdrop-blur-3xl border border-white/20 dark:border-white/10 rounded-full p-1.5 shadow-sm relative z-30 mb-0">
                                                 {/* Attachment menu */}
                                                 {/* Unified Plus Menu */}
                                                 <div className="relative flex-shrink-0">
-                                                    <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => { setShowAttach(!showAttach); setShowEmoji(false); }}>
+                                                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => { setShowAttach(!showAttach); setShowEmoji(false); }}>
                                                         <Plus className="h-5 w-5" />
                                                     </Button>
                                                     <AnimatePresence>
@@ -1822,7 +1831,7 @@ export default function ChatPage() {
                                                     </AnimatePresence>
                                                 </div>
 
-                                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => {
+                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => {
                                                     const isAnyOpen = showEmoji || showStickers || showGifs;
                                                     if (isAnyOpen) {
                                                         setShowEmoji(false); setShowStickers(false); setShowGifs(false);
@@ -1847,10 +1856,10 @@ export default function ChatPage() {
                                                     }
                                                 />
 
-                                                <Button variant="ghost" size="icon" className="h-9 w-9" onClick={voice.start}>
+                                                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={voice.start}>
                                                     <Mic className="h-4 w-4" />
                                                 </Button>
-                                                <Button size="icon" className="h-9 w-9" onClick={() => editingMsg ? saveEdit() : sendMessage()} disabled={!stripHtml(inputText)}>
+                                                <Button size="icon" className="h-9 w-9 rounded-full" onClick={() => editingMsg ? saveEdit() : sendMessage()} disabled={!stripHtml(inputText)}>
                                                     {editingMsg ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
                                                 </Button>
                                             </div>

@@ -94,7 +94,7 @@ export default function TiptapChatEditor({
         ],
         content: value || "",
         editorProps: {
-            attributes: { class: "outline-none min-h-[36px] max-h-[120px] overflow-y-auto text-sm px-3 py-2 break-all whitespace-pre-wrap" },
+            attributes: { class: "outline-none min-h-[20px] max-h-[120px] overflow-y-auto text-sm px-1 py-0 break-all whitespace-pre-wrap flex-1 [&_p]:m-0" },
         },
         onUpdate: ({ editor: e }) => { onChangeRef.current(e.getHTML()); onTypingRef.current?.(); },
         onBlur: () => { onBlurRef.current?.(); },
@@ -334,13 +334,13 @@ export default function TiptapChatEditor({
 
             {/* Editor */}
             <div
-                className="rounded-md border border-input bg-background ring-offset-background focus-within:ring-2 focus-within:ring-ring"
+                className="w-full h-full min-h-[36px] flex items-center bg-transparent border-none outline-none ring-0 placeholder:text-muted-foreground"
                 onContextMenu={handleContextMenu}
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onTouchMove={handleTouchEnd}
             >
-                <EditorContent editor={editor} />
+                <EditorContent editor={editor} className="flex-1 w-full flex items-center justify-center h-full" />
             </div>
         </div>
     );

@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     ];
 
     const users = await User.find({ _id: { $in: allMemberIds } })
-        .select("_id name profilePicture studentId")
+        .select("_id name profilePicture studentId updatedAt")
         .lean();
 
     const userMap = new Map(users.map((u: any) => [u._id.toString(), u]));
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
                     }
                     : null,
                 isOnline: !!isOnlineStatus,
-                lastSeen: presence?.lastSeen || null,
+                lastSeen: presence?.lastSeen || (user as any)?.updatedAt || null,
             };
         });
 
