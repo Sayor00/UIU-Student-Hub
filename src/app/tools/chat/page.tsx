@@ -30,7 +30,8 @@ import { EMOJI_LIST, STICKER_URLS, GIF_URLS } from "./constants";
 import MessageContextMenu, { ConversationContextMenu } from "./MessageContextMenu";
 import ContextMenuBase, { type ContextMenuItem } from "./ContextMenuBase";
 import VoiceMessagePlayer, { RecordingWaveform } from "./VoiceMessagePlayer";
-import MediaPicker from "@/components/chat/MediaPicker";
+
+const MediaPicker = dynamic(() => import("@/components/chat/MediaPicker"), { ssr: false });
 import type {
     ChatConversation, ChatMessage, ChatMember, ChatUser, Attachment,
 } from "./types";
@@ -244,6 +245,8 @@ export default function ChatPage() {
     const [groupSettingsOpen, setGroupSettingsOpen] = React.useState(false);
     const [pollOpen, setPollOpen] = React.useState(false);
     const [showEmoji, setShowEmoji] = React.useState(false);
+    const [hasOpenedEmoji, setHasOpenedEmoji] = React.useState(false);
+    React.useEffect(() => { if (showEmoji) setHasOpenedEmoji(true); }, [showEmoji]);
     const [showAttach, setShowAttach] = React.useState(false);
     const [showStickers, setShowStickers] = React.useState(false);
     const [showGifs, setShowGifs] = React.useState(false);
@@ -269,6 +272,7 @@ export default function ChatPage() {
 
     const voice = useVoiceRecorder();
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const { ref: scrollSentinelRef, inView: isAtBottom } = useInView({ threshold: 0 });
     const scrollContainerRef = React.useRef<HTMLDivElement>(null);
     const { ref: loadMoreRef, inView } = useInView({ threshold: 0 });
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -404,6 +408,25 @@ export default function ChatPage() {
             loadingMoreRef.current = false;
 
             // Clear state (column-reverse means no scroll flash — messages anchor to bottom)
+            setReplyToMessages([]);
+            setEditingMsg(null);
+            setPreEditText('');
+            setShowEmoji(false);
+            setShowAttach(false);
+            setShowStickers(false);
+            setShowGifs(false);
+            setSelectMode(false);
+            setSelectedMsgIds(new Set());
+            setContextMenu(null);
+            setConvContextMenu(null);
+            setChatAreaCtxMenu(null);
+            setRichToolbar(null);
+            voice.cancel();
+            setForwardOpen(false);
+            setForwardMsgIds([]);
+            setDeleteModalOpen(false);
+            setSingleDeleteMsg(null);
+            setViewFile(null);
             setMessages([]);
             setHasMore(false);
             setPendingMessages([]);
@@ -1469,6 +1492,17 @@ export default function ChatPage() {
                             </div>
 
                             {/* Messages — flex-col-reverse anchors content to bottom, eliminating scroll flash */}
+                            <AnimatePresence>
+                                {!isAtBottom && (
+                                    <motion.div initial={{ opacity: 0, scale: 0.8, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                        className="absolute bottom-[90px] right-6 z-50">
+                                        <Button size="icon" className="rounded-full shadow-lg h-10 w-10 bg-primary/90 hover:bg-primary text-primary-foreground backdrop-blur-md border border-white/20"
+                                            onClick={() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+                                            <ChevronDown className="h-5 w-5" />
+                                        </Button>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                             <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 pt-24 md:p-6 md:pt-28 flex flex-col-reverse"
                                 onContextMenu={(e) => {
                                     // Only show chat-area context menu if right-click is NOT on a message bubble
@@ -1481,6 +1515,7 @@ export default function ChatPage() {
                             >
                                 {/* This div is the FIRST child in DOM but LAST visually (bottom anchor point) */}
                                 <div ref={messagesEndRef} />
+                                <div ref={scrollSentinelRef} className="h-px shrink-0 w-full" />
 
                                 {/* All message content in normal top-to-bottom order */}
                                 <div className="space-y-3">
@@ -1547,7 +1582,7 @@ export default function ChatPage() {
                                                     onTouchMove={!selectMode ? handleTouchMove : undefined}
                                                     onTouchEnd={() => !selectMode && handleTouchEnd(msg)}
                                                 >
-                                                    {!isMe && <span className="text-[10px] text-muted-foreground mb-0.5 ml-1">{msg.senderName}</span>}
+                                                    {!isMe && activeConv.type === "group" && <span className="text-[10px] text-muted-foreground mb-0.5 ml-1">{msg.senderName}</span>}
 
                                                     {/* Deleted message */}
                                                     {isDeleted ? (
@@ -1560,18 +1595,25 @@ export default function ChatPage() {
                                                             {repliedMsgs.length > 0 && (
                                                                 <div className="space-y-0.5 mb-0.5">
                                                                     {repliedMsgs.map((rm) => (
-                                                                        <div key={rm._id} className={`rounded-t-xl px-3 py-1.5 text-xs border-l-2 border-primary/50 ${isMe ? 'bg-primary/5' : 'bg-muted/70'} max-w-full truncate`}>
+                                                                        <div key={rm._id} onClick={() => {
+                                                                            const el = document.querySelector(`[data-message-id="${rm._id}"]`);
+                                                                            if (el) {
+                                                                                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                                el.classList.add('bg-primary/20', 'transition-colors', 'duration-500');
+                                                                                setTimeout(() => el.classList.remove('bg-primary/20'), 1500);
+                                                                            }
+                                                                        }} className={`rounded-t-xl px-3 py-1.5 text-xs border-l-2 border-primary/50 cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-primary/5' : 'bg-muted/70'} max-w-full truncate`}>
                                                                             <span className="font-medium text-primary/70">{rm.senderName}</span>
-                                                                            <p className="truncate text-muted-foreground">{rm.deletedForAll ? 'Deleted message' : (rm.text || rm.type)}</p>
+                                                                            <p className="truncate text-muted-foreground">{rm.deletedForAll ? 'Deleted message' : stripHtml(rm.text || rm.type)}</p>
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-sm ${isFailed
+                                                            <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-lg ${isFailed
                                                                 ? "bg-destructive/20 text-destructive rounded-br-sm border border-destructive/30"
                                                                 : isMe
-                                                                    ? `bg-primary text-primary-foreground rounded-br-sm border border-primary/50 ${isSending ? "opacity-70" : ""}`
-                                                                    : "bg-muted/80 backdrop-blur-md border border-border text-foreground rounded-bl-sm"
+                                                                    ? `bg-primary/20 backdrop-blur-xl text-foreground rounded-br-sm border border-primary/30 ${isSending ? "opacity-70" : ""}`
+                                                                    : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground rounded-bl-sm"
                                                                 }`}>
                                                                 {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                                 {msg.type === "image" && msg.attachments?.[0] && (
@@ -1690,7 +1732,7 @@ export default function ChatPage() {
                                                 <div key={rm._id} className={`flex items-center gap-1 ${idx > 0 ? 'mt-0.5' : ''}`}>
                                                     <div className="flex-1 border-l-2 border-primary pl-2 py-0.5 min-w-0">
                                                         <span className="text-xs font-medium text-primary">{rm.senderName}</span>
-                                                        <p className="text-xs text-muted-foreground truncate">{rm.text || rm.type}</p>
+                                                        <p className="text-xs text-muted-foreground truncate">{stripHtml(rm.text || rm.type)}</p>
                                                     </div>
                                                     <button onClick={() => setReplyToMessages((prev) => prev.filter((m) => m._id !== rm._id))} className="text-muted-foreground hover:text-foreground shrink-0">
                                                         <X className="h-3 w-3" />
@@ -1772,33 +1814,34 @@ export default function ChatPage() {
                                         <>
                                             {/* Picker rows */}
                                             {/* Unified Full-Blown Media Picker (Emoji, Sticker, GIF) */}
-                                            <AnimatePresence>
-                                                {showEmoji && (
-                                                    <motion.div initial={{ height: 0, opacity: 0, y: 20 }} animate={{ height: "auto", opacity: 1, y: 0 }} exit={{ height: 0, opacity: 0, y: 20 }}
-                                                        className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-[28px] relative w-full shadow-xl mb-2">
-                                                        <MediaPicker
-                                                            onEmojiSelect={(emoji) => {
-                                                                if (editorRef.current) {
-                                                                    editorRef.current.chain().focus().command(({ tr }: any) => {
-                                                                        tr.insertText(emoji);
-                                                                        return true;
-                                                                    }).run();
-                                                                } else {
-                                                                    setInputText((t) => t + emoji);
-                                                                }
-                                                            }}
-                                                            onGifSelect={(url) => {
-                                                                sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] });
-                                                                setShowEmoji(false);
-                                                            }}
-                                                            onStickerSelect={(url) => {
-                                                                sendMessage({ type: "sticker", text: "Sticker", attachments: [{ url, name: "sticker", size: 0, mimeType: "image/gif" }] });
-                                                                setShowEmoji(false);
-                                                            }}
-                                                        />
-                                                    </motion.div>
-                                                )}
-                                            </AnimatePresence>
+                                            {hasOpenedEmoji && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0, scale: 0.95 }}
+                                                    animate={showEmoji ? { height: "auto", opacity: 1, scale: 1, display: "block" } : { height: 0, opacity: 0, scale: 0.95, transitionEnd: { display: "none" } }}
+                                                    transition={{ duration: 0.2 }}
+                                                    className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-[28px] relative w-full shadow-xl mb-2 origin-bottom">
+                                                    <MediaPicker
+                                                        onEmojiSelect={(emoji) => {
+                                                            if (editorRef.current) {
+                                                                editorRef.current.chain().focus().command(({ tr }: any) => {
+                                                                    tr.insertText(emoji);
+                                                                    return true;
+                                                                }).run();
+                                                            } else {
+                                                                setInputText((t) => t + emoji);
+                                                            }
+                                                        }}
+                                                        onGifSelect={(url) => {
+                                                            sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] });
+                                                            setShowEmoji(false);
+                                                        }}
+                                                        onStickerSelect={(url) => {
+                                                            sendMessage({ type: "sticker", text: "Sticker", attachments: [{ url, name: "sticker", size: 0, mimeType: "image/gif" }] });
+                                                            setShowEmoji(false);
+                                                        }}
+                                                    />
+                                                </motion.div>
+                                            )}
 
                                             <div className="flex items-center gap-1 w-full min-w-0 bg-white/5 dark:bg-black/10 backdrop-blur-3xl border border-white/20 dark:border-white/10 rounded-full p-1.5 shadow-sm relative z-30 mb-0">
                                                 {/* Attachment menu */}
@@ -1810,20 +1853,20 @@ export default function ChatPage() {
                                                     <AnimatePresence>
                                                         {showAttach && (
                                                             <motion.div initial={{ opacity: 0, scale: 0.9, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 10 }}
-                                                                className="absolute bottom-12 left-0 bg-popover border rounded-xl shadow-lg p-2 space-y-1 z-50 min-w-[160px]">
+                                                                className="absolute bottom-12 left-0 bg-background/30 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl shadow-black/30 py-1 px-1.5 z-50 min-w-[160px] overflow-hidden">
                                                                 {[
                                                                     { icon: ImageIcon, label: "Image", accept: "image/*", type: "image", action: "file" },
                                                                     { icon: Video, label: "Video", accept: "video/*", type: "video", action: "file" },
                                                                     { icon: FileText, label: "File", accept: "*/*", type: "file", action: "file" },
                                                                     { icon: Music, label: "Audio", accept: "audio/*", type: "audio", action: "file" },
                                                                 ].map((item) => (
-                                                                    <label key={item.type} className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer text-sm transition-colors">
+                                                                    <label key={item.type} className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground/70 hover:bg-white/10 hover:text-foreground cursor-pointer">
                                                                         <item.icon className="h-4 w-4" /> {item.label}
                                                                         <input type="file" accept={item.accept} className="hidden" onChange={(e) => { handleFileSelect(e, item.type); setShowAttach(false); }} />
                                                                     </label>
                                                                 ))}
 
-                                                                <button onClick={() => { setPollOpen(true); setShowAttach(false); }} className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-accent cursor-pointer text-sm transition-colors text-left">
+                                                                <button onClick={() => { setPollOpen(true); setShowAttach(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground/70 hover:bg-white/10 hover:text-foreground cursor-pointer text-left">
                                                                     <BarChart3 className="h-4 w-4" /> Poll
                                                                 </button>
                                                             </motion.div>
@@ -1842,19 +1885,33 @@ export default function ChatPage() {
                                                     <Smile className="h-5 w-5" />
                                                 </Button>
 
-
-                                                <TiptapChatEditor
-                                                    value={inputText}
-                                                    onChange={setInputText}
-                                                    onSubmit={() => editingMsg ? saveEdit() : sendMessage()}
-                                                    onTyping={sendTyping}
-                                                    editorRef={editorRef}
-                                                    placeholder={
-                                                        activeConv.type === "group"
-                                                            ? `Message ${activeConv.name || "Group"}...`
-                                                            : `Message ${convDisplayName(activeConv, userId)}...`
-                                                    }
-                                                />
+                                                {(() => {
+                                                    const mentionUsers = activeConv.members
+                                                        .filter(m => m.userId !== userId)
+                                                        .map(m => ({
+                                                            id: m.userId,
+                                                            name: m.user?.name || "Unknown",
+                                                            avatar: m.user?.profilePicture || null,
+                                                            role: "Member"
+                                                        }));
+                                                    return (
+                                                        <TiptapChatEditor
+                                                            key={activeConv._id}
+                                                            value={inputText}
+                                                            onChange={setInputText}
+                                                            onSubmit={() => editingMsg ? saveEdit() : sendMessage()}
+                                                            onTyping={sendTyping}
+                                                            editorRef={editorRef}
+                                                            placeholder={
+                                                                activeConv.type === "group"
+                                                                    ? `Message ${activeConv.name || "Group"}...`
+                                                                    : `Message ${convDisplayName(activeConv, userId)}...`
+                                                            }
+                                                            activeConv={activeConv}
+                                                            mentionUsers={mentionUsers}
+                                                        />
+                                                    );
+                                                })()}
 
                                                 <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={voice.start}>
                                                     <Mic className="h-4 w-4" />

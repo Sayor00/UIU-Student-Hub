@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import EmojiPicker, { Theme, EmojiStyle } from "emoji-picker-react";
+import { Picker } from 'emoji-mart';
 import { Smile, Sticker as StickerIcon, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
@@ -13,7 +13,7 @@ interface MediaPickerProps {
 
 type TabType = "emoji" | "gif" | "sticker";
 
-export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelect }: MediaPickerProps) {
+const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: MediaPickerProps) => {
     const [activeTab, setActiveTab] = useState<TabType>("emoji");
     const [searchQuery, setSearchQuery] = useState("");
     const [results, setResults] = useState<any[]>([]);
@@ -22,6 +22,30 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
 
     // Giphy API Key (Add NEXT_PUBLIC_GIPHY_API_KEY to your .env.local file)
     const GIPHY_API_KEY = process.env.NEXT_PUBLIC_GIPHY_API_KEY || "GlVGYHqcVmaccB59OxAwx8YcbdMGE15l";
+
+    // Prevent stale closures when using React.memo
+    const callbacksRef = useRef({ onEmojiSelect, onGifSelect, onStickerSelect });
+    useEffect(() => {
+        callbacksRef.current = { onEmojiSelect, onGifSelect, onStickerSelect };
+    }, [onEmojiSelect, onGifSelect, onStickerSelect]);
+
+    const emojiPickerRef = useRef<HTMLDivElement>(null);
+    const pickerInstance = useRef<any>(null);
+
+    useEffect(() => {
+        if (!pickerInstance.current && emojiPickerRef.current) {
+            pickerInstance.current = new Picker({
+                onEmojiSelect: (e: any) => callbacksRef.current.onEmojiSelect(e.native),
+                theme: "dark",
+                set: "apple",
+                previewPosition: "none",
+                skinTonePosition: "none",
+                navPosition: "top",
+                dynamicWidth: true,
+            });
+            emojiPickerRef.current.appendChild(pickerInstance.current as any);
+        }
+    }, []);
 
     useEffect(() => {
         if (activeTab === "emoji") return;
@@ -35,7 +59,7 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                 const type = searchQuery.trim() ? "search" : "trending";
                 const q = searchQuery.trim() ? `&q=${encodeURIComponent(searchQuery)}` : "";
 
-                const res = await fetch(`https://api.giphy.com/v1/${endpoint}/${type}?api_key=${GIPHY_API_KEY}${q}&limit=40&rating=g`);
+                const res = await fetch(`https://api.giphy.com/v1/${endpoint}/${type}?api_key=${GIPHY_API_KEY}${q}&limit=100&rating=g`);
 
                 if (!res.ok) {
                     throw new Error(`Giphy API Error: ${res.status}`);
@@ -68,38 +92,12 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
         <div className="flex flex-col w-full h-[320px] sm:h-[350px] bg-transparent border-none overflow-hidden rounded-t-3xl z-20">
             {/* Main Content Area */}
             <div className="flex-1 overflow-hidden flex flex-col pt-1 bg-transparent">
-                {activeTab === "emoji" && (
-                    <div
-                        className="flex-1 w-full h-full emoji-picker-wrapper"
-                        style={{
-                            "--epr-bg-color": "transparent",
-                            "--epr-category-label-bg-color": "transparent",
-                            "--epr-picker-border-color": "transparent",
-                            "--epr-hover-bg-color": "rgba(255, 255, 255, 0.1)",
-                            "--epr-text-color": "#e9edef",
-                            "--epr-search-border-color": "transparent",
-                            "--epr-search-input-bg-color": "rgba(255, 255, 255, 0.05)",
-                            "--epr-category-icon-active-color": "hsl(var(--primary))",
-                        } as React.CSSProperties}
-                    >
-                        <EmojiPicker
-                            onEmojiClick={(e) => onEmojiSelect(e.emoji)}
-                            autoFocusSearch={false}
-                            theme={Theme.DARK}
-                            emojiStyle={EmojiStyle.APPLE}
-                            width="100%"
-                            height="100%"
-                            searchDisabled={false}
-                            skinTonesDisabled
-                            lazyLoadEmojis
-                            previewConfig={{ showPreview: false }}
-                        />
-                    </div>
-                )}
+                <div className={`flex-1 w-full h-full emoji-mart-container ${activeTab === 'emoji' ? 'block' : 'hidden'}`} ref={emojiPickerRef}>
+                </div>
 
                 {activeTab === "gif" && (
-                    <div className="flex-1 flex flex-col p-2 bg-transparent">
-                        <div className="relative mb-3 mx-2 mt-2">
+                    <div className="flex-1 flex flex-col p-2 bg-transparent min-h-0 overflow-hidden">
+                        <div className="relative mb-3 mx-2 mt-2 shrink-0">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <input
                                 type="text"
@@ -109,7 +107,7 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                                 className="w-full pl-10 pr-4 py-2 bg-muted/40 text-foreground rounded-full text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary backdrop-blur-sm transition-all"
                             />
                         </div>
-                        <div className="flex-1 overflow-y-auto pr-1 no-scrollbar">
+                        <div className="flex-1 overflow-y-auto pr-1 min-h-0">
                             {loading && results.length === 0 ? (
                                 <div className="flex justify-center items-center h-32"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                             ) : errorMsg ? (
@@ -120,10 +118,10 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                             ) : results.length === 0 && !loading ? (
                                 <div className="text-center text-sm text-muted-foreground pt-10">No results found</div>
                             ) : (
-                                <div className="columns-2 sm:columns-3 gap-3 space-y-3">
+                                <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2 pb-4">
                                     {results.map((item) => (
-                                        <button key={item.id} onClick={() => onGifSelect(item.images.fixed_height.url)} className="w-full relative break-inside-avoid rounded-2xl overflow-hidden group">
-                                            <img src={item.images.fixed_height.url} alt={item.title} className="w-full h-auto object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
+                                        <button key={item.id} onClick={() => callbacksRef.current.onGifSelect(item.images.fixed_height.url)} className="w-full aspect-square relative break-inside-avoid rounded-xl overflow-hidden group">
+                                            <img src={item.images.fixed_height.url} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                                             <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
                                     ))}
@@ -134,8 +132,8 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                 )}
 
                 {activeTab === "sticker" && (
-                    <div className="flex-1 flex flex-col p-2 bg-transparent">
-                        <div className="relative mb-3 mx-2 mt-2">
+                    <div className="flex-1 flex flex-col p-2 bg-transparent min-h-0 overflow-hidden">
+                        <div className="relative mb-3 mx-2 mt-2 shrink-0">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <input
                                 type="text"
@@ -145,7 +143,7 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                                 className="w-full pl-10 pr-4 py-2 bg-muted/40 text-foreground rounded-full text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary backdrop-blur-sm transition-all"
                             />
                         </div>
-                        <div className="flex-1 overflow-y-auto pr-1 no-scrollbar">
+                        <div className="flex-1 overflow-y-auto pr-1 min-h-0">
                             {loading && results.length === 0 ? (
                                 <div className="flex justify-center items-center h-32"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
                             ) : errorMsg ? (
@@ -156,9 +154,9 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
                             ) : results.length === 0 && !loading ? (
                                 <div className="text-center text-sm text-muted-foreground pt-10">No results found</div>
                             ) : (
-                                <div className="grid grid-cols-4 sm:grid-cols-5 gap-3">
+                                <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-2 pb-4">
                                     {results.map((item) => (
-                                        <button key={item.id} onClick={() => onStickerSelect(item.images.fixed_height.url)} className="w-full aspect-square relative rounded-2xl overflow-hidden group hover:bg-muted/30 p-2 transition-colors">
+                                        <button key={item.id} onClick={() => callbacksRef.current.onStickerSelect(item.images.fixed_height.url)} className="w-full aspect-square relative rounded-xl overflow-hidden group hover:bg-muted/30 p-1 transition-colors">
                                             <img src={item.images.fixed_height.url} alt={item.title} className="w-full h-full object-contain group-hover:scale-110 transition-transform duration-300" loading="lazy" />
                                         </button>
                                     ))}
@@ -171,21 +169,21 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
 
             <div className="flex items-center bg-transparent pt-2 pb-4 shrink-0 px-2 justify-center gap-2">
                 <button
-                    onClick={() => setActiveTab("emoji")}
+                    onClick={() => { setActiveTab("emoji"); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
                         ${activeTab === "emoji" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
                 >
                     <Smile className="h-4 w-4" /> Emojis
                 </button>
                 <button
-                    onClick={() => { setActiveTab("gif"); setSearchQuery(""); }}
+                    onClick={() => { setActiveTab("gif"); setSearchQuery(""); setResults([]); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
                         ${activeTab === "gif" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
                 >
                     GIF
                 </button>
                 <button
-                    onClick={() => { setActiveTab("sticker"); setSearchQuery(""); }}
+                    onClick={() => { setActiveTab("sticker"); setSearchQuery(""); setResults([]); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
                         ${activeTab === "sticker" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
                 >
@@ -194,46 +192,21 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
             </div>
 
             <style jsx global>{`
-                /* Hide emoji picker search and header mostly, override custom scrollbar to stick to dark mode */
-                .emoji-picker-wrapper .epr-body::-webkit-scrollbar {
-                    width: 6px;
-                }
-                .emoji-picker-wrapper .epr-body::-webkit-scrollbar-thumb {
-                    background-color: rgba(255, 255, 255, 0.2);
-                    border-radius: 10px;
-                }
-                .emoji-picker-wrapper aside.EmojiPickerReact.epr-dark-theme {
-                    background: transparent !important;
-                    border: none !important;
-                    --epr-bg-color: transparent !important;
-                    --epr-category-label-bg-color: transparent !important;
-                    --epr-picker-border-color: transparent !important;
-                    --epr-hover-bg-color: rgba(255, 255, 255, 0.1) !important;
-                    --epr-text-color: #e9edef !important;
-                    --epr-search-border-color: transparent !important;
-                    --epr-search-input-bg-color: rgba(255, 255, 255, 0.05) !important;
-                    --epr-category-icon-active-color: #00a884 !important;
-                    --epr-category-label-backdrop-filter: blur(8px);
-                    font-family: inherit;
-                }
-                .emoji-picker-wrapper .epr-search-container input.epr-search {
-                    border-radius: 20px !important;
-                    height: 40px !important;
-                    margin: 8px 16px !important;
-                    width: calc(100% - 32px) !important;
-                    color: inherit !important;
-                }
-                .emoji-picker-wrapper .epr-category-nav {
-                    padding: 8px 16px 0 !important;
-                }
-                .no-scrollbar::-webkit-scrollbar {
-                    display: none;
-                }
-                .no-scrollbar {
-                    -ms-overflow-style: none;
-                    scrollbar-width: none;
+                .emoji-mart-container em-emoji-picker {
+                    --rgb-background: transparent;
+                    --rgb-input: transparent;
+                    --color-border: rgba(255, 255, 255, 0.05);
+                    --color-border-over: hsl(var(--primary));
+                    --rgb-accent: 249, 115, 22;
+                    --padding: 8px;
+                    --category-icon-size: 16px;
+                    width: 100% !important;
+                    height: 100% !important;
+                    max-width: 100%;
                 }
             `}</style>
         </div>
     );
-}
+};
+
+export default React.memo(MediaPickerComponent, () => true);

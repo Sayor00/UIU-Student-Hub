@@ -8,6 +8,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Highlight from "@tiptap/extension-highlight";
 import TextAlign from "@tiptap/extension-text-align";
+import Mention from "@tiptap/extension-mention";
+import { ReactRenderer } from "@tiptap/react";
+import tippy from "tippy.js";
+import "tippy.js/dist/tippy.css";
+import { MentionList } from "./MentionList";
 import {
     Bold, Italic, Underline as UnderlineIcon, Strikethrough, Code,
     Link as LinkIcon, X, List, ListOrdered, Quote, Minus,
@@ -25,10 +30,12 @@ interface TiptapChatEditorProps {
     onBlur?: () => void;
     placeholder?: string;
     editorRef?: React.MutableRefObject<ReturnType<typeof useEditor> | null>;
+    activeConv?: any;
+    mentionUsers?: any[];
 }
 
 function stripHtml(html: string): string {
-    return html.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim();
+    return html.replace(/<[^>]+>/g, "").replace(/<[^>]*$/, "").replace(/&nbsp;/g, " ").trim();
 }
 
 export default function TiptapChatEditor({
@@ -39,6 +46,8 @@ export default function TiptapChatEditor({
     onBlur,
     placeholder = "Type a message...",
     editorRef,
+    activeConv,
+    mentionUsers = [],
 }: TiptapChatEditorProps) {
     const [linkDialogOpen, setLinkDialogOpen] = React.useState(false);
     const [linkUrl, setLinkUrl] = React.useState("");
@@ -58,6 +67,9 @@ export default function TiptapChatEditor({
     React.useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
     React.useEffect(() => { onTypingRef.current = onTyping; }, [onTyping]);
     React.useEffect(() => { onBlurRef.current = onBlur; }, [onBlur]);
+
+    const activeConvRef = React.useRef(activeConv);
+    React.useEffect(() => { activeConvRef.current = activeConv; }, [activeConv]);
 
     const ChatKeymap = React.useMemo(() =>
         Extension.create({
@@ -91,6 +103,83 @@ export default function TiptapChatEditor({
             Highlight.configure({ multicolor: false }),
             TextAlign.configure({ types: ["heading", "paragraph"] }),
             ChatKeymap,
+            Mention.configure({
+                HTMLAttributes: {
+                    class: "px-1.5 py-[1px] rounded bg-black/10 dark:bg-white/10 text-inherit font-semibold ring-1 ring-black/5 dark:ring-white/10 inline-block align-baseline",
+                },
+                suggestion: {
+                    items: async ({ query }) => {
+                        const q = query.trim().toLowerCase();
+                        return mentionUsers
+                            .filter((u: any) => {
+                                if (!q) return true;
+                                const name = u.name?.toLowerCase() || "";
+                                return name.includes(q);
+                            })
+                            .slice(0, 10);
+                    },
+                    render: () => {
+                        let component: ReactRenderer;
+                        let popup: any;
+                        return {
+                            onStart: (props) => {
+                                component = new ReactRenderer(MentionList, {
+                                    props,
+                                    editor: props.editor,
+                                });
+                                if (!props.clientRect) return;
+                                popup = tippy("body", {
+                                    getReferenceClientRect: props.clientRect as () => DOMRect,
+                                    appendTo: () => document.body,
+                                    content: component.element,
+                                    showOnCreate: true,
+                                    interactive: true,
+                                    trigger: "manual",
+                                    placement: "top-start",
+                                    offset: [0, 8],
+                                    zIndex: 99999,
+                                    theme: "transparent",
+                                    arrow: false,
+                                });
+                                // Forcefully strip away the background and shadow from Tippy using DOM manipulation
+                                if (popup?.[0]?.popper) {
+                                    const popper = popup[0].popper;
+                                    popper.style.background = "transparent";
+                                    popper.style.boxShadow = "none";
+                                    const box = popper.querySelector(".tippy-box") as HTMLElement;
+                                    if (box) {
+                                        box.style.background = "transparent";
+                                        box.style.boxShadow = "none";
+                                        box.style.border = "none";
+                                    }
+                                    const content = popper.querySelector(".tippy-content") as HTMLElement;
+                                    if (content) {
+                                        content.style.padding = "0";
+                                    }
+                                }
+                            },
+                            onUpdate(props) {
+                                component?.updateProps(props);
+                                if (!props.clientRect) return;
+                                popup?.[0]?.setProps({
+                                    getReferenceClientRect: props.clientRect,
+                                });
+                            },
+                            onKeyDown(props) {
+                                if (props.event.key === "Escape") {
+                                    popup?.[0]?.hide();
+                                    return true;
+                                }
+                                return (component?.ref as any)?.onKeyDown(props);
+                            },
+                            onExit() {
+                                popup?.[0]?.destroy();
+                                component?.destroy();
+                            },
+                        };
+                    },
+                },
+            }),
         ],
         content: value || "",
         editorProps: {
@@ -99,6 +188,16 @@ export default function TiptapChatEditor({
         onUpdate: ({ editor: e }) => { onChangeRef.current(e.getHTML()); onTypingRef.current?.(); },
         onBlur: () => { onBlurRef.current?.(); },
     });
+
+    React.useEffect(() => {
+        if (editor && placeholder) {
+            const extension = editor.extensionManager.extensions.find(e => e.name === 'placeholder');
+            if (extension) {
+                extension.options.placeholder = placeholder;
+                editor.view.dispatch(editor.state.tr);
+            }
+        }
+    }, [editor, placeholder]);
 
     React.useEffect(() => { if (editorRef) editorRef.current = editor; }, [editor, editorRef]);
 
@@ -271,7 +370,7 @@ export default function TiptapChatEditor({
         <div className="relative flex-1">
             {/* Bubble menu */}
             <BubbleMenu editor={editor}>
-                <div className="flex items-center gap-0.5 px-1.5 py-1 rounded-lg border border-border bg-popover shadow-xl flex-wrap">
+                <div className="flex items-center gap-0.5 px-1.5 py-1 rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl shadow-2xl shadow-black/30 flex-wrap">
                     <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold"><Bold className="h-3.5 w-3.5" /></Btn>
                     <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic"><Italic className="h-3.5 w-3.5" /></Btn>
                     <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline"><UnderlineIcon className="h-3.5 w-3.5" /></Btn>
@@ -310,7 +409,7 @@ export default function TiptapChatEditor({
 
             {/* Link dialog */}
             {linkDialogOpen && (
-                <div className="absolute bottom-full left-0 right-0 mb-2 p-3 rounded-lg border border-border bg-popover shadow-xl z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <div className="absolute bottom-full left-0 right-0 mb-2 p-3 rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl shadow-2xl shadow-black/30 z-50 animate-in fade-in slide-in-from-bottom-2 duration-150">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-foreground">Insert Link</span>
                         <button onClick={() => { setLinkDialogOpen(false); setLinkUrl(""); setLinkText(""); }} className="p-0.5 rounded hover:bg-muted"><X className="h-3.5 w-3.5" /></button>

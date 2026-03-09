@@ -280,3 +280,23 @@
   border-top: 1px solid hsl(var(--border));
   margin: 0.5rem 0;
 }
+
+/* Universal Tippy styling overrides for Mentions */
+.tippy-box {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.tippy-arrow {
+  display: none !important;
+}
+
+.tippy-content {
+  padding: 0 !important;
+}
+
+/* Universal override for Tiptap Mention badges to ensure they don't clash with chat bubble colors */
+.tiptap span[data-type="mention"] {
+  @apply px-1.5 py-[1px] rounded bg-black/10 dark:bg-white/10 text-inherit font-semibold ring-1 ring-black/5 dark:ring-white/10 inline-block align-baseline !important;
+}

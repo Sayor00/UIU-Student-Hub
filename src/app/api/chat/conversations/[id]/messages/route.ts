@@ -247,7 +247,7 @@ export async function POST(
         // Update lastMessage on conversation using updateOne to bypass validation
         const previewText =
             type === "text"
-                ? text.trim().slice(0, 100)
+                ? text.replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim().slice(0, 100)
                 : type === "poll"
                     ? `📊 Poll: ${poll.question.trim().slice(0, 50)}`
                     : type === "image"
