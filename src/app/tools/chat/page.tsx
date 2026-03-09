@@ -1514,6 +1514,7 @@ export default function ChatPage() {
 
                 {/* ── Chat Area ── */}
                 <motion.div
+                    id="chat-area-container"
                     initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }}
                     className={`flex-1 flex flex-col bg-white/20 dark:bg-black/20 backdrop-blur-3xl rounded-2xl md:rounded-3xl border border-white/30 dark:border-white/10 shadow-sm shadow-black/5 dark:shadow-none overflow-hidden relative ${!mobileShowChat ? "hidden md:flex" : "flex"}`}
                 >

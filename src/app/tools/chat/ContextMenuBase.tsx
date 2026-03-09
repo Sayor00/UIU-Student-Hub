@@ -58,49 +58,73 @@ export default function ContextMenuBase({
         // Immediately disable transitions for instant painting
         menu.style.transition = "none";
 
-        const width = menu.offsetWidth;
-        const height = menu.offsetHeight;
-        const vw = window.innerWidth;
-        const vh = window.innerHeight;
-        const pad = 8;
-        const gap = 12;
+        let isFirstRender = true;
 
-        const isMobile = vw < 640;
+        const updatePosition = () => {
+            if (!menu) return;
+            const width = menu.offsetWidth;
+            const height = menu.offsetHeight;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const pad = 8;
+            const gap = 12;
 
-        // Find the chat input dock to avoid overlapping it
-        const chatDock = document.getElementById("chat-editor-dock");
-        const maxBottom = chatDock ? chatDock.getBoundingClientRect().top : position.y;
+            const isMobile = vw < 640;
 
-        let x = position.x;
-        let y = Math.min(position.y, maxBottom) - height - gap;
+            const chatContainer = document.getElementById("chat-area-container");
+            const bounds = chatContainer ? chatContainer.getBoundingClientRect() : { left: 0, top: 0, right: vw, bottom: vh };
 
-        if (isMobile) {
-            const mobilePad = 24;
-            x = mobilePad;
-            if (y < mobilePad) y = mobilePad;
+            // Find the chat input dock to avoid overlapping it
+            const chatDock = document.getElementById("chat-editor-dock");
+            const maxBottom = Math.min(
+                chatDock ? chatDock.getBoundingClientRect().top : position.y,
+                bounds.bottom
+            );
 
-            menu.style.left = `${x}px`;
-            menu.style.top = `${y}px`;
-            menu.style.width = `${vw - mobilePad * 2}px`;
-        } else {
-            if (x + width > vw - pad) x = vw - width - pad;
-            if (x < pad) x = pad;
+            let x = position.x;
+            let y = Math.min(position.y, maxBottom) - height - gap;
 
-            if (y < pad) y = position.y + gap;
-            if (y + height > vh - pad) y = vh - height - pad;
-            if (y < pad) y = pad;
+            if (isMobile) {
+                const mobilePad = 24;
+                x = bounds.left + mobilePad;
+                if (y < bounds.top + mobilePad) y = bounds.top + mobilePad;
+                if (y + height > bounds.bottom - mobilePad) y = bounds.bottom - height - mobilePad;
 
-            menu.style.left = `${x}px`;
-            menu.style.top = `${y}px`;
-            menu.style.width = "auto";
-        }
+                menu.style.left = `${x}px`;
+                menu.style.top = `${y}px`;
+                menu.style.width = `${(bounds.right - bounds.left) - mobilePad * 2}px`;
+            } else {
+                if (x + width > bounds.right - pad) x = bounds.right - width - pad;
+                if (x < bounds.left + pad) x = bounds.left + pad;
 
-        requestAnimationFrame(() => {
-            menu.style.transition = "";
-            menu.style.opacity = "1";
-            menu.style.pointerEvents = "auto";
-            menu.style.transform = "scale(1)";
+                if (y < bounds.top + pad) y = position.y + gap;
+                if (y + height > bounds.bottom - pad) y = bounds.bottom - height - pad;
+                if (y < bounds.top + pad) y = bounds.top + pad;
+
+                menu.style.left = `${x}px`;
+                menu.style.top = `${y}px`;
+                menu.style.width = "auto";
+            }
+
+            if (isFirstRender) {
+                isFirstRender = false;
+                requestAnimationFrame(() => {
+                    menu.style.transition = "";
+                    menu.style.opacity = "1";
+                    menu.style.pointerEvents = "auto";
+                    menu.style.transform = "scale(1)";
+                });
+            }
+        };
+
+        updatePosition();
+
+        const observer = new ResizeObserver(() => {
+            updatePosition();
         });
+        observer.observe(menu);
+
+        return () => observer.disconnect();
     }, [position]);
 
     // Close on outside click, Escape, scroll

@@ -11,7 +11,10 @@ import {
     CheckSquare,
     Forward,
     Download,
+    Plus,
 } from "lucide-react";
+import { Picker } from 'emoji-mart';
+import { useTheme } from "next-themes";
 import type { ChatMessage } from "./types";
 import ContextMenuBase, { type ContextMenuItem } from "./ContextMenuBase";
 
@@ -52,6 +55,28 @@ export default function MessageContextMenu({
     const isDeleted = message.deletedForAll;
     const hasText = message.type === "text" && message.text && !isDeleted;
     const hasAttachment = !isDeleted && !!message.attachments?.length && message.attachments[0]?.url;
+
+    const { resolvedTheme } = useTheme();
+    const [showPicker, setShowPicker] = React.useState(false);
+    const pickerRef = React.useRef<HTMLDivElement>(null);
+    const pickerInstance = React.useRef<any>(null);
+
+    React.useEffect(() => {
+        if (!pickerInstance.current && pickerRef.current) {
+            pickerInstance.current = new Picker({
+                onEmojiSelect: (e: any) => {
+                    onReact(message._id, e.native);
+                    onClose();
+                },
+                theme: resolvedTheme === "dark" ? "dark" : "light",
+                set: "apple",
+                previewPosition: "none",
+                skinTonePosition: "none",
+                perLine: 7,
+            });
+            pickerRef.current.appendChild(pickerInstance.current as any);
+        }
+    }, [onReact, message._id, onClose, resolvedTheme]);
 
     const items: ContextMenuItem[] = [
         {
@@ -132,16 +157,54 @@ export default function MessageContextMenu({
     ];
 
     const reactionsHeader = !isPending && !isDeleted ? (
-        <div className="flex items-center gap-1 px-2 py-2 border-b border-white/10">
-            {QUICK_REACTIONS.map((emoji) => (
+        <div className={`flex flex-col w-[280px] ${showPicker ? "" : "border-b border-border"}`}>
+            <div className="flex items-center justify-between px-2 py-2">
+                {QUICK_REACTIONS.map((emoji) => (
+                    <button
+                        key={emoji}
+                        onClick={() => { onReact(message._id, emoji); onClose(); }}
+                        className="text-lg p-1.5 rounded-full hover:bg-foreground/10 transition-all duration-150 hover:scale-125 active:scale-95 transform"
+                    >
+                        {emoji}
+                    </button>
+                ))}
                 <button
-                    key={emoji}
-                    onClick={() => { onReact(message._id, emoji); onClose(); }}
-                    className="text-lg p-1.5 rounded-full hover:bg-white/10 transition-all duration-150 hover:scale-125 active:scale-95 transform"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPicker(!showPicker);
+                    }}
+                    className={`p-1.5 rounded-full transition-all duration-150 ${showPicker ? "bg-foreground/20 text-foreground" : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground"}`}
                 >
-                    {emoji}
+                    <Plus className={`h-5 w-5 transition-transform ${showPicker ? "rotate-45" : ""}`} />
                 </button>
-            ))}
+            </div>
+            <div
+                className={`w-full overflow-hidden transition-all duration-300 ease-in-out ${showPicker ? "h-[320px] opacity-100" : "h-0 opacity-0"}`}
+                ref={pickerRef}
+            >
+                <style dangerouslySetInnerHTML={{
+                    __html: `
+                    em-emoji-picker {
+                        --category-icon-size: 16px;
+                        width: 100% !important;
+                        height: 320px !important;
+                        --border-radius: 0;
+                        --color-border: transparent;
+                        --rgb-background: transparent;
+                        --rgb-accent: 249, 115, 22;
+                        --color-bg: transparent;
+                        --bg-color: transparent;
+                        background: transparent !important;
+                        background-color: transparent !important;
+                    }
+                    em-emoji-picker::part(section) {
+                        background: transparent !important;
+                    }
+                    em-emoji-picker::part(picker) {
+                        background: transparent !important;
+                    }
+                `}} />
+            </div>
         </div>
     ) : undefined;
 
