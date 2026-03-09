@@ -72,7 +72,7 @@ export default function MessageContextMenu({
                 set: "apple",
                 previewPosition: "none",
                 skinTonePosition: "none",
-                perLine: 7,
+                perLine: window.innerWidth < 640 ? 9 : 7,
             });
             pickerRef.current.appendChild(pickerInstance.current as any);
         }
@@ -157,7 +157,7 @@ export default function MessageContextMenu({
     ];
 
     const reactionsHeader = !isPending && !isDeleted ? (
-        <div className={`flex flex-col w-[280px] ${showPicker ? "" : "border-b border-border"}`}>
+        <div className={`flex flex-col w-full sm:w-[280px] ${showPicker ? "" : "border-b border-border"}`}>
             <div className="flex items-center justify-between px-2 py-2">
                 {QUICK_REACTIONS.map((emoji) => (
                     <button
