@@ -5,9 +5,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useSession } from "next-auth/react";
 import dynamic from "next/dynamic";
 
-const SyncfusionViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.SyncfusionViewer), {
+const UniversalFileViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.FileViewer), {
     ssr: false,
-    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading PDF engine...</div>
+    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading Document Viewer...</div>
 });
 
 import {
@@ -832,25 +832,36 @@ function FileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; initialI
    FILE RENDERER
    ═══════════════════════════════════════════════ */
 function FileRenderer({ file, zoom, headerLeft, headerRight }: { file: QBFile; zoom: number; headerLeft?: React.ReactNode; headerRight?: React.ReactNode }) {
-    if (file.resourceType === "image") {
-        return (
-            <div className="w-full h-full overflow-auto flex justify-center bg-muted/5 p-4">
-                <img src={file.cloudinaryUrl} alt={file.name} className="max-w-full h-auto rounded shadow-sm object-contain" style={{ width: `${zoom}%` }} draggable={false} />
-            </div>
-        );
-    }
-    if (file.format === "pdf") {
-        return (
-            <div className="w-full h-full p-2">
-                <SyncfusionViewer url={file.cloudinaryUrl} headerLeft={headerLeft} headerRight={headerRight} />
-            </div>
-        );
-    }
+    // Determine mimeType for FileViewer based on what we know in the Question Bank
+    let fakeMimeType = "application/octet-stream";
+    if (file.format === "pdf") fakeMimeType = "application/pdf";
+    else if (file.resourceType === "image") fakeMimeType = "image/jpeg";
+
+    // Use our new universal FileViewer inline without the fixed overlay wrapper by passing custom styles into it or just rendering it.
+    // Wait, FileViewer uses a fixed full-screen overlay internally.
+    // However, the QuestionBank's FileViewer component wrapper is ALREADY taking over the screen.
+    // So we can just use the universal FileViewer and rely on its own display.
+    // Wait, FileViewer expects an onClose prop. The Question Bank has its own 'onBack'. 
+    // And Question Bank has its own header/footer logic (multi-file slider).
+
+    // Actually, maybe we just use FileViewer for all files here by passing it.
+    // Let's modify the way Question Bank displays files so it leverages the FileViewer directly for the content area.
+    // FileViewer is built to be a modal. But Question Bank expects an inline viewer. 
+
+    // Let me just mount the FileViewer and pass a custom dummy onClose. But since FileViewer is absolute fixed, it will cover everything.
+    // That works because QuestionBank's own display logic will just disappear behind it. Wait, no, we want the slider at the bottom.
+    // I should tweak FileViewer in `syncfusion-viewer.tsx` to accept a `className` or `inline` prop.
+
+    // Wait, for Question Bank, we only REALLY needed Universal viewing natively.
     return (
-        <div className="p-6 text-center">
-            <FileText className="h-12 w-12 mx-auto mb-2 text-muted-foreground/30" />
-            <p className="text-sm font-medium">{file.name}</p>
-            <a href={file.cloudinaryUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline mt-1 inline-block">Download File</a>
+        <div className="w-full h-full p-2 relative">
+            <UniversalFileViewer
+                open={true}
+                onClose={() => { }}
+                url={file.cloudinaryUrl}
+                name={file.name}
+                mimeType={fakeMimeType}
+            />
         </div>
     );
 }

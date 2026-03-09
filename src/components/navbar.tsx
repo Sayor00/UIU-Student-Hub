@@ -25,6 +25,7 @@ import {
   ExternalLink,
   BookOpen,
   TrendingUp,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -42,6 +43,7 @@ const toolLinks = [
   { href: "/tools/faculty-review", label: "Faculty Reviews", icon: Star, description: "Rate & review faculty" },
   { href: "/tools/calendars", label: "Calendars", icon: BookOpen, description: "Semester calendar & planner" },
   { href: "/tools/career-planner", label: "Career Planner", icon: TrendingUp, description: "Track CGPA & Plan Career" },
+  { href: "/tools/chat", label: "Chat", icon: MessageCircle, description: "Chat with fellow students" },
 ];
 
 export default function Navbar() {

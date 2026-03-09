@@ -23,7 +23,7 @@ export async function uploadToCloudinary(
     buffer: Buffer,
     options: {
         folder?: string;
-        resourceType?: "image" | "raw" | "auto";
+        resourceType?: "image" | "raw" | "video" | "auto";
         fileName?: string;
     } = {}
 ) {

@@ -22,9 +22,9 @@ import {
 import { Button } from "@/components/ui/button";
 import dynamic from "next/dynamic";
 
-const SyncfusionViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.SyncfusionViewer), {
+const UniversalFileViewer = dynamic(() => import("@/components/syncfusion-viewer").then(mod => mod.FileViewer), {
     ssr: false,
-    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading PDF engine...</div>
+    loading: () => <div className="p-12 text-center text-muted-foreground flex items-center justify-center animate-pulse"><Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading Document Viewer...</div>
 });
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -867,10 +867,15 @@ function AdminFileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; ini
         </div>
     );
 
+    // Determine mimeType for UniversalFileViewer
+    let fakeMimeType = "application/octet-stream";
+    if (file.format === "pdf") fakeMimeType = "application/pdf";
+    else if (file.resourceType === "image") fakeMimeType = "image/jpeg";
+
     return (
-        <div className="flex flex-col overflow-hidden bg-background h-full">
+        <div className="flex flex-col overflow-hidden bg-background h-full relative">
             {file.format !== "pdf" && (
-                <div className="shrink-0 border-b bg-background/90 backdrop-blur-xl">
+                <div className="shrink-0 border-b bg-background/90 backdrop-blur-xl z-[201] relative">
                     <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
                             {headerLeft}
@@ -879,22 +884,14 @@ function AdminFileViewer({ folder, initialIdx, onBack }: { folder: QBFolder; ini
                     </div>
                 </div>
             )}
-            <div className="flex-1 min-h-0 w-full relative">
-                {file.format === "pdf" ? (
-                    <div className="w-full h-full p-2">
-                        <SyncfusionViewer url={file.cloudinaryUrl} headerLeft={headerLeft} headerRight={headerRight} />
-                    </div>
-                ) : file.resourceType === "image" ? (
-                    <div className="w-full h-full overflow-auto flex justify-center bg-muted/5 p-4">
-                        <img src={file.cloudinaryUrl} alt={file.name} className="max-w-full h-auto rounded shadow-sm object-contain" draggable={false} />
-                    </div>
-                ) : (
-                    <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
-                        <FileText className="h-16 w-16 mx-auto mb-4 opacity-50 text-primary" />
-                        <p className="font-semibold">{file.name}</p>
-                        <a href={file.cloudinaryUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-sm mt-2 block">Download File</a>
-                    </div>
-                )}
+            <div className="flex-1 min-h-[50vh] w-full relative">
+                <UniversalFileViewer
+                    open={true}
+                    onClose={() => { }}
+                    url={file.cloudinaryUrl}
+                    name={file.name}
+                    mimeType={fakeMimeType}
+                />
             </div>
         </div>
     );
