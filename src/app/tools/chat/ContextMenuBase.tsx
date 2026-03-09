@@ -26,6 +26,8 @@ interface ContextMenuBaseProps {
     onClose: () => void;
     /** Optional header content above the items (e.g. emoji reactions bar) */
     header?: React.ReactNode;
+    /** Optional footer content below the items (e.g. rich text formatting grid) */
+    footer?: React.ReactNode;
     /** Minimum width, default 180 */
     minWidth?: number;
 }
@@ -42,6 +44,7 @@ export default function ContextMenuBase({
     items,
     onClose,
     header,
+    footer,
     minWidth = 180,
 }: ContextMenuBaseProps) {
     const menuRef = React.useRef<HTMLDivElement>(null);
@@ -51,26 +54,53 @@ export default function ContextMenuBase({
     React.useLayoutEffect(() => {
         const menu = menuRef.current;
         if (!menu) return;
-        const rect = menu.getBoundingClientRect();
+
+        // Immediately disable transitions for instant painting
+        menu.style.transition = "none";
+
+        const width = menu.offsetWidth;
+        const height = menu.offsetHeight;
         const vw = window.innerWidth;
         const vh = window.innerHeight;
         const pad = 8;
         const gap = 12;
 
+        const isMobile = vw < 640;
+
+        // Find the chat input dock to avoid overlapping it
+        const chatDock = document.getElementById("chat-editor-dock");
+        const maxBottom = chatDock ? chatDock.getBoundingClientRect().top : position.y;
+
         let x = position.x;
-        if (x + rect.width > vw - pad) x = vw - rect.width - pad;
-        if (x < pad) x = pad;
+        let y = Math.min(position.y, maxBottom) - height - gap;
 
-        let y = position.y - rect.height - gap;
-        if (y < pad) y = position.y + gap;
-        if (y + rect.height > vh - pad) y = vh - rect.height - pad;
-        if (y < pad) y = pad;
+        if (isMobile) {
+            const mobilePad = 24;
+            x = mobilePad;
+            if (y < mobilePad) y = mobilePad;
 
-        menu.style.left = `${x}px`;
-        menu.style.top = `${y}px`;
-        menu.style.opacity = "1";
-        menu.style.pointerEvents = "auto";
-        menu.style.transform = "scale(1)";
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.style.width = `${vw - mobilePad * 2}px`;
+        } else {
+            if (x + width > vw - pad) x = vw - width - pad;
+            if (x < pad) x = pad;
+
+            if (y < pad) y = position.y + gap;
+            if (y + height > vh - pad) y = vh - height - pad;
+            if (y < pad) y = pad;
+
+            menu.style.left = `${x}px`;
+            menu.style.top = `${y}px`;
+            menu.style.width = "auto";
+        }
+
+        requestAnimationFrame(() => {
+            menu.style.transition = "";
+            menu.style.opacity = "1";
+            menu.style.pointerEvents = "auto";
+            menu.style.transform = "scale(1)";
+        });
     }, [position]);
 
     // Close on outside click, Escape, scroll
@@ -133,6 +163,7 @@ export default function ContextMenuBase({
                         </React.Fragment>
                     ))}
                 </div>
+                {footer}
             </div>
         </>,
         document.body

@@ -18,8 +18,9 @@ import {
     Link as LinkIcon, X, List, ListOrdered, Quote, Minus,
     AlignLeft, AlignCenter, AlignRight, Highlighter, Heading1, Heading2, Heading3,
     WrapText, Scissors, Copy, ClipboardPaste, Undo2, Redo2, TextSelect,
-    ClipboardType,
+    ClipboardType, Type,
 } from "lucide-react";
+
 import ContextMenuBase, { type ContextMenuItem } from "./ContextMenuBase";
 
 interface TiptapChatEditorProps {
@@ -243,7 +244,22 @@ export default function TiptapChatEditor({
 
     const handleTouchEnd = React.useCallback(() => {
         if (longPressTimer.current) { clearTimeout(longPressTimer.current); longPressTimer.current = null; }
-    }, []);
+
+        // Core Hack for Android: Prevent keyboard pop when drawing a text selection box.
+        // We wait a tiny tick for the browser selection to settle post-touch,
+        // then if there is a newly drawn selection, we briefly remove contenteditable.
+        // The browser evaluates opening the keyboard right after touchend on editable divs.
+        setTimeout(() => {
+            if (!editor) return;
+            const { from, to } = editor.state.selection;
+            if (from !== to && editor.isEditable) {
+                editor.setEditable(false);
+                setTimeout(() => {
+                    editor.setEditable(true);
+                }, 50);
+            }
+        }, 10);
+    }, [editor]);
 
     const closeCtx = React.useCallback(() => setCtxMenu(null), []);
 
@@ -359,44 +375,47 @@ export default function TiptapChatEditor({
         setLinkDialogOpen(false); setLinkUrl(""); setLinkText("");
     }, [editor, linkUrl, linkText]);
 
+    const handleMouseUp = React.useCallback(() => {
+        // Apply the same keyboard suppression hack for pointer devices that emulate mouse events
+        setTimeout(() => {
+            if (!editor) return;
+            const { from, to } = editor.state.selection;
+            if (from !== to && editor.isEditable) {
+                editor.setEditable(false);
+                setTimeout(() => editor.setEditable(true), 50);
+            }
+        }, 10);
+    }, [editor]);
     if (!editor) return null;
 
     const Btn = ({ active, onClick, title, children }: { active?: boolean; onClick: () => void; title: string; children: React.ReactNode }) => (
-        <button onClick={onClick} className={`p-1.5 rounded transition-colors ${active ? "bg-primary/20 text-primary" : "hover:bg-muted text-foreground/80"}`} title={title}>{children}</button>
+        <button
+            onPointerDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onTouchStart={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!editor) return;
+                const wasEditable = editor.isEditable;
+                if (wasEditable) editor.setEditable(false);
+                onClick();
+                if (wasEditable) setTimeout(() => editor.setEditable(true), 10);
+            }}
+            className={`p-2 rounded-lg transition-all duration-200 flex items-center justify-center ${active
+                ? "bg-orange-500/20 text-orange-400 shadow-[inset_0_0_0_1px_rgba(249,115,22,0.3)] shadow-[0_0_10px_rgba(249,115,22,0.1)]"
+                : "hover:bg-foreground/10 text-foreground/70 hover:text-foreground"
+                }`}
+            title={title}
+        >
+            {children}
+        </button>
     );
-    const Sep = () => <div className="w-px h-4 bg-border mx-0.5" />;
+
+    const Sep = () => <div className="w-[1px] h-4 bg-border shrink-0 mx-0.5" />;
 
     return (
-        <div className="relative flex-1">
-            {/* Bubble menu */}
-            <BubbleMenu editor={editor}>
-                <div className="flex items-center gap-0.5 px-1.5 py-1 rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl shadow-2xl shadow-black/30 flex-wrap">
-                    <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold"><Bold className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleItalic().run()} active={editor.isActive("italic")} title="Italic"><Italic className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline"><UnderlineIcon className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleStrike().run()} active={editor.isActive("strike")} title="Strikethrough"><Strikethrough className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleHighlight().run()} active={editor.isActive("highlight")} title="Highlight"><Highlighter className="h-3.5 w-3.5" /></Btn>
-                    <Sep />
-                    <Btn onClick={() => editor.chain().focus().toggleCode().run()} active={editor.isActive("code")} title="Inline Code"><Code className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} title="Code Block"><WrapText className="h-3.5 w-3.5" /></Btn>
-                    <Sep />
-                    <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="Heading 1"><Heading1 className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="Heading 2"><Heading2 className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} title="Heading 3"><Heading3 className="h-3.5 w-3.5" /></Btn>
-                    <Sep />
-                    <Btn onClick={() => editor.chain().focus().toggleBulletList().run()} active={editor.isActive("bulletList")} title="Bullet List"><List className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Numbered List"><ListOrdered className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().toggleBlockquote().run()} active={editor.isActive("blockquote")} title="Blockquote"><Quote className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().setHorizontalRule().run()} active={false} title="Horizontal Rule"><Minus className="h-3.5 w-3.5" /></Btn>
-                    <Sep />
-                    <Btn onClick={() => editor.chain().focus().setTextAlign("left").run()} active={editor.isActive({ textAlign: "left" })} title="Align Left"><AlignLeft className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().setTextAlign("center").run()} active={editor.isActive({ textAlign: "center" })} title="Align Center"><AlignCenter className="h-3.5 w-3.5" /></Btn>
-                    <Btn onClick={() => editor.chain().focus().setTextAlign("right").run()} active={editor.isActive({ textAlign: "right" })} title="Align Right"><AlignRight className="h-3.5 w-3.5" /></Btn>
-                    <Sep />
-                    <Btn onClick={openLinkDialog} active={editor.isActive("link")} title="Link"><LinkIcon className="h-3.5 w-3.5" /></Btn>
-                </div>
-            </BubbleMenu>
-
+        <div id="chat-editor-dock" className="relative flex-1">
             {/* Context menu — uses shared ContextMenuBase */}
             {ctxMenu && (
                 <ContextMenuBase
@@ -404,6 +423,34 @@ export default function TiptapChatEditor({
                     items={getCtxItems()}
                     onClose={closeCtx}
                     minWidth={200}
+                    footer={
+                        <div className="p-1.5 border-t border-border shrink-0 w-full sm:w-[280px]">
+                            {/* Text Styles */}
+                            <div className="flex items-center justify-between mb-1">
+                                <Btn onClick={() => editor.chain().toggleBold().run()} active={editor.isActive("bold")} title="Bold"><Bold className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleItalic().run()} active={editor.isActive("italic")} title="Italic"><Italic className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleUnderline().run()} active={editor.isActive("underline")} title="Underline"><UnderlineIcon className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleStrike().run()} active={editor.isActive("strike")} title="Strikethrough"><Strikethrough className="h-[18px] w-[18px]" /></Btn>
+                                <Sep />
+                                <Btn onClick={() => editor.chain().toggleHighlight().run()} active={editor.isActive("highlight")} title="Highlight"><Highlighter className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleCode().run()} active={editor.isActive("code")} title="Inline Code"><Code className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => { closeCtx(); openLinkDialog(); }} active={editor.isActive("link")} title="Link"><LinkIcon className="h-[18px] w-[18px]" /></Btn>
+                            </div>
+                            {/* Block Styles 1 */}
+                            <div className="flex items-center justify-between mb-1">
+                                <Btn onClick={() => editor.chain().toggleHeading({ level: 1 }).run()} active={editor.isActive("heading", { level: 1 })} title="Heading 1"><Heading1 className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleHeading({ level: 2 }).run()} active={editor.isActive("heading", { level: 2 })} title="Heading 2"><Heading2 className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleHeading({ level: 3 }).run()} active={editor.isActive("heading", { level: 3 })} title="Heading 3"><Heading3 className="h-[18px] w-[18px]" /></Btn>
+                                <Sep />
+                                <Btn onClick={() => editor.chain().toggleBulletList().run()} active={editor.isActive("bulletList")} title="Bullet List"><List className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleOrderedList().run()} active={editor.isActive("orderedList")} title="Numbered List"><ListOrdered className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleBlockquote().run()} active={editor.isActive("blockquote")} title="Blockquote"><Quote className="h-[18px] w-[18px]" /></Btn>
+                                <Btn onClick={() => editor.chain().toggleCodeBlock().run()} active={editor.isActive("codeBlock")} title="Code Block"><WrapText className="h-[18px] w-[18px]" /></Btn>
+                                <Sep />
+                                <Btn onClick={() => editor.chain().setHorizontalRule().run()} active={false} title="Horizontal Rule"><Minus className="h-[18px] w-[18px]" /></Btn>
+                            </div>
+                        </div>
+                    }
                 />
             )}
 
@@ -438,6 +485,7 @@ export default function TiptapChatEditor({
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onTouchMove={handleTouchEnd}
+                onMouseUp={handleMouseUp}
             >
                 <EditorContent editor={editor} className="flex-1 w-full flex items-center justify-center h-full" />
             </div>

@@ -380,11 +380,6 @@ export function FileViewer({ open, onClose, url, name, mimeType }: FileViewerPro
 
             {/* Top toolbar */}
             <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-                {viewerType === "image" && (
-                    <button onClick={() => setRotation((r) => r + 90)} className="h-10 w-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors">
-                        <RotateCw className="h-5 w-5" />
-                    </button>
-                )}
                 {viewerType !== "pdf" && (
                     <button onClick={handleDownload} className="h-10 w-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors">
                         <Download className="h-5 w-5" />
@@ -401,44 +396,47 @@ export function FileViewer({ open, onClose, url, name, mimeType }: FileViewerPro
             </div>
 
             {/* Content */}
-            <div className="relative z-[1] w-full h-full flex items-center justify-center p-12">
+            <div className="relative z-[1] w-full h-full flex items-center justify-center pointer-events-none p-4 md:p-8">
                 {/* Image */}
                 {viewerType === "image" && (
                     <TransformWrapper initialScale={1} minScale={0.5} maxScale={10} centerOnInit>
                         {({ zoomIn, zoomOut }) => (
-                            <>
-                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2">
-                                    <button onClick={() => zoomOut()} className="h-9 w-9 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors">
-                                        <ZoomOut className="h-4 w-4" />
+                            <div className="w-full h-full flex items-center justify-center relative pointer-events-auto">
+                                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2">
+                                    <button onClick={() => zoomOut()} className="h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors border border-white/10 shadow-sm">
+                                        <ZoomOut className="h-5 w-5" />
                                     </button>
-                                    <button onClick={() => zoomIn()} className="h-9 w-9 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition-colors">
-                                        <ZoomIn className="h-4 w-4" />
+                                    <button onClick={() => setRotation((r) => r + 90)} className="h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors border border-white/10 shadow-sm">
+                                        <RotateCw className="h-5 w-5" />
+                                    </button>
+                                    <button onClick={() => zoomIn()} className="h-10 w-10 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center backdrop-blur-md transition-colors border border-white/10 shadow-sm">
+                                        <ZoomIn className="h-5 w-5" />
                                     </button>
                                 </div>
                                 <TransformComponent
-                                    wrapperStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
-                                    contentStyle={{ display: "flex", alignItems: "center", justifyContent: "center" }}
+                                    wrapperStyle={{ width: "100%", height: "100%" }}
+                                    contentStyle={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}
                                 >
                                     <img src={url} alt={name}
-                                        className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing select-none"
+                                        className="w-auto h-auto max-w-[95vw] max-h-[85vh] md:max-h-[90vh] object-contain cursor-grab active:cursor-grabbing select-none"
                                         style={{ transform: `rotate(${rotation}deg)`, transition: "transform 300ms ease" }}
                                         draggable={false}
                                     />
                                 </TransformComponent>
-                            </>
+                            </div>
                         )}
                     </TransformWrapper>
                 )}
 
                 {/* Video */}
                 {viewerType === "video" && (
-                    <video src={url} controls autoPlay className="max-w-full max-h-full rounded-xl shadow-2xl"
-                        style={{ maxHeight: "85vh", maxWidth: "90vw" }} />
+                    <video src={url} controls autoPlay className="max-w-full max-h-full rounded-xl shadow-2xl pointer-events-auto"
+                        style={{ maxHeight: "85vh", maxWidth: "95vw" }} />
                 )}
 
                 {/* Audio */}
                 {viewerType === "audio" && (
-                    <div className="flex flex-col items-center gap-6 bg-card/90 backdrop-blur-md rounded-2xl p-8 shadow-2xl border max-w-md w-full">
+                    <div className="flex flex-col items-center gap-6 bg-card/90 backdrop-blur-md rounded-2xl p-8 shadow-2xl border max-w-md w-full pointer-events-auto">
                         <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center">
                             <Music className="h-10 w-10 text-primary" />
                         </div>
@@ -449,14 +447,14 @@ export function FileViewer({ open, onClose, url, name, mimeType }: FileViewerPro
 
                 {/* PDF — uses the existing SyncfusionViewer */}
                 {viewerType === "pdf" && (
-                    <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl" style={{ maxWidth: "95vw", maxHeight: "95vh" }}>
+                    <div className="w-full h-full rounded-xl overflow-hidden shadow-2xl pointer-events-auto" style={{ maxWidth: "95vw", maxHeight: "95vh" }}>
                         <SyncfusionViewer url={url} />
                     </div>
                 )}
 
                 {/* Text / Code */}
                 {(viewerType === "text" || viewerType === "code") && (
-                    <div className="w-full h-full flex flex-col bg-card rounded-xl overflow-hidden shadow-2xl border" style={{ maxWidth: "90vw", maxHeight: "90vh" }}>
+                    <div className="w-full h-full flex flex-col bg-card rounded-xl overflow-hidden shadow-2xl border pointer-events-auto" style={{ maxWidth: "95vw", maxHeight: "90vh" }}>
                         <div className="px-4 py-2 border-b bg-muted/50 flex items-center gap-2">
                             <FileText className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-medium text-foreground truncate">{name}</span>
@@ -480,7 +478,7 @@ export function FileViewer({ open, onClose, url, name, mimeType }: FileViewerPro
 
                 {/* Unsupported — download prompt */}
                 {viewerType === "unsupported" && (
-                    <div className="flex flex-col items-center gap-6 bg-card/90 backdrop-blur-md rounded-2xl p-8 shadow-2xl border max-w-md w-full">
+                    <div className="flex flex-col items-center gap-6 bg-card/90 backdrop-blur-md rounded-2xl p-8 shadow-2xl border max-w-md w-full pointer-events-auto">
                         <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
                             <FileIcon className="h-10 w-10 text-muted-foreground" />
                         </div>
