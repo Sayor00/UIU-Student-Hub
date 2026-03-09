@@ -165,6 +165,7 @@ export default function ChatPage() {
     const [contextMenu, setContextMenu] = React.useState<{ message: ChatMessage; position: { x: number; y: number } } | null>(null);
     const [convContextMenu, setConvContextMenu] = React.useState<{ conv: ChatConversation; position: { x: number; y: number } } | null>(null);
     const [chatAreaCtxMenu, setChatAreaCtxMenu] = React.useState<{ x: number; y: number } | null>(null);
+    const [mentionCtxMenu, setMentionCtxMenu] = React.useState<{ userId: string; position: { x: number; y: number } } | null>(null);
     const [replyToMessages, setReplyToMessages] = React.useState<ChatMessage[]>([]);
 
     // Mobile touch state
@@ -557,7 +558,7 @@ export default function ChatPage() {
 
         // Include replyTo if replying — send ALL reply IDs
         const currentReplies = replyToMessages;
-        if (currentReplies.length > 0 && !overrides) {
+        if (currentReplies.length > 0) {
             body.replyTo = currentReplies.map((r) => r._id);
         }
 
@@ -619,7 +620,7 @@ export default function ChatPage() {
                 prev.map((m) => m._tempId === tempId ? { ...m, _status: "failed" } : m)
             );
         }
-    }, [activeConv?._id, inputText, userId, session?.user?.name, fetchConversations]);
+    }, [activeConv?._id, inputText, userId, session?.user?.name, fetchConversations, replyToMessages, editingMsg]);
 
     const retryMessage = React.useCallback(async (tempId: string) => {
         const msg = pendingMessages.find((m) => m._tempId === tempId);
@@ -876,7 +877,6 @@ export default function ChatPage() {
         toast.success(`Downloded successfully`);
     }, [messages, selectedMsgIds, exitSelectMode]);
 
-    /* ── Bulk reply ── */
     const bulkReply = React.useCallback(() => {
         const selected = messages.filter((m) => selectedMsgIds.has(m._id) && !m.deletedForAll);
         if (selected.length === 0) return;
@@ -884,6 +884,40 @@ export default function ChatPage() {
         exitSelectMode();
         setTimeout(() => inputRef.current?.commands?.focus(), 100);
     }, [messages, selectedMsgIds, exitSelectMode]);
+
+    /* ── Start Private Chat from Mention Click ── */
+    const startPrivateChatWithUser = React.useCallback(async (targetUserId: string) => {
+        if (!userId || targetUserId === userId) return;
+        setMentionCtxMenu(null);
+        // Check if we already have a private conv with this user
+        const existing = conversations.find(
+            (c) => c.type === "private" && c.members.some((m) => m.userId === targetUserId)
+        );
+        if (existing) {
+            setActiveConv(existing);
+            setMobileShowChat(true);
+            return;
+        }
+        // Otherwise create one
+        try {
+            const res = await fetch("/api/chat/conversations", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ type: "private", memberIds: [targetUserId], isAnonymous: false }),
+            });
+            const data = await res.json();
+            if (res.ok && data.conversation) {
+                setConversations((prev) => {
+                    if (prev.some((c) => c._id === data.conversation._id)) return prev;
+                    return [data.conversation, ...prev];
+                });
+                setActiveConv(data.conversation);
+                setMobileShowChat(true);
+            } else {
+                toast.error(data.error || "Failed to start chat");
+            }
+        } catch { toast.error("Failed to start chat"); }
+    }, [userId, conversations]);
 
     /* ── Forward ── */
     const openForwardDialog = React.useCallback(() => {
@@ -1024,6 +1058,10 @@ export default function ChatPage() {
     const uploadFile = React.useCallback(async (file: File, type: string) => {
         if (!activeConv?._id) return;
 
+        // Capture reply context immediately — clear it so the reply bar dismisses right away
+        const currentReplies = replyToMessages;
+        setReplyToMessages([]);
+
         const localUrl = URL.createObjectURL(file);
         const tempId = `temp-upload-${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const startTime = Date.now();
@@ -1041,6 +1079,8 @@ export default function ChatPage() {
             attachments: [{ url: localUrl, name: file.name, size: file.size, mimeType: file.type }],
             reactions: [],
             readBy: [userId],
+            replyTo: currentReplies.length > 0 ? currentReplies.map(r => r._id) : undefined,
+            replyToMessages: currentReplies.length > 0 ? currentReplies : undefined,
             createdAt: new Date().toISOString(),
         };
         setPendingMessages((prev) => [...prev, optimistic]);
@@ -1091,11 +1131,12 @@ export default function ChatPage() {
             // Phase 2: Server processed file, now sending message (85%)
             updateProgress(85, 1);
 
-            const msgBody = {
+            const msgBody: any = {
                 type,
                 text: file.name,
                 attachments: [{ url: uploadData.url, name: uploadData.name, size: uploadData.size, mimeType: uploadData.mimeType }],
             };
+            if (currentReplies.length > 0) msgBody.replyTo = currentReplies.map(r => r._id);
             const res = await fetch(`/api/chat/conversations/${activeConv._id}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1123,7 +1164,7 @@ export default function ChatPage() {
         } finally {
             URL.revokeObjectURL(localUrl);
         }
-    }, [activeConv?._id, userId, session?.user?.name, fetchConversations]);
+    }, [activeConv?._id, userId, session?.user?.name, fetchConversations, replyToMessages]);
 
     const handleFileSelect = React.useCallback((e: React.ChangeEvent<HTMLInputElement>, type: string) => {
         const file = e.target.files?.[0];
@@ -1134,6 +1175,11 @@ export default function ChatPage() {
     const sendVoice = React.useCallback(async () => {
         const blob = await voice.stop();
         if (!blob || !activeConv?._id) return;
+
+        // Capture reply context immediately
+        const currentReplies = replyToMessages;
+        setReplyToMessages([]);
+
         const file = new File([blob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
         const localUrl = URL.createObjectURL(blob);
 
@@ -1152,6 +1198,8 @@ export default function ChatPage() {
             attachments: [{ url: localUrl, name: file.name, size: blob.size, mimeType: "audio/webm" }],
             reactions: [],
             readBy: [userId],
+            replyTo: currentReplies.length > 0 ? currentReplies.map(r => r._id) : undefined,
+            replyToMessages: currentReplies.length > 0 ? currentReplies : undefined,
             createdAt: new Date().toISOString(),
         };
         setPendingMessages((prev) => [...prev, optimistic]);
@@ -1200,11 +1248,12 @@ export default function ChatPage() {
 
             // Phase 2: Server processed, now sending message (85%)
             updateProgress(85, 1);
-            const msgBody = {
+            const msgBody: any = {
                 type: "voice",
                 text: "",
                 attachments: [{ url: uploadData.url, name: uploadData.name, size: uploadData.size, mimeType: uploadData.mimeType }],
             };
+            if (currentReplies.length > 0) msgBody.replyTo = currentReplies.map(r => r._id);
             const res = await fetch(`/api/chat/conversations/${activeConv._id}/messages`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -1232,7 +1281,7 @@ export default function ChatPage() {
         } finally {
             URL.revokeObjectURL(localUrl);
         }
-    }, [voice, activeConv?._id, userId, session?.user?.name, fetchConversations]);
+    }, [voice, activeConv?._id, userId, session?.user?.name, fetchConversations, replyToMessages]);
 
     const sendPoll = React.useCallback(async () => {
         const opts = pollOptions.filter((o) => o.trim());
@@ -1593,18 +1642,25 @@ export default function ChatPage() {
                                                         <>
                                                             {/* Reply reference(s) */}
                                                             {repliedMsgs.length > 0 && (
-                                                                <div className="space-y-0.5 mb-0.5">
+                                                                <div className="space-y-0">
                                                                     {repliedMsgs.map((rm) => (
                                                                         <div key={rm._id} onClick={() => {
                                                                             const el = document.querySelector(`[data-message-id="${rm._id}"]`);
                                                                             if (el) {
                                                                                 el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                                                el.classList.add('bg-primary/20', 'transition-colors', 'duration-500');
-                                                                                setTimeout(() => el.classList.remove('bg-primary/20'), 1500);
+                                                                                const bubble = (el as HTMLElement).querySelector<HTMLElement>('.rounded-2xl');
+                                                                                if (bubble) {
+                                                                                    bubble.style.transition = 'border-color 0.15s ease, box-shadow 0.15s ease';
+                                                                                    bubble.style.borderColor = 'hsl(var(--primary) / 1)';
+                                                                                    bubble.style.boxShadow = '0 0 0 2px hsl(var(--primary) / 0.6), 0 0 24px 6px hsl(var(--primary) / 0.35), 0 0 48px 10px hsl(var(--primary) / 0.12)';
+                                                                                    setTimeout(() => { bubble.style.transition = 'border-color 1.2s ease, box-shadow 1.2s ease'; bubble.style.borderColor = ''; bubble.style.boxShadow = ''; }, 2500);
+                                                                                }
                                                                             }
-                                                                        }} className={`rounded-t-xl px-3 py-1.5 text-xs border-l-2 border-primary/50 cursor-pointer hover:opacity-80 transition-opacity ${isMe ? 'bg-primary/5' : 'bg-muted/70'} max-w-full truncate`}>
-                                                                            <span className="font-medium text-primary/70">{rm.senderName}</span>
-                                                                            <p className="truncate text-muted-foreground">{rm.deletedForAll ? 'Deleted message' : stripHtml(rm.text || rm.type)}</p>
+                                                                        }} className="flex items-start gap-2 pl-2 pr-1 py-1 rounded-lg border-l-2 border-primary/60 bg-black/10 dark:bg-white/5 cursor-pointer hover:bg-black/20 dark:hover:bg-white/10 transition-colors max-w-full">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <span className="font-semibold text-[11px] text-primary/80 block">{rm.senderName}</span>
+                                                                                <p className="truncate text-[11px] text-foreground/60 leading-tight">{rm.deletedForAll ? 'Deleted message' : stripHtml(rm.text || rm.type)}</p>
+                                                                            </div>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -1612,10 +1668,10 @@ export default function ChatPage() {
                                                             <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-lg ${isFailed
                                                                 ? "bg-destructive/20 text-destructive rounded-br-sm border border-destructive/30"
                                                                 : isMe
-                                                                    ? `bg-primary/20 backdrop-blur-xl text-foreground rounded-br-sm border border-primary/30 ${isSending ? "opacity-70" : ""}`
+                                                                    ? `bg-primary/20 backdrop-blur-xl text-foreground rounded-br-sm border border-primary/15 ${isSending ? "opacity-70" : ""}`
                                                                     : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground rounded-bl-sm"
                                                                 }`}>
-                                                                {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
+                                                                {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" onClick={(e) => { const target = e.target as HTMLElement; if (target.tagName.toLowerCase() === 'span' && target.getAttribute('data-type') === 'mention') { e.stopPropagation(); const mentionId = target.getAttribute('data-id'); if (mentionId) { const menuW = 192, menuH = 96; const x = Math.min(e.clientX, window.innerWidth - menuW - 8); const y = (e.clientY + menuH + 8 > window.innerHeight) ? e.clientY - menuH - 4 : e.clientY + 8; setMentionCtxMenu({ userId: mentionId, position: { x, y } }); } } }} dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                                 {msg.type === "image" && msg.attachments?.[0] && (
                                                                     <img src={msg.attachments[0].url} alt="" className="rounded-lg max-w-full max-h-64 cursor-pointer" onClick={() => setViewFile({ url: msg.attachments[0].url, name: msg.attachments[0].name || "image", mimeType: msg.attachments[0].mimeType || "image/jpeg" })} />
                                                                 )}
@@ -1928,6 +1984,39 @@ export default function ChatPage() {
                     )}
                 </motion.div>
             </div>
+
+            {/* ── Mention Context Menu Popup ── */}
+            {mentionCtxMenu && (
+                <>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setMentionCtxMenu(null)} />
+                    <div
+                        className="fixed z-[9999] min-w-[180px] rounded-xl bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl shadow-black/40 py-1.5 px-1.5 flex flex-col gap-0.5"
+                        style={{ top: mentionCtxMenu.position.y + 8, left: mentionCtxMenu.position.x }}
+                    >
+                        {mentionCtxMenu.userId !== userId && (
+                            <button
+                                onClick={() => startPrivateChatWithUser(mentionCtxMenu.userId)}
+                                className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground hover:bg-white/10 text-left"
+                            >
+                                <MessageCircle className="h-4 w-4 opacity-70" />
+                                Send private message
+                            </button>
+                        )}
+                        <button
+                            onClick={() => {
+                                const mentionEl = document.querySelector(`span[data-id="${mentionCtxMenu.userId}"]`);
+                                const name = mentionEl?.textContent?.replace('@', '') || mentionCtxMenu.userId;
+                                navigator.clipboard.writeText(name).then(() => toast.success('Name copied!'));
+                                setMentionCtxMenu(null);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 text-foreground hover:bg-white/10 text-left"
+                        >
+                            <CopyIcon className="h-4 w-4 opacity-70" />
+                            Copy name
+                        </button>
+                    </div>
+                </>
+            )}
 
             {/* ── New Chat Dialog ── */}
             <Dialog open={newChatOpen} onOpenChange={setNewChatOpen}>
