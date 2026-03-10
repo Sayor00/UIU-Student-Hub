@@ -300,3 +300,26 @@
 .tiptap span[data-type="mention"] {
   @apply px-1.5 py-[1px] rounded bg-black/10 dark:bg-white/10 text-inherit font-semibold ring-1 ring-black/5 dark:ring-white/10 inline-block align-baseline !important;
 }
+
+/* ── Mini Chat Styles ── */
+.mini-chat-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mini-chat-scrollbar::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/15 rounded-full;
+}
+
+.mini-chat-scrollbar::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/30;
+}
+
+.mini-chat-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Compact editor in mini chat windows */
+.mini-chat-scrollbar .tiptap {
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
