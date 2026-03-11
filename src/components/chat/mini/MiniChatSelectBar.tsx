@@ -4,6 +4,7 @@ import { X, Copy as CopyIcon, Reply, Forward, Download, Trash2 } from "lucide-re
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { stripHtml } from "@/app/tools/chat/TiptapChatEditor";
+import { downloadFile } from "./useChatHelpers";
 import type { ChatMessage } from "@/app/tools/chat/types";
 
 interface MiniChatSelectBarProps {
@@ -41,24 +42,18 @@ export default function MiniChatSelectBar({
         if (selected.length === 0) { toast.info('No media in selected messages'); return; }
         toast.info(`Downloading ${selected.length} file${selected.length > 1 ? 's' : ''}...`);
         onExitSelect();
+        let failed = false;
         for (const m of selected) {
             for (const att of m.attachments) {
                 try {
-                    const response = await fetch(att.url);
-                    const blob = await response.blob();
-                    const blobUrl = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = blobUrl; a.download = att.name || 'download';
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                    URL.revokeObjectURL(blobUrl);
+                    await downloadFile(att.url, att.name || 'download');
                 } catch {
-                    const a = document.createElement('a');
-                    a.href = att.url; a.download = att.name || 'download'; a.target = '_blank';
-                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                    failed = true;
                 }
             }
         }
-        toast.success('Downloaded successfully');
+        if (failed) toast.error('Some downloads failed');
+        else toast.success('Downloaded successfully');
     }, [messages, selectedMsgIds, onExitSelect]);
 
     const handleBulkReply = React.useCallback(() => {

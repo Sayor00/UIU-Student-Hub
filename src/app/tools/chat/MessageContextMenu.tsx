@@ -17,6 +17,7 @@ import { Picker } from 'emoji-mart';
 import { useTheme } from "next-themes";
 import type { ChatMessage } from "./types";
 import ContextMenuBase, { type ContextMenuItem } from "./ContextMenuBase";
+import { downloadFile } from "@/components/chat/mini/useChatHelpers";
 
 interface MessageContextMenuProps {
     message: ChatMessage;
@@ -76,6 +77,12 @@ export default function MessageContextMenu({
             });
             pickerRef.current.appendChild(pickerInstance.current as any);
         }
+        return () => {
+            if (pickerInstance.current && pickerRef.current) {
+                try { pickerRef.current.removeChild(pickerInstance.current as any); } catch { }
+            }
+            pickerInstance.current = null;
+        };
     }, [onReact, message._id, onClose, resolvedTheme]);
 
     const items: ContextMenuItem[] = [
@@ -120,27 +127,7 @@ export default function MessageContextMenu({
             icon: <Download className="h-4 w-4" />,
             onClick: async () => {
                 if (hasAttachment) {
-                    try {
-                        const response = await fetch(message.attachments[0].url);
-                        const blob = await response.blob();
-                        const blobUrl = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = blobUrl;
-                        a.download = message.attachments[0].name || 'download';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(blobUrl);
-                    } catch (error) {
-                        console.error("Download failed:", error);
-                        const a = document.createElement('a');
-                        a.href = message.attachments[0].url;
-                        a.download = message.attachments[0].name || 'download';
-                        a.target = '_blank';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                    }
+                    await downloadFile(message.attachments[0].url, message.attachments[0].name || 'download');
                 }
                 onClose();
             },

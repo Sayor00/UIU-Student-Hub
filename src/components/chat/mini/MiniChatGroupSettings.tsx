@@ -24,6 +24,7 @@ export default function MiniChatGroupSettings({
 }: MiniChatGroupSettingsProps) {
     const isAdmin = conversation.members.find((m) => m.userId === userId)?.role === "admin";
     const [editGroupName, setEditGroupName] = useState(conversation.name || "");
+    useEffect(() => { setEditGroupName(conversation.name || ""); }, [conversation.name]);
     const [addMemberSearch, setAddMemberSearch] = useState("");
     const [addMemberResults, setAddMemberResults] = useState<ChatUser[]>([]);
 

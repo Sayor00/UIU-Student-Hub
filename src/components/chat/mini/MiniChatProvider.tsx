@@ -4,6 +4,8 @@ import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import type { ChatConversation, ChatUser } from "@/app/tools/chat/types";
 import { convDisplayName } from "./useChatHelpers";
+import dynamic from "next/dynamic";
+import { AnimatePresence } from "framer-motion";
 
 /* ── Types ── */
 interface MiniChatWindow {
@@ -19,6 +21,8 @@ interface MiniChatContextValue {
     userId: string;
     launcherHeight: number;
     setLauncherHeight: (h: number) => void;
+    activeModalId: string | null;
+    setActiveModalId: (id: string | null) => void;
     openChat: (convId: string) => void;
     closeChat: (convId: string) => void;
     minimizeChat: (convId: string) => void;
@@ -45,6 +49,7 @@ export default function MiniChatProvider({ children }: { children: React.ReactNo
     const [openWindows, setOpenWindows] = useState<MiniChatWindow[]>([]);
     const [launcherOpen, setLauncherOpen] = useState(false);
     const [launcherHeight, setLauncherHeight] = useState<number>(0);
+    const [activeModalId, setActiveModalId] = useState<string | null>(null);
 
     const isAuthenticated = status === "authenticated" && !!userId;
     const isChatPage = pathname?.startsWith("/tools/chat");
@@ -145,6 +150,8 @@ export default function MiniChatProvider({ children }: { children: React.ReactNo
         userId,
         launcherHeight,
         setLauncherHeight,
+        activeModalId,
+        setActiveModalId,
         openChat,
         closeChat,
         minimizeChat,
@@ -168,8 +175,6 @@ export default function MiniChatProvider({ children }: { children: React.ReactNo
 }
 
 /* ── Lazy-loaded UI ── */
-import dynamic from "next/dynamic";
-
 
 type MiniChatWindowProps = {
     conversation: ChatConversation;
@@ -181,8 +186,6 @@ type MiniChatWindowProps = {
 
 const MiniChatLauncher = dynamic<Record<string, never>>(() => import("./MiniChatLauncher"), { ssr: false });
 const MiniChatWindowComponent = dynamic<MiniChatWindowProps>(() => import("./MiniChatWindow"), { ssr: false });
-
-import { AnimatePresence } from "framer-motion";
 
 function MiniChatUI() {
     const ctx = useMiniChat();

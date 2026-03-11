@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useMiniChat } from "./MiniChatProvider";
-import { convDisplayName, convAvatar, convInitial, getOtherMember, timeAgo, stripHtmlSimple } from "./useChatHelpers";
+import { convDisplayName, convAvatar, convInitial, getOtherMember, timeAgo, stripHtmlSimple, bounceEase, useIsMobile } from "./useChatHelpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,16 +15,7 @@ import { Separator } from "@/components/ui/separator";
 import { ConversationContextMenu } from "@/app/tools/chat/MessageContextMenu";
 import type { ChatConversation, ChatUser } from "@/app/tools/chat/types";
 
-// Bespoke easing curve that mathematically models a floor bounce 
-// without needing complex frame arrays or spring overshoots
-const bounceEase = (t: number) => {
-    const n1 = 7.5625;
-    const d1 = 2.75;
-    if (t < 1 / d1) return n1 * t * t;
-    if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
-    if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
-    return n1 * (t -= 2.625 / d1) * t + 0.984375;
-};
+
 
 export default function MiniChatLauncher() {
     const ctx = useMiniChat();
@@ -39,12 +30,7 @@ function LauncherInner() {
 
     const [searchQuery, setSearchQuery] = useState("");
     const [panel, setPanel] = useState<"list" | "newChat" | "newGroup">("list");
-    const [isMobile, setIsMobile] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-    React.useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    const isMobile = useIsMobile();
     const [convCtxMenu, setConvCtxMenu] = useState<{ convId: string; convType: "private" | "group"; position: { x: number; y: number } } | null>(null);
 
     const clearChat = useCallback(async () => {

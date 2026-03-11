@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { useTheme } from "next-themes";
 import { Picker } from 'emoji-mart';
 import { Smile, Sticker as StickerIcon, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ interface MediaPickerProps {
 type TabType = "emoji" | "gif" | "sticker";
 
 const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: MediaPickerProps) => {
+    const { resolvedTheme } = useTheme();
     const [activeTab, setActiveTab] = useState<TabType>("emoji");
     const [searchQuery, setSearchQuery] = useState("");
     const [results, setResults] = useState<any[]>([]);
@@ -36,7 +38,7 @@ const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: M
         if (!pickerInstance.current && emojiPickerRef.current) {
             pickerInstance.current = new Picker({
                 onEmojiSelect: (e: any) => callbacksRef.current.onEmojiSelect(e.native),
-                theme: "dark",
+                theme: resolvedTheme === "dark" ? "dark" : "light",
                 set: "apple",
                 previewPosition: "none",
                 skinTonePosition: "none",
@@ -46,6 +48,19 @@ const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: M
             emojiPickerRef.current.appendChild(pickerInstance.current as any);
         }
     }, []);
+
+    // Update picker theme when app theme changes
+    useEffect(() => {
+        if (pickerInstance.current) {
+            const shadow = (pickerInstance.current as HTMLElement).shadowRoot;
+            if (shadow) {
+                const section = shadow.querySelector('section');
+                if (section) {
+                    section.dataset.theme = resolvedTheme === 'dark' ? 'dark' : 'light';
+                }
+            }
+        }
+    }, [resolvedTheme]);
 
     useEffect(() => {
         if (activeTab === "emoji") return;
@@ -89,7 +104,7 @@ const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: M
     }, [activeTab, searchQuery]);
 
     return (
-        <div className="flex flex-col w-full h-[320px] sm:h-[350px] bg-transparent border-none overflow-hidden rounded-t-3xl z-20">
+        <div className="flex flex-col w-full h-full bg-transparent border-none overflow-hidden rounded-t-3xl z-20">
             {/* Main Content Area */}
             <div className="flex-1 overflow-hidden flex flex-col pt-1 bg-transparent">
                 <div className={`flex-1 w-full h-full emoji-mart-container ${activeTab === 'emoji' ? 'block' : 'hidden'}`} ref={emojiPickerRef}>
@@ -167,25 +182,25 @@ const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: M
                 )}
             </div>
 
-            <div className="flex items-center bg-transparent pt-2 pb-4 shrink-0 px-2 justify-center gap-2">
+            <div className="flex items-center bg-transparent pt-2 pb-2 shrink-0 px-2 justify-center gap-2">
                 <button
                     onClick={() => { setActiveTab("emoji"); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
-                        ${activeTab === "emoji" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
+                        ${activeTab === "emoji" ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                 >
                     <Smile className="h-4 w-4" /> Emojis
                 </button>
                 <button
                     onClick={() => { setActiveTab("gif"); setSearchQuery(""); setResults([]); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
-                        ${activeTab === "gif" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
+                        ${activeTab === "gif" ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                 >
                     GIF
                 </button>
                 <button
                     onClick={() => { setActiveTab("sticker"); setSearchQuery(""); setResults([]); }}
                     className={`flex items-center justify-center h-9 rounded-full px-5 transition-all font-medium text-sm gap-2
-                        ${activeTab === "sticker" ? "bg-white/10 text-white shadow-sm" : "text-muted-foreground hover:bg-white/5 hover:text-white"}`}
+                        ${activeTab === "sticker" ? "bg-muted text-foreground shadow-sm" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                 >
                     <StickerIcon className="h-4 w-4" /> Stickers
                 </button>
@@ -195,7 +210,7 @@ const MediaPickerComponent = ({ onEmojiSelect, onGifSelect, onStickerSelect }: M
                 .emoji-mart-container em-emoji-picker {
                     --rgb-background: transparent;
                     --rgb-input: transparent;
-                    --color-border: rgba(255, 255, 255, 0.05);
+                    --color-border: hsl(var(--border));
                     --color-border-over: hsl(var(--primary));
                     --rgb-accent: 249, 115, 22;
                     --padding: 8px;

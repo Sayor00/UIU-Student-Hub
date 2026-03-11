@@ -11,11 +11,12 @@ import {
     Pause, Play, Search, Forward, Trash2, Copy as CopyIcon, Download,
     Phone, VideoIcon, ArrowLeft, Settings, CheckSquare, MessageCircle, ExternalLink,
 } from "lucide-react";
+
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { useInView } from "react-intersection-observer";
 import { useMiniChat } from "./MiniChatProvider";
-import { timeAgo, formatTime, convDisplayName, convAvatar, convInitial, getOtherMember, stripHtmlSimple } from "./useChatHelpers";
+import { timeAgo, formatTime, convDisplayName, convAvatar, convInitial, getOtherMember, stripHtmlSimple, bounceEase, useIsMobile } from "./useChatHelpers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -34,15 +35,6 @@ import ContextMenuBase, { type ContextMenuItem } from "@/app/tools/chat/ContextM
 
 const MediaPicker = dynamic(() => import("@/components/chat/MediaPicker"), { ssr: false });
 
-// Math-based floor bounce curve
-const bounceEase = (t: number) => {
-    const n1 = 7.5625;
-    const d1 = 2.75;
-    if (t < 1 / d1) return n1 * t * t;
-    if (t < 2 / d1) return n1 * (t -= 1.5 / d1) * t + 0.75;
-    if (t < 2.5 / d1) return n1 * (t -= 2.25 / d1) * t + 0.9375;
-    return n1 * (t -= 2.625 / d1) * t + 0.984375;
-};
 
 /* ── Voice Recorder Hook ── */
 function useVoiceRecorder() {
@@ -83,6 +75,21 @@ function useVoiceRecorder() {
         setRecording(false); setPaused(false); if (timerRef.current) clearInterval(timerRef.current); setDuration(0);
     }, []);
     return { recording, paused, duration, start, stop, cancel, togglePause, stream };
+}
+
+/* ── Global Modal Sync Hook ── */
+function useModalSync(id: string, isOpen: boolean, setter: (v: any) => void) {
+    const ctx = useMiniChat();
+    useEffect(() => {
+        if (isOpen) {
+            ctx?.setActiveModalId(id);
+        } else if (ctx?.activeModalId === id) {
+            ctx?.setActiveModalId(null);
+        }
+    }, [isOpen, id, ctx]);
+    useEffect(() => {
+        if (ctx?.activeModalId && ctx?.activeModalId !== id && isOpen) setter(false);
+    }, [ctx?.activeModalId, id, isOpen, setter]);
 }
 
 /* ── Props ── */
@@ -178,6 +185,13 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
     const prevScrollHeightRef = useRef(0);
     const shouldScrollOnSendRef = useRef(false);
     const loadingMoreRef = useRef(false);
+
+    // Global modal sync
+    useModalSync(`${convId}-settings`, groupSettingsOpen, setGroupSettingsOpen);
+    useModalSync(`${convId}-poll`, pollOpen, setPollOpen);
+    useModalSync(`${convId}-delete`, deleteModalOpen, setDeleteModalOpen);
+    useModalSync(`${convId}-forward`, forwardOpen, setForwardOpen);
+    useModalSync(`${convId}-file`, !!viewFile, (v) => { if (!v) setViewFile(null); });
     const lastPollIdsRef = useRef<string>("");
     const isFirstLoadRef = useRef(true);
     const lastTypingTime = useRef<number>(0);
@@ -277,7 +291,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
             if (res.ok) { setPendingMessages((prev) => prev.map((m) => m._tempId === tempId ? { ...m, _status: "sent" } : m)); ctx.fetchConversations(); }
             else { const d = await res.json(); setPendingMessages((prev) => prev.map((m) => m._tempId === tempId ? { ...m, _status: "failed" } : m)); toast.error(d.error || "Message failed"); }
         } catch { setPendingMessages((prev) => prev.map((m) => m._tempId === tempId ? { ...m, _status: "failed" } : m)); }
-    }, [convId, inputText, userId, session?.user?.name, replyToMessages, editingMsg, ctx]);
+    }, [convId, inputText, userId, session?.user?.name, replyToMessages, editingMsg, ctx, saveDraft]);
 
     const retryMessage = useCallback(async (tempId: string) => {
         const msg = pendingMessages.find((m) => m._tempId === tempId); if (!msg?._retryBody) return;
@@ -480,12 +494,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
     const myMember = latestConv.members.find((m) => m.userId === userId);
     const isAdmin = myMember?.role === "admin";
 
-    const [isMobile, setIsMobile] = React.useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
-    React.useEffect(() => {
-        const handleResize = () => setIsMobile(window.innerWidth < 768);
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+    const isMobile = useIsMobile();
 
     // Compute right offset based on cumulative widths of windows to the right
     const rightOffset = React.useMemo(() => {
@@ -578,7 +587,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], right: { type: 'spring', stiffness: 350, damping: 22 } }}
                         style={{ right: rightOffset }}
                         id={`mcw-${convId.replace(/[^a-zA-Z0-9]/g, '')}`}
-                        className="fixed bottom-2 z-[9990] w-[calc(100vw-1rem)] h-[70vh] md:w-[328px] md:h-[450px] rounded-2xl bg-background/50 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.4)] flex flex-col overflow-hidden">
+                        className="fixed bottom-2 z-[9990] w-[calc(100vw-1rem)] h-[70vh] md:w-[328px] md:h-[520px] rounded-2xl bg-background/50 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.4)] flex flex-col overflow-hidden">
                         <style>{`
                             @media (max-width: 767px) {
                                 #mcw-${convId.replace(/[^a-zA-Z0-9]/g, '')} { 
@@ -747,8 +756,8 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                             <div className="px-2 pt-1 border-t bg-muted/30">
                                 <div className="flex items-center gap-1">
                                     <Reply className="h-3 w-3 text-primary shrink-0" />
-                                    <div className="flex-1 min-w-0">{replyToMessages.map((rm) => (<div key={rm._id} className="border-l-2 border-primary pl-1 py-0.5"><span className="text-[9px] font-medium text-primary">{rm.senderName}</span><p className="text-[9px] text-muted-foreground truncate">{stripHtmlSimple(rm.text || rm.type)}</p></div>))}</div>
-                                    <button onClick={() => setReplyToMessages([])} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-3 w-3" /></button>
+                                    <div className="flex-1 min-w-0">{replyToMessages.map((rm) => (<div key={rm._id} className="border-l-2 border-primary pl-1 py-0.5 flex items-center gap-1"><div className="flex-1 min-w-0"><span className="text-[9px] font-medium text-primary">{rm.senderName}</span><p className="text-[9px] text-muted-foreground truncate">{stripHtmlSimple(rm.text || rm.type)}</p></div><button onClick={() => setReplyToMessages((prev) => prev.filter((m) => m._id !== rm._id))} className="text-muted-foreground hover:text-foreground shrink-0"><X className="h-2.5 w-2.5" /></button></div>))}</div>
+                                    {replyToMessages.length > 1 && <button onClick={() => setReplyToMessages([])} className="text-muted-foreground hover:text-foreground shrink-0" title="Remove all"><X className="h-3 w-3" /></button>}
                                 </div>
                             </div>
                         )}
@@ -777,7 +786,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                                 ) : (
                                     <>
                                         {hasOpenedEmoji && (
-                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={showEmoji ? { height: 280, opacity: 1, display: "block" } : { height: 0, opacity: 0, transitionEnd: { display: "none" } }}
+                                            <motion.div initial={{ height: 0, opacity: 0 }} animate={showEmoji ? { height: 350, opacity: 1, display: "block" } : { height: 0, opacity: 0, transitionEnd: { display: "none" } }}
                                                 transition={{ duration: 0.2 }} className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-xl relative w-full shadow-xl mb-1">
                                                 <MediaPicker onEmojiSelect={(emoji) => { if (editorRef.current) { editorRef.current.chain().focus().command(({ tr }: any) => { tr.insertText(emoji); return true; }).run(); } else setInputText((t) => t + emoji); }}
                                                     onGifSelect={(url) => { sendMessage({ type: "gif", text: "GIF", attachments: [{ url, name: "gif", size: 0, mimeType: "image/gif" }] }); setShowEmoji(false); }}
@@ -810,93 +819,92 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                 )}
             </AnimatePresence>
 
-            {!minimized && (
-                <>
-                    {/* Context Menu */}
-                    {contextMenu && <MessageContextMenu message={contextMenu.message} isMe={contextMenu.message.senderId === userId} isGroup={latestConv.type === "group"} position={contextMenu.position} onClose={() => setContextMenu(null)}
-                        onReply={(msg) => setReplyToMessages((prev) => prev.some((m) => m._id === msg._id) ? prev : [...prev, msg])} onCopy={copyMessageText}
-                        onDelete={(msg) => { setSingleDeleteMsg(msg); setDeleteModalOpen(true); }} onReact={reactToMessage} onEdit={startEdit}
-                        onSelect={(msg) => enterSelectMode(msg)} onForward={(msg) => { setForwardMsgIds([msg._id]); setForwardOpen(true); }}
-                        onReplyPrivately={latestConv.type === "group" ? (msg) => { startPrivateChatWithUser(msg.senderId); setContextMenu(null); } : undefined} />}
+            <>
+                {/* Context Menu */}
+                {contextMenu && <MessageContextMenu message={contextMenu.message} isMe={contextMenu.message.senderId === userId} isGroup={latestConv.type === "group"} position={contextMenu.position} onClose={() => setContextMenu(null)}
+                    onReply={(msg) => setReplyToMessages((prev) => prev.some((m) => m._id === msg._id) ? prev : [...prev, msg])} onCopy={copyMessageText}
+                    onDelete={(msg) => { setSingleDeleteMsg(msg); setDeleteModalOpen(true); }} onReact={reactToMessage} onEdit={startEdit}
+                    onSelect={(msg) => enterSelectMode(msg)} onForward={(msg) => { setForwardMsgIds([msg._id]); setForwardOpen(true); }}
+                    onReplyPrivately={latestConv.type === "group" ? (msg) => { startPrivateChatWithUser(msg.senderId); setContextMenu(null); } : undefined} />}
 
-                    {/* Chat area context menu (right-click empty space) */}
-                    <AnimatePresence>
-                        {chatAreaCtxMenu && <ContextMenuBase position={chatAreaCtxMenu} onClose={() => setChatAreaCtxMenu(null)} items={[
-                            { icon: <CheckSquare className="h-4 w-4" />, label: "Select Messages", onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); } },
-                            { icon: <X className="h-4 w-4" />, label: "Close chat", onClick: () => { ctx.closeChat(convId); setChatAreaCtxMenu(null); } },
-                        ]} />}
-                    </AnimatePresence>
+                {/* Chat area context menu (right-click empty space) */}
+                <AnimatePresence>
+                    {chatAreaCtxMenu && <ContextMenuBase position={chatAreaCtxMenu} onClose={() => setChatAreaCtxMenu(null)} items={[
+                        { icon: <CheckSquare className="h-4 w-4" />, label: "Select Messages", onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); } },
+                        { icon: <X className="h-4 w-4" />, label: "Close chat", onClick: () => { ctx.closeChat(convId); setChatAreaCtxMenu(null); } },
+                    ]} />}
+                </AnimatePresence>
 
-                    {/* Mention context menu */}
-                    {mentionCtxMenu && (<>
-                        <div className="fixed inset-0 z-[9998]" onClick={() => setMentionCtxMenu(null)} />
-                        <div className="fixed z-[9999] min-w-[150px] rounded-xl bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl py-1 px-1 flex flex-col gap-0.5"
-                            style={{ top: mentionCtxMenu.position.y, left: mentionCtxMenu.position.x }}>
-                            {mentionCtxMenu.userId !== userId && (
-                                <button onClick={() => startPrivateChatWithUser(mentionCtxMenu.userId)}
-                                    className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] rounded-lg hover:bg-white/10 text-left">
-                                    <MessageCircle className="h-3 w-3 opacity-70" /> Send private message
-                                </button>
-                            )}
-                            <button onClick={() => { const el = document.querySelector(`span[data-id="${mentionCtxMenu.userId}"]`); const name = el?.textContent?.replace('@', '') || ''; navigator.clipboard.writeText(name).then(() => toast.success('Name copied!')); setMentionCtxMenu(null); }}
+                {/* Mention context menu */}
+                {mentionCtxMenu && (<>
+                    <div className="fixed inset-0 z-[9998]" onClick={() => setMentionCtxMenu(null)} />
+                    <div className="fixed z-[9999] min-w-[150px] rounded-xl bg-background/60 backdrop-blur-2xl border border-white/10 shadow-2xl py-1 px-1 flex flex-col gap-0.5"
+                        style={{ top: mentionCtxMenu.position.y, left: mentionCtxMenu.position.x }}>
+                        {mentionCtxMenu.userId !== userId && (
+                            <button onClick={() => startPrivateChatWithUser(mentionCtxMenu.userId)}
                                 className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] rounded-lg hover:bg-white/10 text-left">
-                                <CopyIcon className="h-3 w-3 opacity-70" /> Copy name
+                                <MessageCircle className="h-3 w-3 opacity-70" /> Send private message
                             </button>
-                        </div>
-                    </>)}
+                        )}
+                        <button onClick={() => { const el = document.querySelector(`span[data-id="${mentionCtxMenu.userId}"]`); const name = el?.textContent?.replace('@', '') || ''; navigator.clipboard.writeText(name).then(() => toast.success('Name copied!')); setMentionCtxMenu(null); }}
+                            className="w-full flex items-center gap-2 px-2 py-1.5 text-[11px] rounded-lg hover:bg-white/10 text-left">
+                            <CopyIcon className="h-3 w-3 opacity-70" /> Copy name
+                        </button>
+                    </div>
+                </>)}
 
-                    {/* Group Settings Dialog */}
-                    {latestConv.type === "group" && (
-                        <MiniChatGroupSettings open={groupSettingsOpen} onOpenChange={setGroupSettingsOpen}
-                            conversation={latestConv} userId={userId}
-                            onConversationUpdate={() => ctx.fetchConversations()}
-                            onLeave={() => { ctx.closeChat(convId); ctx.fetchConversations(); }} />
-                    )}
+                {/* Group Settings Dialog */}
+                {latestConv.type === "group" && (
+                    <MiniChatGroupSettings open={groupSettingsOpen} onOpenChange={setGroupSettingsOpen}
+                        conversation={latestConv} userId={userId}
+                        onConversationUpdate={() => ctx.fetchConversations()}
+                        onLeave={() => { ctx.closeChat(convId); ctx.fetchConversations(); }} />
+                )}
 
-                    {/* Poll Dialog */}
-                    <Dialog open={pollOpen} onOpenChange={setPollOpen}><DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="text-sm">Create Poll</DialogTitle></DialogHeader>
-                        <div className="space-y-2"><Input placeholder="Ask a question..." value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} className="h-8 text-xs" />
-                            {pollOptions.map((opt, i) => (<div key={i} className="flex gap-1"><Input placeholder={`Option ${i + 1}`} value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n); }} className="flex-1 h-8 text-xs" />{pollOptions.length > 2 && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>}</div>))}
-                            <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setPollOptions([...pollOptions, ""])}>+ Add Option</Button>
-                            <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={pollMulti} onChange={(e) => setPollMulti(e.target.checked)} className="accent-primary" />Allow multiple votes</label>
-                        </div><DialogFooter><Button size="sm" variant="outline" onClick={() => setPollOpen(false)}>Cancel</Button><Button size="sm" onClick={sendPoll}>Create</Button></DialogFooter></DialogContent></Dialog>
+                {/* Poll Dialog */}
+                <Dialog open={pollOpen} onOpenChange={setPollOpen}><DialogContent className="max-w-xs"><DialogHeader><DialogTitle className="text-sm">Create Poll</DialogTitle></DialogHeader>
+                    <div className="space-y-2"><Input placeholder="Ask a question..." value={pollQuestion} onChange={(e) => setPollQuestion(e.target.value)} className="h-8 text-xs" />
+                        {pollOptions.map((opt, i) => (<div key={i} className="flex gap-1"><Input placeholder={`Option ${i + 1}`} value={opt} onChange={(e) => { const n = [...pollOptions]; n[i] = e.target.value; setPollOptions(n); }} className="flex-1 h-8 text-xs" />{pollOptions.length > 2 && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setPollOptions(pollOptions.filter((_, j) => j !== i))}><X className="h-3 w-3" /></Button>}</div>))}
+                        <Button variant="outline" size="sm" className="w-full text-xs" onClick={() => setPollOptions([...pollOptions, ""])}>+ Add Option</Button>
+                        <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={pollMulti} onChange={(e) => setPollMulti(e.target.checked)} className="accent-primary" />Allow multiple votes</label>
+                    </div><DialogFooter><Button size="sm" variant="outline" onClick={() => setPollOpen(false)}>Cancel</Button><Button size="sm" onClick={sendPoll}>Create</Button></DialogFooter></DialogContent></Dialog>
 
-                    {/* Delete Dialog */}
-                    <Dialog open={deleteModalOpen} onOpenChange={(o) => { setDeleteModalOpen(o); if (!o) setSingleDeleteMsg(null); }}><DialogContent className="max-w-xs">
-                        <DialogHeader><DialogTitle className="text-sm">Delete message?</DialogTitle></DialogHeader>
-                        <div className="flex flex-col gap-1.5">
-                            {/* Single message delete OR bulk delete */}
-                            {singleDeleteMsg ? (<>
-                                <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { deleteMessageForMe(singleDeleteMsg._id); setDeleteModalOpen(false); setSingleDeleteMsg(null); }}><Trash2 className="h-3 w-3 mr-1" />Delete for me</Button>
-                                {singleDeleteMsg.senderId === userId && !singleDeleteMsg.deletedForAll && <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { deleteMessageForAll(singleDeleteMsg._id); setDeleteModalOpen(false); setSingleDeleteMsg(null); }}><Trash2 className="h-3 w-3 mr-1" />Delete for everyone</Button>}
-                            </>) : (() => {
-                                const selectedMsgs = messages.filter((m) => selectedMsgIds.has(m._id));
-                                const canDeleteForEveryone = selectedMsgs.length > 0 && selectedMsgs.every((m) => m.senderId === userId && !m.deletedForAll);
-                                return (<>
-                                    <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { bulkDeleteForMe(); setDeleteModalOpen(false); }}><Trash2 className="h-3 w-3 mr-1" />Delete {selectedMsgIds.size} for me</Button>
-                                    {canDeleteForEveryone && <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { bulkDeleteForAll(); setDeleteModalOpen(false); }}><Trash2 className="h-3 w-3 mr-1" />Delete {selectedMsgIds.size} for everyone</Button>}
-                                </>);
-                            })()}
-                        </div><DialogFooter><Button variant="ghost" size="sm" onClick={() => { setDeleteModalOpen(false); setSingleDeleteMsg(null); }}>Cancel</Button></DialogFooter></DialogContent></Dialog>
+                {/* Delete Dialog */}
+                <Dialog open={deleteModalOpen} onOpenChange={(o) => { setDeleteModalOpen(o); if (!o) setSingleDeleteMsg(null); }}><DialogContent className="max-w-xs">
+                    <DialogHeader><DialogTitle className="text-sm">Delete message?</DialogTitle></DialogHeader>
+                    <div className="flex flex-col gap-1.5">
+                        {/* Single message delete OR bulk delete */}
+                        {singleDeleteMsg ? (<>
+                            <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { deleteMessageForMe(singleDeleteMsg._id); setDeleteModalOpen(false); setSingleDeleteMsg(null); }}><Trash2 className="h-3 w-3 mr-1" />Delete for me</Button>
+                            {singleDeleteMsg.senderId === userId && !singleDeleteMsg.deletedForAll && <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { deleteMessageForAll(singleDeleteMsg._id); setDeleteModalOpen(false); setSingleDeleteMsg(null); }}><Trash2 className="h-3 w-3 mr-1" />Delete for everyone</Button>}
+                        </>) : (() => {
+                            const selectedMsgs = messages.filter((m) => selectedMsgIds.has(m._id));
+                            const canDeleteForEveryone = selectedMsgs.length > 0 && selectedMsgs.every((m) => m.senderId === userId && !m.deletedForAll);
+                            return (<>
+                                <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { bulkDeleteForMe(); setDeleteModalOpen(false); }}><Trash2 className="h-3 w-3 mr-1" />Delete {selectedMsgIds.size} for me</Button>
+                                {canDeleteForEveryone && <Button variant="outline" size="sm" className="justify-start text-destructive text-xs" onClick={() => { bulkDeleteForAll(); setDeleteModalOpen(false); }}><Trash2 className="h-3 w-3 mr-1" />Delete {selectedMsgIds.size} for everyone</Button>}
+                            </>);
+                        })()}
+                    </div><DialogFooter><Button variant="ghost" size="sm" onClick={() => { setDeleteModalOpen(false); setSingleDeleteMsg(null); }}>Cancel</Button></DialogFooter></DialogContent></Dialog>
 
-                    {/* Forward Dialog */}
-                    <Dialog open={forwardOpen} onOpenChange={(o) => { setForwardOpen(o); if (!o) { setForwardMsgIds([]); setFwdSearch(''); setFwdSelectedConvs(new Set()); setFwdMessage(''); } }}><DialogContent className="max-w-xs">
-                        <DialogHeader><DialogTitle className="text-sm">Forward to</DialogTitle></DialogHeader>
-                        <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" /><Input placeholder="Search..." value={fwdSearch} onChange={(e) => setFwdSearch(e.target.value)} className="pl-7 h-8 text-xs" /></div>
-                        <div className="max-h-[200px] overflow-y-auto space-y-0.5">{ctx.conversations.filter((c) => c._id !== convId && (!fwdSearch.trim() || convDisplayName(c, userId).toLowerCase().includes(fwdSearch.toLowerCase()))).map((conv) => (
-                            <button key={conv._id} onClick={() => setFwdSelectedConvs((prev) => { const n = new Set(prev); if (n.has(conv._id)) n.delete(conv._id); else n.add(conv._id); return n; })}
-                                className={`w-full flex items-center gap-2 p-2 rounded-lg text-left text-xs ${fwdSelectedConvs.has(conv._id) ? 'bg-primary/10' : 'hover:bg-accent'}`}>
-                                <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${fwdSelectedConvs.has(conv._id) ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>{fwdSelectedConvs.has(conv._id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}</div>
-                                <span className="truncate">{convDisplayName(conv, userId)}</span>
-                            </button>
-                        ))}</div>
-                        <Input placeholder="Add a message..." value={fwdMessage} onChange={(e) => setFwdMessage(e.target.value)} className="h-8 text-xs" />
-                        <DialogFooter><Button size="sm" disabled={fwdSelectedConvs.size === 0} onClick={() => forwardTo(Array.from(fwdSelectedConvs), fwdMessage || undefined)}><Send className="h-3 w-3 mr-1" />Send</Button></DialogFooter></DialogContent></Dialog>
+                {/* Forward Dialog */}
+                <Dialog open={forwardOpen} onOpenChange={(o) => { setForwardOpen(o); if (!o) { setForwardMsgIds([]); setFwdSearch(''); setFwdSelectedConvs(new Set()); setFwdMessage(''); } }}><DialogContent className="max-w-xs">
+                    <DialogHeader><DialogTitle className="text-sm">Forward to</DialogTitle></DialogHeader>
+                    <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" /><Input placeholder="Search..." value={fwdSearch} onChange={(e) => setFwdSearch(e.target.value)} className="pl-7 h-8 text-xs" /></div>
+                    <div className="max-h-[200px] overflow-y-auto space-y-0.5">{ctx.conversations.filter((c) => c._id !== convId && (!fwdSearch.trim() || convDisplayName(c, userId).toLowerCase().includes(fwdSearch.toLowerCase()))).map((conv) => (
+                        <button key={conv._id} onClick={() => setFwdSelectedConvs((prev) => { const n = new Set(prev); if (n.has(conv._id)) n.delete(conv._id); else n.add(conv._id); return n; })}
+                            className={`w-full flex items-center gap-2 p-2 rounded-lg text-left text-xs ${fwdSelectedConvs.has(conv._id) ? 'bg-primary/10' : 'hover:bg-accent'}`}>
+                            <div className={`h-4 w-4 rounded border-2 flex items-center justify-center shrink-0 ${fwdSelectedConvs.has(conv._id) ? 'bg-primary border-primary' : 'border-muted-foreground/40'}`}>{fwdSelectedConvs.has(conv._id) && <Check className="h-2.5 w-2.5 text-primary-foreground" />}</div>
+                            <span className="truncate">{convDisplayName(conv, userId)}</span>
+                        </button>
+                    ))}</div>
+                    <Input placeholder="Add a message..." value={fwdMessage} onChange={(e) => setFwdMessage(e.target.value)} className="h-8 text-xs" />
+                    <DialogFooter><Button size="sm" disabled={fwdSelectedConvs.size === 0} onClick={() => forwardTo(Array.from(fwdSelectedConvs), fwdMessage || undefined)}><Send className="h-3 w-3 mr-1" />Send</Button></DialogFooter></DialogContent></Dialog>
 
-                    {/* Universal File Viewer */}
-                    {viewFile && <FileViewer open={!!viewFile} onClose={() => setViewFile(null)} url={viewFile.url} name={viewFile.name} mimeType={viewFile.mimeType} />}
-                </>
-            )}
+                {/* Universal File Viewer */}
+                {viewFile && <FileViewer open={!!viewFile} onClose={() => setViewFile(null)} url={viewFile.url} name={viewFile.name} mimeType={viewFile.mimeType} />}
+            </>
+
         </>
     );
 }
