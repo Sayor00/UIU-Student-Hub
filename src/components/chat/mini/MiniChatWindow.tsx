@@ -440,11 +440,18 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
         if (msg._tempId || msg.deletedForAll) return;
         const touch = e.touches[0];
         touchStartRef.current = { x: touch.clientX, y: touch.clientY, msgId: msg._id };
-        longPressTimer.current = setTimeout(() => {
-            try { navigator.vibrate?.(50); } catch { }
-            setContextMenu({ message: msg, position: { x: touch.clientX, y: touch.clientY } });
-            longPressTimer.current = null;
-        }, 500);
+
+        // Only trigger the long press if they actually touch the message bubble content
+        const target = e.target as HTMLElement;
+        const isBubble = target.closest('.rounded-xl');
+
+        if (isBubble) {
+            longPressTimer.current = setTimeout(() => {
+                try { navigator.vibrate?.(50); } catch { }
+                setContextMenu({ message: msg, position: { x: touch.clientX, y: touch.clientY } });
+                longPressTimer.current = null;
+            }, 500);
+        }
     }, []);
 
     const handleTouchMove = useCallback((e: React.TouchEvent) => {
@@ -557,9 +564,9 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                         {/* Desktop close button */}
                         <button onClick={(e) => { e.stopPropagation(); ctx.closeChat(convId); }} className="hidden md:block text-muted-foreground hover:text-foreground shrink-0"><X className="h-3.5 w-3.5" /></button>
 
-                        {/* Mobile tiny close badge */}
-                        <button onClick={(e) => { e.stopPropagation(); ctx.closeChat(convId); }} className="md:hidden absolute -top-1.5 -right-1.5 h-7 w-7 bg-background text-muted-foreground hover:bg-destructive hover:text-destructive-foreground rounded-full flex items-center justify-center shadow-lg transition-colors border border-white/10" aria-label="Close chat">
-                            <X className="h-3.5 w-3.5" />
+                        {/* Mobile explicit close badge */}
+                        <button onClick={(e) => { e.stopPropagation(); ctx.closeChat(convId); }} className="md:hidden absolute -top-3 -right-3 h-8 w-8 bg-background/95 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground rounded-full flex items-center justify-center shadow-lg shadow-black/20 transition-colors border-2 border-border/40 backdrop-blur-sm" aria-label="Close chat">
+                            <X className="h-4 w-4" />
                         </button>
                     </motion.div>
                 ) : (
@@ -659,8 +666,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                                                     <Reply className="h-4 w-4 text-primary" />
                                                 </div>
                                             )}
-                                            <div data-message-id={msg._id} className={`max-w-[85%] min-w-0 ${isMe ? "items-end" : "items-start"} flex flex-col`}
-                                                onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }}>
+                                            <div data-message-id={msg._id} className={`max-w-[85%] min-w-0 ${isMe ? "items-end" : "items-start"} flex flex-col`}>
                                                 {!isMe && latestConv.type === "group" && <span className="text-[9px] text-muted-foreground mb-0.5 ml-1">{msg.senderName}</span>}
                                                 {isDeleted ? (
                                                     <div className="rounded-xl px-2.5 py-1.5 text-[11px] bg-muted/50 border border-dashed border-border italic text-muted-foreground">🚫 Deleted</div>
@@ -671,7 +677,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                                                                 <div className="flex-1 min-w-0"><span className="font-semibold text-[9px] text-primary/80 block">{rm.senderName}</span><p className="truncate text-[9px] text-foreground/60">{rm.deletedForAll ? 'Deleted' : stripHtmlSimple(rm.text || rm.type)}</p></div>
                                                             </div>
                                                         ))}</div>}
-                                                        <div className={`rounded-xl px-2.5 py-1.5 text-[11px] shadow-sm ${isFailed ? "bg-destructive/20 text-destructive border border-destructive/30" : isMe ? `bg-primary/20 backdrop-blur-xl text-foreground border border-primary/15 ${isSending ? "opacity-70" : ""}` : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground"}`}>
+                                                        <div onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }} className={`rounded-xl px-2.5 py-1.5 text-[11px] shadow-sm ${isFailed ? "bg-destructive/20 text-destructive border border-destructive/30" : isMe ? `bg-primary/20 backdrop-blur-xl text-foreground border border-primary/15 ${isSending ? "opacity-70" : ""}` : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground"}`}>
                                                             {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" onClick={(e) => { const target = e.target as HTMLElement; if (target.tagName.toLowerCase() === 'span' && target.getAttribute('data-type') === 'mention') { e.stopPropagation(); const mentionId = target.getAttribute('data-id'); if (mentionId) { const x = Math.min(e.clientX, window.innerWidth - 180 - 8); const y = (e.clientY + 80 > window.innerHeight) ? e.clientY - 80 : e.clientY + 8; setMentionCtxMenu({ userId: mentionId, position: { x, y } }); } } }} dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                             {msg.type === "image" && msg.attachments?.[0] && <img src={msg.attachments[0].url} alt="" className="rounded-lg max-w-full max-h-40 cursor-pointer" onClick={() => setViewFile({ url: msg.attachments[0].url, name: msg.attachments[0].name || "image", mimeType: msg.attachments[0].mimeType || "image/jpeg" })} />}
                                                             {msg.type === "video" && msg.attachments?.[0] && <video src={msg.attachments[0].url} controls className="rounded-lg max-w-full max-h-40 cursor-pointer" onDoubleClick={() => setViewFile({ url: msg.attachments[0].url, name: msg.attachments[0].name || "video", mimeType: msg.attachments[0].mimeType || "video/mp4" })} />}
@@ -814,10 +820,12 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                         onReplyPrivately={latestConv.type === "group" ? (msg) => { startPrivateChatWithUser(msg.senderId); setContextMenu(null); } : undefined} />}
 
                     {/* Chat area context menu (right-click empty space) */}
-                    {chatAreaCtxMenu && <ContextMenuBase position={chatAreaCtxMenu} onClose={() => setChatAreaCtxMenu(null)} items={[
-                        { icon: <CheckSquare className="h-4 w-4" />, label: "Select Messages", onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); } },
-                        { icon: <X className="h-4 w-4" />, label: "Close chat", onClick: () => { ctx.closeChat(convId); setChatAreaCtxMenu(null); } },
-                    ]} />}
+                    <AnimatePresence>
+                        {chatAreaCtxMenu && <ContextMenuBase position={chatAreaCtxMenu} onClose={() => setChatAreaCtxMenu(null)} items={[
+                            { icon: <CheckSquare className="h-4 w-4" />, label: "Select Messages", onClick: () => { setSelectMode(true); setChatAreaCtxMenu(null); } },
+                            { icon: <X className="h-4 w-4" />, label: "Close chat", onClick: () => { ctx.closeChat(convId); setChatAreaCtxMenu(null); } },
+                        ]} />}
+                    </AnimatePresence>
 
                     {/* Mention context menu */}
                     {mentionCtxMenu && (<>
