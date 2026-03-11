@@ -1900,7 +1900,7 @@ export default function ChatPage() {
                                             {hasOpenedEmoji && (
                                                 <motion.div
                                                     initial={{ height: 0, opacity: 0, scale: 0.95 }}
-                                                    animate={showEmoji ? { height: "auto", opacity: 1, scale: 1, display: "block" } : { height: 0, opacity: 0, scale: 0.95, transitionEnd: { display: "none" } }}
+                                                    animate={showEmoji ? { height: 420, opacity: 1, scale: 1, display: "block" } : { height: 0, opacity: 0, scale: 0.95, transitionEnd: { display: "none" } }}
                                                     transition={{ duration: 0.2 }}
                                                     className="overflow-hidden bg-muted/20 backdrop-blur-xl border border-border/40 rounded-[28px] relative w-full shadow-xl mb-2 origin-bottom">
                                                     <MediaPicker
