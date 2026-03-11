@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   title: "UIU Student Hub - Tools for UIU Students",
   description:
     "A collection of useful tools for United International University students. CGPA Calculator, and more.",
+  icons: {
+    icon: "/uiu-logo.svg",
+    apple: "/uiu-logo.svg",
+  },
 };
 
 export default async function RootLayout({
