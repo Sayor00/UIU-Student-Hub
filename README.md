@@ -5,7 +5,7 @@
 <h1 align="center">UIU Student Hub</h1>
 
 <p align="center">
-  A comprehensive, all-in-one web platform built for <strong>United International University (UIU)</strong> students — featuring academic tools, faculty reviews, schedule planning, and more.
+  A comprehensive, all-in-one web platform built for <strong>United International University (UIU)</strong> students — featuring academic tools, faculty reviews, schedule planning, real-time chat, and more.
 </p>
 
 <p align="center">
@@ -25,8 +25,13 @@
 - [Features](#features)
   - [CGPA Calculator](#-cgpa-calculator)
   - [Section Selector](#-section-selector)
+  - [Academic Calendar](#-academic-calendar)
+  - [Question Bank](#-question-bank--interactive-pdf-viewer)
   - [Fee Calculator](#-fee-calculator)
   - [Faculty Reviews](#-faculty-reviews)
+  - [Real-Time Chat](#-real-time-chat)
+  - [UCAM Auto-Register Bot](#-ucam-auto-register-bot)
+  - [Career Planner](#-career-planner)
   - [User Profile & Dashboard](#-user-profile--dashboard)
   - [Admin Panel](#-admin-panel)
   - [Authentication System](#-authentication-system)
@@ -53,6 +58,11 @@
 - A **Section Selector** that parses UIU's official class routine PDFs for smart schedule planning
 - A **Fee Calculator** covering all 17 UIU programs with waiver and installment breakdowns
 - A **Faculty Review** system with anonymous ratings and detailed breakdowns
+- A **Real-Time Chat** system with private and group messaging, voice messages, file sharing, polls, and reactions
+- A **UCAM Auto-Register Bot** for automated course registration with headless browser automation
+- A **Career Planner** for tracking academic progress against career goals
+- An **Academic Calendar** with email reminders powered by Upstash QStash
+- A **Question Bank** with community-driven exam papers and interactive PDF viewer
 - A full **Admin Panel** for platform management
 - **Email-verified authentication** restricted to UIU student email domains
 
@@ -220,6 +230,90 @@ A personalized dashboard for registered users with four sections:
 
 ---
 
+### 💬 Real-Time Chat
+
+A full-featured messaging system with both a dedicated full-page chat interface and an omnipresent mini chat widget.
+
+- **Private & Group Conversations**
+  - Create 1-on-1 private chats or group chats with multiple members
+  - Anonymous chat mode — choose a display name for anonymous conversations
+  - Group management — rename, add/remove members, role-based admin controls
+  - Leave group functionality
+- **Rich Text Messaging**
+  - **Tiptap Editor** — rich text input with bold, italic, underline, strikethrough, lists, links
+  - **@Mentions** — tag users in group chats with autocomplete suggestions; click mentions to start private chats
+  - **Emoji Picker** — full emoji-mart integration with native emoji rendering and search
+  - **Stickers & GIFs** — built-in sticker packs and GIF picker via unified MediaPicker
+- **File Sharing & Media**
+  - Upload images, videos, audio, and documents with real-time progress tracking
+  - Upload progress bar with estimated time remaining and bytes-per-second calculation
+  - Inline media previews (images, video players, audio players)
+  - File viewer powered by Syncfusion WebAssembly PDF engine for document previews
+  - **Cloudinary** — cloud-based file storage for uploaded media
+- **Voice Messages**
+  - In-chat voice recording with pause/resume functionality
+  - Custom waveform visualizer during recording
+  - Interactive playback with progress bar and time display
+- **Reactions & Polls**
+  - Emoji reactions on messages with quick-react bar (❤️ 😂 👍 😮 😢 🙏)
+  - Full emoji picker for custom reactions
+  - Interactive poll creation with multiple choice and real-time vote tracking
+- **Message Management**
+  - **Reply** — single or multi-message replies with visual quote preview and click-to-scroll
+  - **Edit** — edit sent messages with edit history indicator
+  - **Delete** — delete for me or delete for everyone
+  - **Forward** — forward messages to one or multiple conversations with optional message
+  - **Copy** — copy message text with formatted timestamps
+  - **Multi-Select** — bulk select messages for copy, reply, forward, save media, or delete
+- **Context Menus**
+  - Custom glass-morphism context menu with backdrop blur on right-click/long-press
+  - Mobile-optimized long-press gesture with haptic feedback (vibration)
+  - Swipe-to-reply gesture on mobile
+  - Chat area context menu (select all / close chat)
+- **Real-Time Features**
+  - Polling-based real-time message updates (3s interval) with hash-based change detection
+  - Typing indicators showing who's currently typing
+  - Read receipts (single check → double check → blue double check)
+  - Online/offline presence indicators with "last seen" timestamps
+  - Presence heartbeat (30s interval)
+- **Optimistic UI**
+  - Messages appear instantly with sending/sent/failed status
+  - Failed message retry and discard
+  - Pending messages persisted to localStorage for crash recovery
+- **Mini Chat Widget**
+  - Floating chat bubbles accessible from any page on the platform
+  - Multiple simultaneous chat windows with smart stacking
+  - Minimize/restore with animated transitions
+  - Full feature parity with the dedicated chat page in a compact form
+  - Responsive design — adaptive layout for mobile and desktop
+  - Conversation launcher with search, new chat, and new group creation
+- **Additional Features**
+  - Draft persistence via localStorage (per-conversation)
+  - Infinite scroll with scroll position preservation on older message load
+  - URL-based conversation routing (`?c=conversationId`)
+  - Unread message count badges
+  - Conversation search and filtering
+
+---
+
+### 🤖 UCAM Auto-Register Bot
+
+An automated course registration tool for UIU's UCAM portal with three operation modes.
+
+- **Puppeteer Mode** — full headless Chromium automation on the server
+  - Automated login, course search, and registration on the UCAM portal
+  - Chromium binary downloaded on-demand with caching for subsequent runs
+  - Supports Vercel Pro with 5-minute function timeout
+- **Fast Mode (Client-Side)** — runs entirely in the browser via a thin CORS proxy
+  - Bypasses Vercel's 10-second hobby function timeout
+  - API calls proxied through `/api/bot-proxy` to handle CORS restrictions
+  - Real-time status updates in the browser UI
+- **Hybrid Mode** — combination of server and client-side approaches
+- **Security** — bot access requires authentication via `requireBotAccess` middleware
+- **Custom Login URL** — configurable UCAM endpoint for different portal versions
+
+---
+
 ### 📈 Career Planner
 
 A comprehensive tool to track academic progress against specific career goals and domain requirements.
@@ -233,16 +327,27 @@ A comprehensive tool to track academic progress against specific career goals an
   - **Career Fit** — percentage-based match against various career tracks
 - **Risk Analysis** — identifies specific low-grade courses that are dragging down CGPA
 - **Graduation Scenarios** — calculates final CGPA outcomes based on maintaining specific GPAs for remaining credits
+
+---
+
+### 🛡️ Admin Panel
+
+A comprehensive admin dashboard for platform management.
+
 - **User Management:**
   - Searchable, paginated user list
   - Role management (promote/demote admins)
   - User deletion
 - **Faculty Management:**
   - Full CRUD operations for faculty members
+  - Faculty image upload via Cloudinary
   - Request moderation (Approve with edits / Decline)
+  - Faculty edit request workflows
   - Real-time initials validation
 - **Review Moderation:**
   - View full review details and delete inappropriate content
+- **Question Bank Moderation:**
+  - Approve or reject community-submitted exam papers
 - **Domain Management:**
   - Manage allowed email domains for user registration (`*.uiu.ac.bd`, etc.)
 - **System Stats** — monitor platform growth and engagement
@@ -295,6 +400,22 @@ Secure, email-verified authentication restricted to UIU students.
 | **Sonner**                | 1.7     | Toast notifications                |
 | **cmdk**                  | 1.1     | Command palette / combobox         |
 
+### Chat & Rich Text
+
+| Technology                     | Version | Purpose                            |
+| ------------------------------ | ------- | ---------------------------------- |
+| **Tiptap**                     | 2.x     | Rich text editor (ProseMirror)     |
+| **emoji-mart**                 | 5.x     | Emoji picker component             |
+| **Cloudinary**                 | —       | Cloud media storage for uploads    |
+| **react-intersection-observer**| 9.x     | Scroll detection & infinite scroll |
+
+### Automation & Bot
+
+| Technology                | Version | Purpose                            |
+| ------------------------- | ------- | ---------------------------------- |
+| **Puppeteer / puppeteer-core** | 23.x | Headless browser automation (UCAM bot) |
+| **@sparticuz/chromium**   | —       | Chromium binary for serverless     |
+
 ### Utilities & Export
 
 | Technology                | Version | Purpose                            |
@@ -332,14 +453,30 @@ UIU-Student-Hub/
 │   │   │   ├── register/page.tsx    #   Registration with UIU email
 │   │   │   └── verify/page.tsx      #   6-digit email verification
 │   │   │
+│   │   ├── dashboard/               # Dashboard (authenticated)
+│   │   │   ├── page.tsx             #   Dashboard home
+│   │   │   └── academic/            #   Academic overview sub-pages
+│   │   │
 │   │   ├── tools/                   # Academic tools
 │   │   │   ├── page.tsx             #   Tools directory (searchable)
 │   │   │   ├── cgpa-calculator/     #   CGPA Calculator
-│   │   │   ├── section-selector/    #   Section Selector (PDF parser)
+│   │   │   ├── section-planner/     #   Section Selector (PDF parser)
 │   │   │   ├── fee-calculator/      #   Fee Calculator
-│   │   │   └── faculty-review/      #   Faculty Reviews
-│   │   │       ├── page.tsx         #     Faculty directory
-│   │   │       └── [slug]/page.tsx  #     Faculty detail + reviews
+│   │   │   ├── faculty-review/      #   Faculty Reviews
+│   │   │   │   ├── page.tsx         #     Faculty directory
+│   │   │   │   └── [slug]/page.tsx  #     Faculty detail + reviews
+│   │   │   ├── chat/                #   Real-time Chat
+│   │   │   │   ├── page.tsx         #     Full chat page (~2400 lines)
+│   │   │   │   ├── TiptapChatEditor.tsx  #  Rich text editor
+│   │   │   │   ├── MessageContextMenu.tsx # Context menu + emoji picker
+│   │   │   │   ├── ContextMenuBase.tsx    # Glass-morphism context menu
+│   │   │   │   ├── VoiceMessagePlayer.tsx # Voice recording & playback
+│   │   │   │   ├── MentionList.tsx   #     @mention autocomplete
+│   │   │   │   ├── constants.ts     #     Emojis, stickers, GIFs
+│   │   │   │   └── types.ts         #     Chat type definitions
+│   │   │   ├── calendars/           #   Academic Calendar
+│   │   │   ├── career-planner/      #   Career Planner
+│   │   │   └── question-bank/       #   Question Bank
 │   │   │
 │   │   ├── profile/                 # User profile (authenticated)
 │   │   │   ├── page.tsx             #   Personal info
@@ -358,56 +495,97 @@ UIU-Student-Hub/
 │   │   └── api/                     # API routes (Next.js Route Handlers)
 │   │       ├── auth/                #   Auth endpoints
 │   │       ├── cgpa/                #   CGPA record CRUD
+│   │       ├── chat/                #   Chat messaging system
+│   │       │   ├── conversations/   #     Conversation CRUD + messages
+│   │       │   ├── presence/        #     Online/offline heartbeat
+│   │       │   ├── upload/          #     File upload (Cloudinary)
+│   │       │   └── users/           #     User search for chat
 │   │       ├── faculty/             #   Faculty listing & requests
+│   │       ├── faculty-edits/       #   Faculty edit request workflow
 │   │       ├── reviews/             #   Review CRUD & reactions
 │   │       ├── profile/             #   Profile data & updates
+│   │       ├── calendars/           #   Calendar CRUD & events
+│   │       ├── courses/             #   Course data
+│   │       ├── departments/         #   Department listing
+│   │       ├── question-bank/       #   Question bank & submissions
 │   │       ├── upload/              #   PDF upload & parsing
 │   │       ├── demo-pdf/            #   Demo PDF parser
+│   │       ├── auto-register/       #   UCAM bot (Puppeteer mode)
+│   │       ├── auto-register-fast/  #   UCAM bot (client-side mode)
+│   │       ├── auto-register-hybrid/#   UCAM bot (hybrid mode)
+│   │       ├── bot-proxy/           #   CORS proxy for bot API calls
+│   │       ├── reminders/           #   Reminder scheduling (QStash)
+│   │       ├── qstash/              #   QStash webhook consumers
+│   │       ├── comments/            #   Calendar comments
+│   │       ├── todos/               #   Calendar todos
 │   │       └── admin/               #   Admin-only endpoints
 │   │
 │   ├── components/                  # Shared React components
 │   │   ├── navbar.tsx               #   Responsive nav with mobile menu
+│   │   ├── Dashboard.tsx            #   Dashboard home component
 │   │   ├── auth-provider.tsx        #   NextAuth SessionProvider wrapper
 │   │   ├── theme-provider.tsx       #   next-themes ThemeProvider wrapper
 │   │   ├── toaster.tsx              #   Sonner toast notifications
 │   │   ├── course-card-selector.tsx #   Course selection card component
 │   │   ├── schedule-planner.tsx     #   Visual timetable component
-│   │   └── ui/                      #   shadcn/ui primitives
-│   │       ├── button.tsx
-│   │       ├── card.tsx
-│   │       ├── dialog.tsx
-│   │       ├── dropdown-menu.tsx
-│   │       ├── input.tsx
-│   │       ├── select.tsx
-│   │       ├── badge.tsx
-│   │       ├── alert-dialog.tsx
-│   │       ├── command.tsx
-│   │       ├── label.tsx
-│   │       ├── popover.tsx
-│   │       ├── separator.tsx
-│   │       └── sonner.tsx
+│   │   ├── syncfusion-viewer.tsx    #   WebAssembly PDF viewer + OCR
+│   │   ├── faculty-image-uploader.tsx # Cloudinary image upload
+│   │   ├── student-id-guard.tsx     #   Student ID requirement gate
+│   │   ├── image-viewer.tsx         #   Image lightbox viewer
+│   │   ├── chat/                    #   Chat system components
+│   │   │   ├── MediaPicker.tsx      #     Emoji/sticker/GIF picker
+│   │   │   └── mini/                #     Mini chat widget
+│   │   │       ├── MiniChatProvider.tsx  # Global chat state
+│   │   │       ├── MiniChatLauncher.tsx  # Floating launcher UI
+│   │   │       ├── MiniChatWindow.tsx    # Chat window (~900 lines)
+│   │   │       ├── MiniChatSelectBar.tsx # Bulk action bar
+│   │   │       ├── MiniChatGroupSettings.tsx # Group mgmt dialog
+│   │   │       └── useChatHelpers.ts     # Shared chat utilities
+│   │   ├── academic/                #   Academic components
+│   │   ├── career-planner/          #   Career planner components
+│   │   └── ui/                      #   shadcn/ui primitives (24 files)
 │   │
 │   ├── lib/                         # Utility modules
 │   │   ├── auth.ts                  #   NextAuth configuration
 │   │   ├── mongodb.ts               #   Mongoose connection singleton
 │   │   ├── admin.ts                 #   Admin auth helpers
+│   │   ├── botAuth.ts               #   Bot access authentication
 │   │   ├── validation.ts            #   Email domain & input validation
 │   │   ├── email.ts                 #   Nodemailer email service
+│   │   ├── cloudinary.ts            #   Cloudinary upload utilities
 │   │   ├── grading.ts               #   UIU grading system & CGPA logic
 │   │   ├── feeData.ts               #   UIU fee structures & calculators
 │   │   ├── exportUtils.ts           #   PDF/PNG/Excel/Calendar export
+│   │   ├── pdf-utils.ts             #   PDF parsing helpers
+│   │   ├── qstash.ts                #   QStash client & helpers
+│   │   ├── send-reminder.ts         #   Reminder email composition
+│   │   ├── trimesterUtils.ts        #   Trimester date calculations
+│   │   ├── time-format.ts           #   Time formatting utilities
+│   │   ├── career-planner/          #   Career planner domain logic
 │   │   └── utils.ts                 #   Tailwind class merger (cn)
 │   │
-│   └── models/                      # Mongoose schemas
+│   └── models/                      # Mongoose schemas (22 models)
 │       ├── User.ts                  #   User accounts
 │       ├── Faculty.ts               #   Faculty members
+│       ├── FacultyRequest.ts        #   Faculty addition requests
+│       ├── FacultyEditRequest.ts    #   Faculty edit requests
 │       ├── Review.ts                #   Faculty reviews
 │       ├── CGPARecord.ts            #   Saved CGPA calculations
+│       ├── Conversation.ts          #   Chat conversations
+│       ├── Message.ts               #   Chat messages
+│       ├── ChatPresence.ts          #   Online presence tracking
 │       ├── AcademicCalendar.ts      #   Official UIU trimesters
 │       ├── UserCalendar.ts          #   Private/custom calendars
-│       ├── EventReminder.ts         #   Tracked precise email schedules
-│       ├── DigestReminder.ts        #   Tracked daily digest schedules
-│       ├── FacultyRequest.ts        #   Faculty addition requests
+│       ├── CalendarComment.ts       #   Date-specific comments
+│       ├── CalendarTodo.ts          #   Calendar todos/deadlines
+│       ├── EventReminder.ts         #   Precise email schedules
+│       ├── DigestReminder.ts        #   Daily digest schedules
+│       ├── Course.ts                #   Course catalog
+│       ├── Program.ts               #   Academic programs
+│       ├── CareerPath.ts            #   Career path definitions
+│       ├── SectionData.ts           #   Parsed section/routine data
+│       ├── QuestionBank.ts          #   Question bank directories
+│       ├── QuestionBankSubmission.ts#   Community submissions
 │       └── Settings.ts              #   App settings (email domains)
 │
 ├── package.json
@@ -443,7 +621,7 @@ UIU-Student-Hub/
 | ------------------ | ---------- | ---------------------------------------- |
 | `name`             | String     | Faculty full name                        |
 | `initials`         | String     | Unique initials (e.g., "ABC")            |
-| `department`       | String     | Department name                          |
+| `departments`      | String[]   | Departments (supports multi-department faculty) |
 | `designation`      | String     | Title (default: "Lecturer")              |
 | `email`            | String     | Contact email                            |
 | `phone`            | String     | Phone number                             |
@@ -459,7 +637,7 @@ UIU-Student-Hub/
 | `totalReviews`     | Number     | Denormalized review count                |
 | `ratingBreakdown`  | Object     | `{ teaching, grading, friendliness, availability }` |
 
-*Text index on `name`, `initials`, `department` for search.*
+*Text index on `name`, `initials`, `departments` for search.*
 
 ### Review
 
@@ -536,6 +714,43 @@ UIU-Student-Hub/
 
 *Currently used for `allowed_email_domains` storage.*
 
+### Conversation
+
+| Field              | Type       | Description                              |
+| ------------------ | ---------- | ---------------------------------------- |
+| `type`             | Enum       | `private` \| `group`                    |
+| `name`             | String     | Group name (null for private chats)      |
+| `members`          | Array      | `[{ userId, role, anonymousName, joinedAt }]` |
+| `isAnonymous`      | Boolean    | Whether the conversation is anonymous    |
+| `lastMessage`      | Object     | Denormalized last message preview        |
+| `lastActivityAt`   | Date       | Timestamp of last activity               |
+
+### Message
+
+| Field              | Type       | Description                              |
+| ------------------ | ---------- | ---------------------------------------- |
+| `conversationId`   | ObjectId   | References Conversation                  |
+| `senderId`         | ObjectId   | References User                          |
+| `senderName`       | String     | Display name (may be anonymous name)     |
+| `text`             | String     | Message text (HTML for rich text)        |
+| `type`             | Enum       | `text` \| `image` \| `video` \| `file` \| `audio` \| `voice` \| `gif` \| `sticker` \| `poll` \| `system` |
+| `attachments`      | Array      | `[{ url, name, size, mimeType }]`        |
+| `poll`             | Object     | `{ question, options: [{ text, votes }], multipleChoice }` |
+| `reactions`        | Array      | `[{ emoji, userIds }]`                   |
+| `readBy`           | ObjectId[] | Users who have seen the message          |
+| `replyTo`          | ObjectId[] | IDs of messages being replied to         |
+| `edited`           | Boolean    | Whether the message has been edited      |
+| `deletedForAll`    | Boolean    | Soft-deleted for all participants        |
+| `deletedFor`       | ObjectId[] | Users who individually deleted           |
+
+### ChatPresence
+
+| Field              | Type       | Description                              |
+| ------------------ | ---------- | ---------------------------------------- |
+| `userId`           | ObjectId   | References User (unique)                 |
+| `lastSeen`         | Date       | Last heartbeat timestamp                 |
+| `isOnline`         | Boolean    | Computed from lastSeen (virtual field)   |
+
 ---
 
 ## API Routes
@@ -590,7 +805,7 @@ UIU-Student-Hub/
 
 | Method | Endpoint          | Auth     | Description                           |
 | ------ | ----------------- | -------- | ------------------------------------- |
-| `POST` | `/api/upload`     | Public   | Upload and parse a PDF file           |
+| `POST` | `/api/upload`     | Public   | Upload and parse a PDF class routine  |
 | `GET`  | `/api/demo-pdf`   | Public   | Parse the bundled demo class routine  |
 
 ### Reminders (Upstash QStash)
@@ -624,6 +839,53 @@ UIU-Student-Hub/
 | `DELETE` | `/api/admin/faculty-requests`         | Admin  | Bulk delete by status                    |
 | `GET`    | `/api/admin/domains`                  | Admin  | Get allowed email domains                |
 | `PUT`    | `/api/admin/domains`                  | Admin  | Update allowed email domains             |
+
+### Chat
+
+| Method   | Endpoint                                          | Auth   | Description                              |
+| -------- | ------------------------------------------------- | ------ | ---------------------------------------- |
+| `GET`    | `/api/chat/conversations`                         | User   | List user's conversations with unread counts |
+| `POST`   | `/api/chat/conversations`                         | User   | Create private or group conversation     |
+| `GET`    | `/api/chat/conversations/[id]`                    | User   | Get conversation details                 |
+| `DELETE` | `/api/chat/conversations/[id]`                    | User   | Clear chat / leave conversation          |
+| `PATCH`  | `/api/chat/conversations/[id]`                    | User   | Update group (rename, add/remove members)|
+| `GET`    | `/api/chat/conversations/[id]/messages`           | User   | Get messages (paginated with cursor)     |
+| `POST`   | `/api/chat/conversations/[id]/messages`           | User   | Send a message                           |
+| `PATCH`  | `/api/chat/conversations/[id]/messages/[msgId]`   | User   | Edit a message                           |
+| `DELETE` | `/api/chat/conversations/[id]/messages/[msgId]`   | User   | Delete message (for me / for all / bulk) |
+| `POST`   | `/api/chat/conversations/[id]/messages/[msgId]/react` | User | Toggle emoji reaction on a message   |
+| `POST`   | `/api/chat/conversations/[id]/typing`             | User   | Send typing indicator                    |
+| `DELETE` | `/api/chat/conversations/[id]/typing`             | User   | Clear typing indicator                   |
+| `POST`   | `/api/chat/conversations/[id]/poll`               | User   | Vote on a poll                           |
+| `POST`   | `/api/chat/presence`                              | User   | Heartbeat for online presence            |
+| `POST`   | `/api/chat/upload`                                | User   | Upload file to Cloudinary for chat       |
+| `GET`    | `/api/chat/users/search`                          | User   | Search users for new chat creation       |
+
+### Auto-Register Bot
+
+| Method | Endpoint                      | Auth   | Description                              |
+| ------ | ----------------------------- | ------ | ---------------------------------------- |
+| `POST` | `/api/auto-register`          | User   | UCAM registration (Puppeteer mode)       |
+| `POST` | `/api/auto-register-fast`     | User   | UCAM registration (client-side mode)     |
+| `POST` | `/api/auto-register-hybrid`   | User   | UCAM registration (hybrid mode)          |
+| `POST` | `/api/bot-proxy`              | User   | CORS proxy for UCAM API calls            |
+
+### Question Bank
+
+| Method | Endpoint                              | Auth   | Description                              |
+| ------ | ------------------------------------- | ------ | ---------------------------------------- |
+| `GET`  | `/api/question-bank`                  | Public | List question bank directories/files     |
+| `POST` | `/api/question-bank/submissions`      | User   | Submit files for admin review            |
+
+### Miscellaneous
+
+| Method | Endpoint               | Auth   | Description                              |
+| ------ | ---------------------- | ------ | ---------------------------------------- |
+| `GET`  | `/api/courses`         | Public | Get course catalog data                  |
+| `GET`  | `/api/departments`     | Public | Get department listing                   |
+| `POST` | `/api/faculty-edits`   | User   | Submit faculty edit request              |
+| `GET`  | `/api/comments`        | User   | Calendar date comments                   |
+| `GET`  | `/api/todos`           | User   | Calendar todos                           |
 
 ---
 
@@ -666,6 +928,11 @@ SMTP_PASSWORD=your-gmail-app-password
 # Admin notification email (optional — falls back to SMTP_EMAIL)
 ADMIN_EMAIL=admin@example.com
 
+# Cloudinary (file uploads for chat & faculty images)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+
 # Upstash QStash (Real-Time Background Job Scheduling)
 QSTASH_TOKEN=your-qstash-token
 QSTASH_CURRENT_SIGNING_KEY=your-signing-key
@@ -679,6 +946,9 @@ QSTASH_NEXT_SIGNING_KEY=your-next-signing-key
 | `NEXTAUTH_SECRET`            | Yes      | Secret key for JWT signing (generate with `openssl rand -base64 32`) |
 | `SMTP_EMAIL`                 | Yes      | Gmail address for sending emails                             |
 | `SMTP_PASSWORD`              | Yes      | Gmail App Password (NOT your regular password)               |
+| `CLOUDINARY_CLOUD_NAME`      | Yes      | Cloudinary cloud name for file uploads                       |
+| `CLOUDINARY_API_KEY`         | Yes      | Cloudinary API key                                           |
+| `CLOUDINARY_API_SECRET`      | Yes      | Cloudinary API secret                                        |
 | `QSTASH_TOKEN`               | Yes      | API Token to interface with Upstash Scheduling               |
 | `QSTASH_CURRENT_SIGNING_KEY` | Yes      | Used to verify incoming HTTP traffic dynamically sourced from Upstash limits |
 | `QSTASH_NEXT_SIGNING_KEY`    | Yes      | Rotating backup key required by Upstash verify function      |

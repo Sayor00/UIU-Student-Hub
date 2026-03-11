@@ -554,7 +554,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                                 ? { type: 'tween', ease: bounceEase, duration: 0.6 }
                                 : { type: 'spring', stiffness: 350, damping: 22 }
                         }}
-                        className="fixed flex items-center justify-between p-1 md:p-0 md:gap-2 md:px-3 md:py-2 rounded-full bg-background/50 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.24)] cursor-pointer hover:shadow-xl z-[9990] right-0 bottom-0 md:w-[176px]"
+                        className="fixed flex items-center justify-between p-1 md:p-0 md:gap-2 md:px-3 md:py-2 rounded-full bg-background/30 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.24)] cursor-pointer hover:shadow-xl z-[9990] right-0 bottom-0 md:w-[176px]"
                         onClick={() => {
                             if (isMobile) {
                                 const openWin = openWindows.find(w => !w.minimized && w.convId !== convId);
@@ -587,7 +587,7 @@ export default function MiniChatWindow({ conversation, minimized, index, totalWi
                         transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1], right: { type: 'spring', stiffness: 350, damping: 22 } }}
                         style={{ right: rightOffset }}
                         id={`mcw-${convId.replace(/[^a-zA-Z0-9]/g, '')}`}
-                        className="fixed bottom-2 z-[9990] w-[calc(100vw-1rem)] h-[70vh] md:w-[328px] md:h-[520px] rounded-2xl bg-background/50 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.4)] flex flex-col overflow-hidden">
+                        className="fixed bottom-2 z-[9990] w-[calc(100vw-1rem)] h-[70vh] md:w-[328px] md:h-[520px] rounded-2xl bg-background/30 md:bg-background/40 backdrop-blur-3xl border border-white/20 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.4)] flex flex-col overflow-hidden">
                         <style>{`
                             @media (max-width: 767px) {
                                 #mcw-${convId.replace(/[^a-zA-Z0-9]/g, '')} { 

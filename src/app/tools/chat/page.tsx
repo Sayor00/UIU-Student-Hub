@@ -144,6 +144,7 @@ export default function ChatPage() {
 
     // Mobile touch state
     const longPressTimer = React.useRef<NodeJS.Timeout | null>(null);
+    const chatAreaLongPressRef = React.useRef<NodeJS.Timeout | null>(null);
     const touchStartRef = React.useRef<{ x: number; y: number; msgId: string | null }>({ x: 0, y: 0, msgId: null });
     const [swipeOffsets, setSwipeOffsets] = React.useState<Record<string, number>>({});
 
@@ -705,12 +706,18 @@ export default function ChatPage() {
         if (msg._tempId || msg.deletedForAll) return;
         const touch = e.touches[0];
         touchStartRef.current = { x: touch.clientX, y: touch.clientY, msgId: msg._id };
-        longPressTimer.current = setTimeout(() => {
-            // Long press — open context menu at touch position
-            try { navigator.vibrate?.(50); } catch { }
-            setContextMenu({ message: msg, position: { x: touch.clientX, y: touch.clientY } });
-            longPressTimer.current = null;
-        }, 500);
+
+        // Only trigger the long press if they actually touch the message bubble content
+        const target = e.target as HTMLElement;
+        const isBubble = target.closest('[data-chat-bubble]');
+
+        if (isBubble) {
+            longPressTimer.current = setTimeout(() => {
+                try { navigator.vibrate?.(50); } catch { }
+                setContextMenu({ message: msg, position: { x: touch.clientX, y: touch.clientY } });
+                longPressTimer.current = null;
+            }, 500);
+        }
     }, []);
 
     const handleTouchMove = React.useCallback((e: React.TouchEvent) => {
@@ -754,6 +761,25 @@ export default function ChatPage() {
         });
         touchStartRef.current = { x: 0, y: 0, msgId: null };
     }, [swipeOffsets]);
+
+    /* ── Chat area touch handlers (long-press on empty space) ── */
+    const handleChatAreaTouchStart = React.useCallback((e: React.TouchEvent) => {
+        const target = e.target as HTMLElement;
+        // Only trigger if NOT touching a chat bubble or message row
+        if (target.closest('[data-chat-bubble]') || target.closest('[data-message-id]')) return;
+        const touch = e.touches[0];
+        chatAreaLongPressRef.current = setTimeout(() => {
+            try { navigator.vibrate?.(50); } catch { }
+            setChatAreaCtxMenu({ x: touch.clientX, y: touch.clientY });
+            chatAreaLongPressRef.current = null;
+        }, 500);
+    }, []);
+    const handleChatAreaTouchMove = React.useCallback(() => {
+        if (chatAreaLongPressRef.current) { clearTimeout(chatAreaLongPressRef.current); chatAreaLongPressRef.current = null; }
+    }, []);
+    const handleChatAreaTouchEnd = React.useCallback(() => {
+        if (chatAreaLongPressRef.current) { clearTimeout(chatAreaLongPressRef.current); chatAreaLongPressRef.current = null; }
+    }, []);
 
     /* ── Multi-select helpers ── */
     const toggleSelectMsg = React.useCallback((msgId: string) => {
@@ -862,7 +888,7 @@ export default function ChatPage() {
                 }
             }
         }
-        toast.success(`Downloded successfully`);
+        toast.success(`Downloaded successfully`);
     }, [messages, selectedMsgIds, exitSelectMode]);
 
     const bulkReply = React.useCallback(() => {
@@ -1553,11 +1579,14 @@ export default function ChatPage() {
                                 onContextMenu={(e) => {
                                     // Only show chat-area context menu if right-click is NOT on a message bubble
                                     const target = e.target as HTMLElement;
-                                    if (!target.closest('[data-message-id]')) {
+                                    if (!target.closest('[data-chat-bubble]')) {
                                         e.preventDefault();
                                         setChatAreaCtxMenu({ x: e.clientX, y: e.clientY });
                                     }
                                 }}
+                                onTouchStart={handleChatAreaTouchStart}
+                                onTouchMove={handleChatAreaTouchMove}
+                                onTouchEnd={handleChatAreaTouchEnd}
                             >
                                 {/* This div is the FIRST child in DOM but LAST visually (bottom anchor point) */}
                                 <div ref={messagesEndRef} />
@@ -1626,7 +1655,6 @@ export default function ChatPage() {
                                                 <div
                                                     data-message-id={msg._id}
                                                     className={`max-w-[75%] min-w-0 ${isMe ? "items-end" : "items-start"} flex flex-col`}
-                                                    onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }}
                                                 >
                                                     {!isMe && activeConv.type === "group" && <span className="text-[10px] text-muted-foreground mb-0.5 ml-1">{msg.senderName}</span>}
 
@@ -1662,12 +1690,14 @@ export default function ChatPage() {
                                                                     ))}
                                                                 </div>
                                                             )}
-                                                            <div className={`rounded-2xl px-3.5 py-2 text-sm shadow-lg ${isFailed
-                                                                ? "bg-destructive/20 text-destructive rounded-br-sm border border-destructive/30"
-                                                                : isMe
-                                                                    ? `bg-primary/20 backdrop-blur-xl text-foreground rounded-br-sm border border-primary/15 ${isSending ? "opacity-70" : ""}`
-                                                                    : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground rounded-bl-sm"
-                                                                }`}>
+                                                            <div data-chat-bubble
+                                                                onContextMenu={(e) => { if (!isPending && !selectMode) { e.preventDefault(); e.stopPropagation(); setContextMenu({ message: msg, position: { x: e.clientX, y: e.clientY } }); } }}
+                                                                className={`rounded-2xl px-3.5 py-2 text-sm shadow-lg ${isFailed
+                                                                    ? "bg-destructive/20 text-destructive rounded-br-sm border border-destructive/30"
+                                                                    : isMe
+                                                                        ? `bg-primary/20 backdrop-blur-xl text-foreground rounded-br-sm border border-primary/15 ${isSending ? "opacity-70" : ""}`
+                                                                        : "bg-black/10 dark:bg-white/10 backdrop-blur-2xl border border-black/5 dark:border-white/10 text-foreground rounded-bl-sm"
+                                                                    }`}>
                                                                 {msg.type === "text" && <div className="tiptap whitespace-pre-wrap break-all min-w-0 w-full" onClick={(e) => { const target = e.target as HTMLElement; if (target.tagName.toLowerCase() === 'span' && target.getAttribute('data-type') === 'mention') { e.stopPropagation(); const mentionId = target.getAttribute('data-id'); if (mentionId) { const menuW = 192, menuH = 96; const x = Math.min(e.clientX, window.innerWidth - menuW - 8); const y = (e.clientY + menuH + 8 > window.innerHeight) ? e.clientY - menuH - 4 : e.clientY + 8; setMentionCtxMenu({ userId: mentionId, position: { x, y } }); } } }} dangerouslySetInnerHTML={{ __html: msg.text || "" }} />}
                                                                 {msg.type === "image" && msg.attachments?.[0] && (
                                                                     <img src={msg.attachments[0].url} alt="" className="rounded-lg max-w-full max-h-64 cursor-pointer" onClick={() => setViewFile({ url: msg.attachments[0].url, name: msg.attachments[0].name || "image", mimeType: msg.attachments[0].mimeType || "image/jpeg" })} />

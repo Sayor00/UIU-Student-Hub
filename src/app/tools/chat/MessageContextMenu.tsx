@@ -62,28 +62,66 @@ export default function MessageContextMenu({
     const pickerRef = React.useRef<HTMLDivElement>(null);
     const pickerInstance = React.useRef<any>(null);
 
+    // Dynamically calculate perLine based on container width
+    // Each emoji cell is ~36px wide, so we divide the available width
+    const calcPerLine = React.useCallback((containerWidth: number) => {
+        const emojiSize = 36;
+        const padding = 24; // picker internal padding
+        const available = containerWidth - padding;
+        return Math.max(7, Math.min(14, Math.floor(available / emojiSize)));
+    }, []);
+
     React.useEffect(() => {
-        if (!pickerInstance.current && pickerRef.current) {
+        const container = pickerRef.current;
+        if (!container) return;
+
+        const mountPicker = () => {
+            if (pickerInstance.current && container) {
+                try { container.removeChild(pickerInstance.current as any); } catch { }
+                pickerInstance.current = null;
+            }
+            const containerWidth = container.offsetWidth || (window.innerWidth < 640 ? window.innerWidth - 48 : 280);
             pickerInstance.current = new Picker({
                 onEmojiSelect: (e: any) => {
                     onReact(message._id, e.native);
                     onClose();
                 },
                 theme: resolvedTheme === "dark" ? "dark" : "light",
-                set: "apple",
+                set: "native",
                 previewPosition: "none",
                 skinTonePosition: "none",
-                perLine: window.innerWidth < 640 ? 9 : 7,
+                perLine: calcPerLine(containerWidth),
+                noCountryFlags: false,
             });
-            pickerRef.current.appendChild(pickerInstance.current as any);
-        }
+            container.appendChild(pickerInstance.current as any);
+        };
+
+        // Mount after a frame so the container has its final width from ContextMenuBase
+        const raf = requestAnimationFrame(() => mountPicker());
+
+        // Remount if container resizes (e.g. ContextMenuBase adjusts width)
+        const observer = new ResizeObserver((entries) => {
+            const newWidth = entries[0]?.contentRect.width;
+            if (newWidth && pickerInstance.current) {
+                const newPerLine = calcPerLine(newWidth);
+                // Only remount if perLine would change
+                const currentPerLine = calcPerLine(container.offsetWidth);
+                if (newPerLine !== currentPerLine) {
+                    mountPicker();
+                }
+            }
+        });
+        observer.observe(container);
+
         return () => {
-            if (pickerInstance.current && pickerRef.current) {
-                try { pickerRef.current.removeChild(pickerInstance.current as any); } catch { }
+            cancelAnimationFrame(raf);
+            observer.disconnect();
+            if (pickerInstance.current && container) {
+                try { container.removeChild(pickerInstance.current as any); } catch { }
             }
             pickerInstance.current = null;
         };
-    }, [onReact, message._id, onClose, resolvedTheme]);
+    }, [onReact, message._id, onClose, resolvedTheme, calcPerLine]);
 
     const items: ContextMenuItem[] = [
         {
@@ -144,13 +182,13 @@ export default function MessageContextMenu({
     ];
 
     const reactionsHeader = !isPending && !isDeleted ? (
-        <div className={`flex flex-col w-full sm:w-[280px] ${showPicker ? "" : "border-b border-border"}`}>
-            <div className="flex items-center justify-between px-2 py-2">
+        <div className={`flex flex-col w-full ${showPicker ? "" : "border-b border-white/[0.06]"}`}>
+            <div className="flex items-center justify-between px-2.5 py-2.5">
                 {QUICK_REACTIONS.map((emoji) => (
                     <button
                         key={emoji}
                         onClick={() => { onReact(message._id, emoji); onClose(); }}
-                        className="text-lg p-1.5 rounded-full hover:bg-foreground/10 transition-all duration-150 hover:scale-125 active:scale-95 transform"
+                        className="text-xl w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-all duration-150 hover:scale-110 active:scale-90 transform"
                     >
                         {emoji}
                     </button>
@@ -160,9 +198,9 @@ export default function MessageContextMenu({
                         e.stopPropagation();
                         setShowPicker(!showPicker);
                     }}
-                    className={`p-1.5 rounded-full transition-all duration-150 ${showPicker ? "bg-foreground/20 text-foreground" : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground"}`}
+                    className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-150 ${showPicker ? "bg-white/15 text-foreground rotate-45" : "text-muted-foreground hover:bg-white/10 hover:text-foreground"}`}
                 >
-                    <Plus className={`h-5 w-5 transition-transform ${showPicker ? "rotate-45" : ""}`} />
+                    <Plus className="h-[18px] w-[18px] transition-transform duration-200" />
                 </button>
             </div>
             <div
@@ -181,8 +219,13 @@ export default function MessageContextMenu({
                         --rgb-accent: 249, 115, 22;
                         --color-bg: transparent;
                         --bg-color: transparent;
+                        --font-family: inherit;
                         background: transparent !important;
                         background-color: transparent !important;
+                    }
+                    em-emoji-picker .searchbar {
+                        background: rgba(255,255,255,0.05) !important;
+                        border-radius: 8px !important;
                     }
                     em-emoji-picker::part(section) {
                         background: transparent !important;

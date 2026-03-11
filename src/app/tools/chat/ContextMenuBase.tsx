@@ -153,32 +153,32 @@ export default function ContextMenuBase({
             <div className="fixed inset-0 z-[9998]" />
             <div
                 ref={menuRef}
-                className="fixed z-[9999] rounded-xl border border-white/10 bg-background/30 backdrop-blur-xl shadow-2xl shadow-black/30 overflow-hidden transition-transform duration-150 origin-top-left"
+                className="fixed z-[9999] rounded-2xl border border-white/[0.08] bg-background/40 backdrop-blur-3xl shadow-[0_8px_40px_rgba(0,0,0,0.35),0_0_0_1px_rgba(255,255,255,0.04)_inset] overflow-hidden transition-transform duration-150 origin-top-left"
                 style={{ left: 0, top: 0, minWidth, opacity: 0, pointerEvents: "none", transform: "scale(0.95)" }}
             >
                 {header}
-                <div className="py-1 px-1.5">
+                <div className="py-1.5 px-1.5">
                     {visibleItems.map((item) => (
                         <React.Fragment key={item.label}>
-                            {item.dividerAbove && <div className="h-px bg-white/10 my-1 mx-1" />}
+                            {item.dividerAbove && <div className="h-px bg-white/[0.06] my-1 mx-2" />}
                             <button
                                 onClick={item.onClick}
                                 disabled={item.disabled}
-                                className={`w-full flex items-center gap-3 px-3 py-2 text-sm rounded-lg transition-all duration-150 ${item.disabled
+                                className={`w-full flex items-center gap-3 px-3 py-2.5 text-[13px] rounded-lg transition-all duration-100 ${item.disabled
                                     ? "text-muted-foreground/40 cursor-default"
                                     : item.destructive
-                                        ? "text-red-400 hover:bg-red-500/15 cursor-pointer"
-                                        : "text-foreground hover:bg-white/10 cursor-pointer"
+                                        ? "text-red-400 hover:bg-red-500/10 active:bg-red-500/15 cursor-pointer"
+                                        : "text-foreground/90 hover:bg-white/[0.08] active:bg-white/[0.12] cursor-pointer"
                                     }`}
                             >
                                 {item.icon && (
-                                    <span className={item.disabled ? "opacity-40" : "opacity-70"}>
+                                    <span className={item.disabled ? "opacity-40" : "opacity-60"}>
                                         {item.icon}
                                     </span>
                                 )}
-                                <span className="flex-1 text-left">{item.label}</span>
+                                <span className="flex-1 text-left font-medium">{item.label}</span>
                                 {item.shortcut && (
-                                    <span className={`text-xs ml-4 ${item.disabled ? "text-muted-foreground/30" : "text-muted-foreground/60"
+                                    <span className={`text-xs ml-4 ${item.disabled ? "text-muted-foreground/30" : "text-muted-foreground/50"
                                         }`}>
                                         {item.shortcut}
                                     </span>
