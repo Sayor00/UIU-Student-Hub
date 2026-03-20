@@ -222,8 +222,17 @@ A personalized dashboard for registered users with four sections:
   - **Greeting** based on time of day
   - **Quick Access** to recently used tools (Automatically prioritized by most recently used and highest usage frequency)
   - **Upcoming Events** list drawn from all your active calendars (Clicking events auto-focuses them in the calendar tool)
+  - **Attendance Chart** — horizontal bar chart showing per-course attendance with interactive legend toggles:
+    - Click **Present** (green), **Absent** (red), or **Remaining** (gray) to switch views
+    - Percentage-normalized bars with raw count labels and custom tooltip showing all three values
+    - Data fetched live from UCAM via encrypted credentials
   - **Pinned Calendars** — quick links to your most vital schedules with unpin capability (Direct calendar routing)
   - **Daily Focus** & **Study Tips**
+- **UCAM Integration:**
+  - **Credential Storage** — securely save UCAM portal credentials (AES-256-GCM encrypted at rest)
+  - **Attendance Sync** — live scraping of attendance summary from UCAM portal
+  - **Academic Data Sync** — streaming sync API for fetching CGPA, marks, and transcript data with real-time progress updates
+  - **Auto-Sync** — optional automatic sync on dashboard load
 - **Profile Info** — avatar, name (editable), email, student ID, department, role
 - **Academic Stats** — overview of saved CGPA data, credits earned, and trimester performance
 - **My Content** — manage your submitted faculty requests and written reviews
@@ -367,6 +376,22 @@ Secure, email-verified authentication restricted to UIU students.
 
 ---
 
+### 🛡️ Security & Encryption
+
+Sensitive user data is encrypted at rest using industry-standard cryptography.
+
+- **Algorithm** — AES-256-GCM (authenticated encryption with associated data)
+- **Key management** — 256-bit key derived from `ENCRYPTION_KEY` environment variable via SHA-256
+- **IV** — cryptographically random 12-byte initialization vector per encryption operation
+- **Auth tag** — GCM authentication tag prevents tampering and ensures data integrity
+- **Format** — `base64(iv):base64(authTag):base64(ciphertext)` stored as a single string
+- **Encrypted data:**
+  - UCAM portal credentials (student ID + password)
+  - CGPA records (trimesters, results, credit data)
+- **Backward compatibility** — `decrypt()` gracefully handles unencrypted plaintext, enabling zero-downtime migration
+
+---
+
 ## Tech Stack
 
 ### Core Framework
@@ -385,6 +410,7 @@ Secure, email-verified authentication restricted to UIU students.
 | **Mongoose**              | 8.9     | MongoDB ODM                        |
 | **NextAuth.js**           | 4.24    | Authentication (Credentials)       |
 | **bcryptjs**              | 2.4     | Password hashing                   |
+| **crypto** (Node.js)      | —       | AES-256-GCM encryption at rest     |
 
 ### UI & Styling
 
@@ -548,6 +574,7 @@ UIU-Student-Hub/
 │   ├── lib/                         # Utility modules
 │   │   ├── auth.ts                  #   NextAuth configuration
 │   │   ├── mongodb.ts               #   Mongoose connection singleton
+│   │   ├── encryption.ts            #   AES-256-GCM encrypt/decrypt
 │   │   ├── admin.ts                 #   Admin auth helpers
 │   │   ├── botAuth.ts               #   Bot access authentication
 │   │   ├── validation.ts            #   Email domain & input validation
@@ -801,6 +828,18 @@ UIU-Student-Hub/
 | `GET`   | `/api/profile`   | User     | Get full profile + academic + reviews + faculties |
 | `PATCH` | `/api/profile`   | User     | Update name and student ID                   |
 
+### UCAM Integration
+
+| Method | Endpoint                    | Auth   | Description                                          |
+| ------ | --------------------------- | ------ | ---------------------------------------------------- |
+| `GET`  | `/api/user/credentials`     | User   | Check if UCAM credentials are stored                 |
+| `POST` | `/api/user/credentials`     | User   | Save encrypted UCAM credentials                      |
+| `GET`  | `/api/user/attendance`      | User   | Fetch live attendance summary from UCAM              |
+| `POST` | `/api/user/sync-results`    | User   | Stream-sync academic data from UCAM                  |
+| `GET`  | `/api/user/sync-check`      | User   | Check if UCAM data has changed (fingerprint check)   |
+| `GET`  | `/api/user/preferences`     | User   | Get user preferences                                 |
+| `PATCH`| `/api/user/preferences`     | User   | Update user preferences                              |
+
 ### Upload
 
 | Method | Endpoint          | Auth     | Description                           |
@@ -921,6 +960,9 @@ MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net/<dbname>
 NEXTAUTH_URL=http://localhost:3000
 NEXTAUTH_SECRET=your-secure-random-secret-key
 
+# Encryption (for sensitive data at rest)
+ENCRYPTION_KEY=your-secure-encryption-key-min-32-chars
+
 # Gmail SMTP (for email verification & admin notifications)
 SMTP_EMAIL=your-gmail@gmail.com
 SMTP_PASSWORD=your-gmail-app-password
@@ -944,6 +986,7 @@ QSTASH_NEXT_SIGNING_KEY=your-next-signing-key
 | `MONGODB_URI`                | Yes      | MongoDB connection string                                    |
 | `NEXTAUTH_URL`               | Yes      | Base URL of the app (e.g., `http://localhost:3000`)          |
 | `NEXTAUTH_SECRET`            | Yes      | Secret key for JWT signing (generate with `openssl rand -base64 32`) |
+| `ENCRYPTION_KEY`             | Yes      | Key for AES-256-GCM encryption of sensitive data (generate with `openssl rand -base64 32`). Falls back to `NEXTAUTH_SECRET` if not set |
 | `SMTP_EMAIL`                 | Yes      | Gmail address for sending emails                             |
 | `SMTP_PASSWORD`              | Yes      | Gmail App Password (NOT your regular password)               |
 | `CLOUDINARY_CLOUD_NAME`      | Yes      | Cloudinary cloud name for file uploads                       |
