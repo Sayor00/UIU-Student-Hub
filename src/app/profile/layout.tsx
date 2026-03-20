@@ -12,6 +12,7 @@ import {
   ClipboardList,
   CalendarDays,
   Loader2,
+  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,6 +22,7 @@ const profileLinks = [
   { href: "/profile/reviews", label: "My Reviews", icon: MessageSquare },
   { href: "/profile/faculties", label: "My Faculties", icon: ClipboardList },
   { href: "/profile/calendars", label: "My Calendars", icon: CalendarDays },
+  { href: "/profile/credentials", label: "Linked Accounts", icon: Lock },
 ];
 
 export default function ProfileLayout({

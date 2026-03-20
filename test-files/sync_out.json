@@ -1,0 +1,179 @@
+[DSA-DEBUG] Processing URL: https://ucam.uiu.ac.bd/Result/ItemWiseDetailsMarksForStudent.aspx?mmi=415d552c795d4d494e63
+[DSA-DEBUG] MARKS FOUND!!
+[DSA-DEBUG] EXTRACTED FROM PARSER: [
+  {
+    name: 'Class Tests - Class Tests-1',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Class Tests-2',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Class Tests-3',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Best 2 (Two)',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  { name: 'Assignment', totalMarks: 5, obtainedMarks: 5 },
+  { name: 'Mid-term  Exam', totalMarks: 30, obtainedMarks: 24 }
+]
+Found Trimester 253!
+[
+  {
+    "name": "Data Structure and Algorithms I",
+    "code": "CSE2215",
+    "credit": 3,
+    "grade": "A",
+    "isRetake": false,
+    "assessments": [
+      {
+        "name": "Class Tests - Class Tests-1",
+        "totalMarks": 20,
+        "obtainedMarks": 20
+      },
+      {
+        "name": "Class Tests - Class Tests-2",
+        "totalMarks": 20,
+        "obtainedMarks": 20
+      },
+      {
+        "name": "Class Tests - Class Tests-3",
+        "totalMarks": 20,
+        "obtainedMarks": 20
+      },
+      {
+        "name": "Class Tests - Best 2 (Two)",
+        "totalMarks": 20,
+        "obtainedMarks": 20
+      },
+      {
+        "name": "Assignment",
+        "totalMarks": 5,
+        "obtainedMarks": 5
+      },
+      {
+        "name": "Mid-term  Exam",
+        "totalMarks": 30,
+        "obtainedMarks": 24
+      }
+    ]
+  },
+  {
+    "name": "Data Structure and Algorithms I Laboratory",
+    "code": "CSE2216",
+    "credit": 1,
+    "grade": "A",
+    "isRetake": false,
+    "assessments": [
+      {
+        "name": "Attendance",
+        "totalMarks": 5,
+        "obtainedMarks": 5
+      }
+    ]
+  },
+  {
+    "name": "Physics",
+    "code": "PHY2105",
+    "credit": 3,
+    "grade": "A",
+    "isRetake": false,
+    "assessments": [
+      {
+        "name": "Class Tests - Class Tests-1",
+        "totalMarks": 20,
+        "obtainedMarks": 19.5
+      },
+      {
+        "name": "Class Tests - Class Tests-2",
+        "totalMarks": 20,
+        "obtainedMarks": 19.5
+      },
+      {
+        "name": "Class Tests - Class Tests-3",
+        "totalMarks": 20,
+        "obtainedMarks": 17
+      },
+      {
+        "name": "Class Tests - Best 2 (Two)",
+        "totalMarks": 20,
+        "obtainedMarks": 19.5
+      },
+      {
+        "name": "Mid-term  Exam",
+        "totalMarks": 30,
+        "obtainedMarks": 28
+      }
+    ]
+  },
+  {
+    "name": "Physics Laboratory",
+    "code": "PHY2106",
+    "credit": 1,
+    "grade": "A",
+    "isRetake": false,
+    "assessments": [
+      {
+        "name": "Attendance",
+        "totalMarks": 5,
+        "obtainedMarks": 5
+      },
+      {
+        "name": "Quiz",
+        "totalMarks": 15,
+        "obtainedMarks": 15
+      },
+      {
+        "name": "Lab  Performance",
+        "totalMarks": 15,
+        "obtainedMarks": 14.5
+      },
+      {
+        "name": "Mid-term  Viva",
+        "totalMarks": 20,
+        "obtainedMarks": 17
+      }
+    ]
+  },
+  {
+    "name": "Coordinate Geometry and Vector Analysis",
+    "code": "MATH2201",
+    "credit": 3,
+    "grade": "A-",
+    "isRetake": false,
+    "assessments": [
+      {
+        "name": "Class Tests - Class Tests-1",
+        "totalMarks": 20,
+        "obtainedMarks": 18
+      },
+      {
+        "name": "Class Tests - Class Tests-2",
+        "totalMarks": 20,
+        "obtainedMarks": 20
+      },
+      {
+        "name": "Class Tests - Class Tests-3",
+        "totalMarks": 20,
+        "obtainedMarks": 13
+      },
+      {
+        "name": "Class Tests - Best 2 (Two)",
+        "totalMarks": 20,
+        "obtainedMarks": 19
+      },
+      {
+        "name": "Mid-term  Exam",
+        "totalMarks": 30,
+        "obtainedMarks": 27
+      }
+    ]
+  }
+]

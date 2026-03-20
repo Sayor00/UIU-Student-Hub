@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useRef, ReactNode } from "react";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 import { calculateAcademicStats, calculateTrimesterTrends, getTrimesterName } from "@/lib/trimesterUtils";
@@ -17,6 +17,8 @@ export interface AcademicDataState {
 
 interface AcademicContextType extends AcademicDataState {
     fetchAcademicData: () => Promise<void>;
+    syncAcademicData: () => Promise<void>;
+    isSyncing: boolean;
     addTrimester: (code: string) => Promise<boolean>;
     deleteTrimester: (code: string) => Promise<boolean>;
     addCourse: (trimesterCode: string, courseCode: string) => Promise<boolean>;
@@ -36,6 +38,9 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         latestRecord: null,
         trends: []
     });
+    const autoSyncChecked = useRef(false);
+    const [isSyncing, setIsSyncing] = useState(false);
+    const syncingRef = useRef(false); // Ref for guard — avoids stale closure
 
     const fetchAcademicData = useCallback(async () => {
         if (!session?.user) return;
@@ -79,6 +84,50 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         }
     }, [session?.user?.email]);
 
+    // Centralized sync function — prevents duplicate concurrent syncs
+    const syncAcademicData = useCallback(async () => {
+        if (syncingRef.current) return; // Guard via ref (no stale closure)
+        syncingRef.current = true;
+        setIsSyncing(true);
+        toast.info("Connecting to UCAM...", { id: "sync-toast" });
+        try {
+            const res = await fetch("/api/user/sync-results", { method: "POST" });
+            if (!res.body) {
+                toast.error("Failed to connect to sync service", { id: "sync-toast" });
+                return;
+            }
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const event = JSON.parse(line);
+                        if (event.type === "progress") {
+                            toast.info(event.message, { id: "sync-toast" });
+                        } else if (event.type === "done") {
+                            toast.success(event.message || "Synced!", { id: "sync-toast" });
+                            await fetchAcademicData();
+                        } else if (event.type === "error") {
+                            toast.error(event.error || "Sync failed", { id: "sync-toast" });
+                        }
+                    } catch {}
+                }
+            }
+        } catch (err) {
+            toast.error("Something went wrong during sync", { id: "sync-toast" });
+        } finally {
+            syncingRef.current = false;
+            setIsSyncing(false);
+        }
+    }, [fetchAcademicData]);
+
     // Initial Fetch when session is ready
     useEffect(() => {
         if (session?.user) {
@@ -96,6 +145,26 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
             });
         }
     }, [session?.user?.email, fetchAcademicData]);
+
+    // Background auto-sync: after initial load, check if UCAM data is stale
+    useEffect(() => {
+        if (data.loading || !session?.user || autoSyncChecked.current) return;
+        autoSyncChecked.current = true;
+
+        (async () => {
+            try {
+                const checkRes = await fetch("/api/user/sync-check");
+                if (!checkRes.ok) return;
+                const checkData = await checkRes.json();
+                if (!checkData.stale) return;
+
+                // Use the centralized sync
+                await syncAcademicData();
+            } catch (err) {
+                console.error("Background auto-sync failed:", err);
+            }
+        })();
+    }, [data.loading, session?.user?.email, syncAcademicData]);
 
     const saveData = async (updatedTrimesters: any[]) => {
         const prevCGPA = data.latestRecord?.previousCGPA || 0;
@@ -206,6 +275,8 @@ export function AcademicProvider({ children }: { children: ReactNode }) {
         <AcademicContext.Provider value={{
             ...data,
             fetchAcademicData,
+            syncAcademicData,
+            isSyncing,
             addTrimester,
             deleteTrimester,
             addCourse,

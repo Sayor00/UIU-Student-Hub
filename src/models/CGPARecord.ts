@@ -2,37 +2,11 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface ICGPARecord extends Document {
   userId: mongoose.Types.ObjectId;
-  previousCredits: number;
-  previousCGPA: number;
-  earnedCredits: number; // Root-level: total earned credits (grades >= D)
-  trimesters: {
-    name: string;
-    code: string; // Added code
-    isCompleted?: boolean;
-    courses: {
-      name: string;
-      code?: string; // Added code
-      credit: number;
-      grade?: string; // Made optional
-      isRetake: boolean;
-      previousGrade?: string;
-      assessments?: {
-        name: string;
-        totalMarks: number;
-        obtainedMarks: number;
-        weight: number;
-        isCT?: boolean;
-      }[];
-    }[];
-  }[];
-  results: {
-    trimesterName: string;
-    gpa: number;
-    cgpa: number;
-    trimesterCredits: number;
-    totalCredits: number;
-    earnedCredits: number;
-  }[];
+
+  encryptedData?: string; // Contains encrypted JSON string of trimesters and results
+  ucamFingerprint?: string; // SHA-256 hash of last-synced UCAM transcript
+  lastSyncedAt?: Date; // When last full sync completed
+  lastCheckedAt?: Date; // When last fingerprint check ran
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,54 +18,19 @@ const CGPARecordSchema = new Schema<ICGPARecord>(
       ref: "User",
       required: true,
     },
-    previousCredits: {
-      type: Number,
-      default: 0,
+
+    encryptedData: {
+      type: String, // encrypted JSON
     },
-    previousCGPA: {
-      type: Number,
-      default: 0,
+    ucamFingerprint: {
+      type: String,
     },
-    earnedCredits: {
-      type: Number,
-      default: 0,
+    lastSyncedAt: {
+      type: Date,
     },
-    trimesters: [
-      {
-        code: { type: String, required: true },
-        isCompleted: { type: Boolean, default: false },
-        courses: [
-          {
-            name: { type: String },
-            code: { type: String },
-            credit: { type: Number, required: true },
-            grade: { type: String }, // Made optional
-            isRetake: { type: Boolean, default: false },
-            previousGrade: { type: String },
-            assessments: [
-              {
-                name: { type: String },
-                totalMarks: { type: Number },
-                obtainedMarks: { type: Number },
-                weight: { type: Number },
-                isCT: { type: Boolean, default: false }, // Added isCT
-              }
-            ],
-          },
-        ],
-      },
-    ],
-    results: [
-      {
-        trimesterName: { type: String },
-        trimesterCode: { type: String }, // Added trimesterCode
-        gpa: { type: Number },
-        cgpa: { type: Number },
-        trimesterCredits: { type: Number },
-        totalCredits: { type: Number },
-        earnedCredits: { type: Number },
-      },
-    ],
+    lastCheckedAt: {
+      type: Date,
+    },
   },
   {
     timestamps: true,
@@ -103,3 +42,4 @@ const CGPARecord: Model<ICGPARecord> =
   mongoose.model<ICGPARecord>("CGPARecord", CGPARecordSchema);
 
 export default CGPARecord;
+

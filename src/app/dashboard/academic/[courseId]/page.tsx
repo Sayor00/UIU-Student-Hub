@@ -2,7 +2,7 @@
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { MoveLeft, GraduationCap, Save, Loader2, AlertCircle } from "lucide-react";
+import { MoveLeft, GraduationCap, Save, Loader2, AlertCircle, RefreshCw, Trash2 } from "lucide-react";
 import CourseGradePlanner, { Assessment, DEFAULT_ASSESSMENTS } from "@/components/academic/CourseGradePlanner";
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { calculateAcademicStats, calculateTrimesterTrends, getTrimesterName } from "@/lib/trimesterUtils";
@@ -45,18 +45,22 @@ export default function CoursePlannerPage() {
     // This is now the CODE (e.g. "241")
     const trimesterCode = searchParams.get("trimester");
 
-    // Use Shared Hook
     const {
         trimesters,
         loading: hookLoading,
         fetchAcademicData,
-        updateTrimesters
+        updateTrimesters,
+        syncAcademicData,
+        isSyncing
     } = useAcademicData();
 
     // Local Loading State for finding the specific course
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [assessments, setAssessments] = useState<Assessment[]>([]);
+    const [detectedCtCount, setDetectedCtCount] = useState(3);
+
+
 
     // Initialize with empty data
     const [courseData, setCourseData] = useState({
@@ -113,18 +117,65 @@ export default function CoursePlannerPage() {
 
                     // Load Assessments
                     if (course.assessments && course.assessments.length > 0) {
-                        setAssessments(course.assessments.map((a: any) => ({
-                            id: a._id || Math.random().toString(),
-                            name: a.name,
-                            weight: a.weight || 0,
-                            obtained: a.obtainedMarks || 0,
-                            total: a.totalMarks || 0,
-                            isCT: a.isCT || false,
-                            bestN: a.isCT || a.name.includes("Class Test"),
-                            group: (a.isCT || a.name.includes("Class Test")) ? "CT" : undefined
-                        })));
+                        let extractedCtCount = 3;
+                        const filtered = course.assessments.filter((a: any) => {
+                            const lowerName = a.name.toLowerCase();
+                            // If it's an aggregate like "Best 2 (Two)" or "Average" (Keep attendance so it passes to the math component)
+                            if (lowerName.includes("best") || lowerName.includes("average")) {
+                                const match = lowerName.match(/best\s*(\d+)/i) || lowerName.match(/best\s+[a-z]+\s*\((\d+)\)/i);
+                                if (match) {
+                                    extractedCtCount = parseInt(match[1], 10);
+                                }
+                                return false; // Strip it out
+                            }
+                            return true; // Keep raw individual assessments
+                        });
+
+                        setDetectedCtCount(extractedCtCount);
+
+                        const newAssessments = filtered.map((a: any) => {
+                            const lowerName = a.name.toLowerCase();
+                            const isCT = a.isCT || lowerName.includes("class test") || lowerName.includes("ct -");
+                            const isAttendance = a.isAttendance || lowerName === 'attendance';
+                            
+                            const weight = a.weight || (isAttendance ? 5 : a.totalMarks) || 0;
+                            
+                            return {
+                                id: a._id || Math.random().toString(),
+                                name: a.name,
+                                weight,
+                                obtained: a.obtainedMarks || 0,
+                                total: isAttendance ? weight : (a.totalMarks || 0),
+                                isCT: isCT,
+                                bestN: isCT,
+                                group: isCT ? "CT" : undefined,
+                                isAttendance,
+                            };
+                        });
+
+                        // Intelligent Merge: Active semesters usually hide future exams (e.g. Finals) or attendance details.
+                        // If they are missing from the raw UCAM array, append them from defaults so the Predictor UI still functions.
+                        const hasAttendance = newAssessments.some((a: any) => a.name.toLowerCase().includes("attend"));
+                        const hasMidterm = newAssessments.some((a: any) => a.name.toLowerCase().includes("mid"));
+                        const hasFinal = newAssessments.some((a: any) => a.name.toLowerCase().includes("final"));
+                        
+                        if (!hasAttendance) {
+                            // The backend scraper handles transforming raw 24-class counts into 5 Marks.
+                            // If the row doesn't exist yet, we inject a pristine 0/5 blank slate so the user 
+                            // can input their current marks explicitly.
+                            newAssessments.push({ id: Math.random().toString(), name: "Attendance", weight: 5, obtained: 0, total: 5, isCT: false, isAttendance: true });
+                        }
+                        if (!hasMidterm) {
+                            newAssessments.push({ id: Math.random().toString(), name: "Midterm Exam", weight: 30, obtained: 0, total: 30, isCT: false });
+                        }
+                        if (!hasFinal) {
+                            newAssessments.push({ id: Math.random().toString(), name: "Final Exam", weight: 40, obtained: 0, total: 40, isCT: false });
+                        }
+
+                        setAssessments(newAssessments);
                     } else {
                         setAssessments(DEFAULT_ASSESSMENTS);
+                        setDetectedCtCount(3);
                     }
                     setLoading(false); // Success!
                 }
@@ -187,7 +238,8 @@ export default function CoursePlannerPage() {
                                     totalMarks: a.total,
                                     obtainedMarks: a.obtained,
                                     weight: a.weight,
-                                    isCT: a.isCT
+                                    isCT: a.isCT,
+                                    isAttendance: a.isAttendance || false
                                 }))
                             };
                         }
@@ -210,7 +262,8 @@ export default function CoursePlannerPage() {
                                         totalMarks: a.total,
                                         obtainedMarks: a.obtained,
                                         weight: a.weight,
-                                        isCT: a.isCT
+                                        isCT: a.isCT,
+                                        isAttendance: a.isAttendance || false
                                     }))
                                 };
                             }
@@ -378,8 +431,8 @@ export default function CoursePlannerPage() {
     return (
         <div className="w-full max-w-[95%] mx-auto py-8 space-y-6"> {/* Wider layout */}
             {/* Header */}
-            <div className="flex items-start gap-4 justify-between">
-                <div className="flex items-start gap-3 md:gap-4 overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-start gap-4 justify-between w-full">
+                <div className="flex items-start gap-3 md:gap-4 overflow-hidden w-full">
                     <Button variant="ghost" size="icon" onClick={() => router.back()} className="shrink-0 mt-1 h-8 w-8 md:h-10 md:w-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
                         <MoveLeft className="h-5 w-5 md:h-6 md:w-6" />
                     </Button>
@@ -397,13 +450,23 @@ export default function CoursePlannerPage() {
                     </div>
                 </div>
 
-                <div className="shrink-0 ml-2">
-                    <div className="shrink-0 ml-2">
+                <div className="shrink-0 w-full sm:w-auto flex flex-col justify-start sm:justify-end border-t sm:border-t-0 pt-4 sm:pt-0 border-black/5 dark:border-white/5 mt-3 sm:mt-0">
+                    <div className="flex flex-row flex-wrap items-center gap-2 w-full sm:w-auto">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex shrink-0 justify-center sm:w-auto rounded-xl sm:rounded-full gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all duration-300 shadow-sm px-4 h-10"
+                            onClick={syncAcademicData}
+                            disabled={isSyncing}
+                        >
+                            {isSyncing ? <Loader2 className="h-4 w-4 animate-spin shrink-0" /> : <RefreshCw className="h-4 w-4 shrink-0" />}
+                            <span className="font-medium whitespace-nowrap">{isSyncing ? "Syncing..." : <>Sync <span className="hidden sm:inline">Info</span></>}</span>
+                        </Button>
                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                                <Button variant="destructive" size="sm" disabled={saving} className="h-8 md:h-10 px-3 md:px-4 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-none">
-                                    <span className="hidden md:inline">Delete Course</span>
-                                    <span className="md:hidden">Delete</span>
+                                <Button variant="destructive" size="sm" disabled={saving} className="flex shrink-0 justify-center sm:w-auto h-10 px-4 gap-2 bg-red-500/10 text-red-600 hover:bg-red-500/20 border border-red-500/20 dark:text-red-400 shadow-none rounded-xl sm:rounded-md">
+                                    <Trash2 className="h-4 w-4 shrink-0" />
+                                    <span className="font-medium whitespace-nowrap">Delete <span className="hidden sm:inline">Course</span></span>
                                 </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent className="sm:max-w-[425px]">
@@ -566,6 +629,7 @@ export default function CoursePlannerPage() {
                         onMarksChange={handleMarksChange}
                         assessments={assessments}
                         onAssessmentsChange={setAssessments}
+                        initialCtCount={detectedCtCount}
                     />
                 </div>
             </div>

@@ -20,6 +20,11 @@ export interface IUserPreferences {
     digestMode: boolean;
     enabled: boolean;
   };
+  ucamInfo?: {
+    ucamId: string;
+    ucamPassword: string; // encrypted
+    autoSync: boolean;
+  };
 }
 
 export interface IUser extends Document {
@@ -105,6 +110,11 @@ const UserSchema = new Schema<IUser>(
         offsets: { type: [String], default: ["1d", "morning"] },
         digestMode: { type: Boolean, default: true },
         enabled: { type: Boolean, default: true },
+      },
+      ucamInfo: {
+        ucamId: { type: String },
+        ucamPassword: { type: String }, // encrypted string
+        autoSync: { type: Boolean, default: false },
       },
     },
   },

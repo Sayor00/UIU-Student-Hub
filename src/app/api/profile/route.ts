@@ -7,6 +7,7 @@ import CGPARecord from "@/models/CGPARecord";
 import Review from "@/models/Review";
 import FacultyRequest from "@/models/FacultyRequest";
 import Faculty from "@/models/Faculty";
+import { decrypt } from "@/lib/encryption";
 
 // GET user profile data
 export async function GET() {
@@ -50,7 +51,22 @@ export async function GET() {
     }
 
     // Process CGPA data
-    const latestCgpa = cgpaRecords[0] || null;
+    let latestCgpa: any = cgpaRecords[0] ? cgpaRecords[0].toObject() : null;
+    
+    if (latestCgpa && latestCgpa.encryptedData) {
+      const decrypted = decrypt(latestCgpa.encryptedData);
+      if (decrypted) {
+        try {
+          const parsed = JSON.parse(decrypted);
+          latestCgpa.trimesters = parsed.trimesters || [];
+          latestCgpa.results = parsed.results || [];
+        } catch (e) {
+          console.error("Failed to parse decrypted profile CGPA data");
+        }
+      }
+      delete latestCgpa.encryptedData;
+    }
+
     let academicSummary = null;
 
     if (latestCgpa && latestCgpa.results && latestCgpa.results.length > 0) {

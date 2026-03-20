@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MoveLeft, History, PlusCircle, Trash2, ArrowUpRight, BookOpen, AlertCircle, Search } from "lucide-react";
+import { MoveLeft, History, PlusCircle, Trash2, ArrowUpRight, BookOpen, AlertCircle, Search, RefreshCw, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
     Accordion,
@@ -30,25 +30,18 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { useSession } from "next-auth/react";
 import AddResultModal from "@/components/academic/AddResultModal";
 import { cn } from "@/lib/utils";
 import { getTrimesterName } from "@/lib/trimesterUtils";
-import { motion, AnimatePresence } from "framer-motion";
-import { useAcademicData } from "@/hooks/useAcademicData"; // Import Hook
-import { Label } from "@/components/ui/label"; // Ensure Label is imported
+import { motion } from "framer-motion";
+import { useAcademicData } from "@/hooks/useAcademicData";
+import { Label } from "@/components/ui/label";
 
 export default function AcademicHistoryPage() {
     const router = useRouter();
-    const { data: session } = useSession();
 
     // Use Custom Hook
-    const { trimesters, loading, fetchAcademicData, deleteTrimester, addCourse, addTrimester } = useAcademicData();
-
-    // Fetch on load
-    useEffect(() => {
-        if (session) fetchAcademicData();
-    }, [session?.user?.email, fetchAcademicData]);
+    const { trimesters, loading, fetchAcademicData, deleteTrimester, addCourse, addTrimester, syncAcademicData, isSyncing } = useAcademicData();
 
     // Add Course State (UI Only)
     const [addCourseTrimester, setAddCourseTrimester] = useState<string | null>(null);
@@ -183,24 +176,30 @@ export default function AcademicHistoryPage() {
                         <p className="text-sm md:text-base text-muted-foreground mt-1">Manage your complete trimester records.</p>
                     </div>
                 </div>
-                {/* 
-                   Pass addTrimester from hook to the modal via props, 
-                   Assuming AddResultModal can accept an 'onAdd' or 'addTrimester' prop? 
-                   Currently it handles submission internally. Use onSuccess to refresh.
-                   Ideally, refactor AddResultModal to take `addTrimester` function.
-                   For now, let's keep it as is (it calls API directly) but give it onSuccess={fetchAcademicData}.
-                   Wait, AddResultModal ALSO needs the fix for previousCGPA.
-                   So I MUST refactor AddResultModal to use the hook or accept the function.
-                   Let's pass the specialized function.
-                */}
-                <AddResultModal
-                    onSuccess={fetchAcademicData}
-                    onAddTrimester={addTrimester} // New prop for dependency injection
-                    trigger={
-                        <Button className="w-full md:w-auto gap-2 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-900/20">
-                            <PlusCircle className="h-4 w-4" /> Add Trimester
-                        </Button>
-                    } />
+                {/* Action Buttons Container (Side-by-side on Mobile) */}
+                <div className="grid grid-cols-2 md:flex items-center gap-2 md:gap-3 w-full md:w-auto">
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full rounded-md md:rounded-full gap-2 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all duration-300 shadow-sm h-10 px-2 md:px-4"
+                        onClick={syncAcademicData}
+                        disabled={isSyncing}
+                    >
+                        {isSyncing ? <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> : <RefreshCw className="h-4 w-4 shrink-0" />}
+                        <span className="truncate text-xs md:text-sm">{isSyncing ? "Syncing..." : <>Sync <span className="hidden sm:inline">Info</span></>}</span>
+                    </Button>
+                    <div className="w-full">
+                        <AddResultModal
+                            onSuccess={fetchAcademicData}
+                            onAddTrimester={addTrimester} // New prop for dependency injection
+                            trigger={
+                                <Button className="w-full gap-2 bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-900/20 h-10 px-2 md:px-4">
+                                    <PlusCircle className="h-4 w-4 shrink-0" /> 
+                                    <span className="truncate text-xs md:text-sm">Add <span className="hidden sm:inline">Trimester</span></span>
+                                </Button>
+                            } />
+                    </div>
+                </div>
             </div>
 
             {/* Search Bar */}
