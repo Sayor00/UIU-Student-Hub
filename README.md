@@ -941,7 +941,7 @@ UIU-Student-Hub/
 
 ```bash
 # Clone the repository
-git clone https://github.com/Sayor00/UIU-Student-Hub.git
+git clone https://github.com/TahsinFaiyaz30/UIU-Student-Hub.git
 cd UIU-Student-Hub
 
 # Install dependencies

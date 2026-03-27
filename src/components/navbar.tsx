@@ -195,7 +195,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             {/* GitHub Repo */}
             <a
-              href="https://github.com/Sayor00/UIU-Student-Hub"
+              href="https://github.com/TahsinFaiyaz30/UIU-Student-Hub"
               target="_blank"
               rel="noopener noreferrer"
             >
