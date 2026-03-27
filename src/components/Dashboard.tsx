@@ -9,13 +9,14 @@ import {
     BarChart3, CalendarDays, DollarSign, Star, BookOpen,
     Clock, Pin, Target, Loader2, X, TrendingUp, TrendingDown,
     Compass, ChevronRight, Activity, Code2, Briefcase, FileQuestion,
+    Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useAcademicContext } from "@/context/academic-context";
 import { parseStudentId, getTrimesterName } from "@/lib/trimesterUtils";
-import { AreaChart, Area, ResponsiveContainer, YAxis, XAxis, LabelList } from "recharts";
+import { AreaChart, Area, BarChart, Bar, ResponsiveContainer, YAxis, XAxis, LabelList, Tooltip, Cell } from "recharts";
 import { useTimeFormat } from "@/hooks/useTimeFormat";
 import {
     autoSuggestCareers, getProgram, gradeToPoint, isPassingGrade, buildCareerRoadmap
@@ -99,6 +100,8 @@ export default function Dashboard({ userName }: { userName: string }) {
     const [calendarDetails, setCalendarDetails] = React.useState<Record<string, { title: string }>>({});
     const [careerGoalId, setCareerGoalId] = React.useState<string | null>(null);
     const [targetCGPA, setTargetCGPA] = React.useState<number>(3.5);
+    const [attendance, setAttendance] = React.useState<any[]>([]);
+    const [attView, setAttView] = React.useState<'present' | 'absent' | 'remaining'>('present');
     const [loading, setLoading] = React.useState(true);
 
     const greeting = React.useMemo(() => greetings[Math.floor(Math.random() * greetings.length)], []);
@@ -164,6 +167,17 @@ export default function Dashboard({ userName }: { userName: string }) {
                 setCalendarDetails(calMap);
             } catch { }
             finally { setLoading(false); }
+
+            // Fetch attendance separately (lightweight, non-blocking)
+            try {
+                const attRes = await fetch("/api/user/attendance");
+                if (attRes.ok) {
+                    const attData = await attRes.json();
+                    if (attData.attendance?.length > 0) {
+                        setAttendance(attData.attendance);
+                    }
+                }
+            } catch { }
         };
         fetchData();
     }, []);
@@ -596,6 +610,108 @@ export default function Dashboard({ userName }: { userName: string }) {
                             </Card>
                         </motion.div>
                     )}
+
+                    {/* Attendance Summary */}
+                    {attendance.length > 0 && (() => {
+                         const chartData = attendance.map((a: any) => {
+                            const total = (a.present || 0) + (a.absent || 0) + (a.remaining || 0);
+                            const rawVal = attView === 'absent' ? (a.absent || 0) : attView === 'remaining' ? (a.remaining || 0) : (a.present || 0);
+                            return {
+                                name: `${a.courseCode} (${a.section})`,
+                                value: total > 0 ? (rawVal / total) * 100 : 0,
+                                _rawValue: rawVal,
+                                _rawPresent: a.present || 0,
+                                _rawAbsent: a.absent || 0,
+                                _rawRemaining: a.remaining || 0,
+                                _rawTotal: total,
+                            };
+                        });
+                        const barColor = attView === 'absent' ? '#dc2626' : attView === 'remaining' ? 'hsl(var(--muted-foreground))' : '#059669';
+
+                        return (
+                        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+                            <Card className="border-white/10 bg-gradient-to-br from-emerald-500/5 via-background/50 to-background/50 backdrop-blur-xl">
+                                <CardContent className="p-5">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Users className="h-4 w-4 text-emerald-500" />
+                                        <span className="text-sm font-semibold">Attendance</span>
+                                        <span className="text-[10px] text-muted-foreground ml-auto">Current Trimester</span>
+                                    </div>
+                                    <div style={{ height: attendance.length * 32 + 16, minHeight: 120 }}>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart
+                                                data={chartData}
+                                                layout="vertical"
+                                                margin={{ top: 0, right: 30, left: 0, bottom: 0 }}
+                                                barSize={18}
+                                            >
+                                                <XAxis type="number" hide domain={[0, 100]} />
+                                                <YAxis
+                                                    dataKey="name"
+                                                    type="category"
+                                                    width={100}
+                                                    axisLine={false}
+                                                    tickLine={false}
+                                                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                                                />
+                                                <Tooltip
+                                                    wrapperStyle={{ outline: 'none' }}
+                                                    cursor={{ fill: 'hsl(var(--muted) / 0.1)' }}
+                                                    content={({ active, payload }) => {
+                                                        if (!active || !payload?.[0]) return null;
+                                                        const p = payload[0].payload;
+                                                        return (
+                                                            <div style={{
+                                                                backgroundColor: 'hsl(var(--background) / 0.6)',
+                                                                backdropFilter: 'blur(16px)',
+                                                                WebkitBackdropFilter: 'blur(16px)',
+                                                                border: '1px solid hsl(var(--border) / 0.3)',
+                                                                borderRadius: '10px',
+                                                                fontSize: '11px',
+                                                                padding: '8px 12px',
+                                                                boxShadow: '0 8px 32px hsl(var(--foreground) / 0.08)',
+                                                                display: 'flex', flexDirection: 'column' as const, gap: '2px'
+                                                            }}>
+                                                                <div><span style={{ color: '#059669', fontWeight: 600 }}>Present: </span>{p._rawPresent}</div>
+                                                                <div><span style={{ color: '#dc2626', fontWeight: 600 }}>Absent: </span>{p._rawAbsent}</div>
+                                                                <div><span style={{ color: 'hsl(var(--muted-foreground))', fontWeight: 600 }}>Remaining: </span>{p._rawRemaining}</div>
+                                                            </div>
+                                                        );
+                                                    }}
+                                                />
+                                                <Bar
+                                                    dataKey="value"
+                                                    fill={barColor}
+                                                    radius={4}
+                                                    background={{ fill: 'hsl(var(--muted-foreground) / 0.12)', radius: 4 }}
+                                                >
+                                                    <LabelList dataKey="_rawValue" position="center" className="fill-white" fontSize={9} fontWeight={700} />
+                                                    <LabelList dataKey="_rawTotal" position="right" className="fill-muted-foreground" fontSize={9} fontWeight={600} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="flex items-center justify-center gap-4 mt-2">
+                                        {(['present', 'absent', 'remaining'] as const).map((view) => {
+                                            const colors = { present: '#059669', absent: '#dc2626', remaining: 'hsl(var(--muted-foreground) / 0.4)' };
+                                            const labels = { present: 'Present', absent: 'Absent', remaining: 'Remaining' };
+                                            return (
+                                                <div
+                                                    key={view}
+                                                    className="flex items-center gap-1.5 text-[10px] cursor-pointer select-none transition-opacity"
+                                                    style={{ opacity: attView === view ? 1 : 0.4 }}
+                                                    onClick={() => setAttView(view)}
+                                                >
+                                                    <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: colors[view] }} /> {labels[view]}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                        );
+                    })()}
 
                     {/* Pinned Calendars */}
                     {pinnedCalendarIds.length > 0 && (

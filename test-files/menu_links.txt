@@ -1,0 +1,18 @@
+--- Links ---
+[0112430141] -> javascript:__doPostBack('ctl00$lbtnUserName','')
+[Logout] -> javascript:__doPostBack('ctl00$lblLogout','')
+[Home] -> StudentHome.aspx
+[IQAC] -> UserRequestForIQAC.aspx
+[OBE] -> UserRequestForOBE.aspx
+[Student Accounts] -> ../Bill/BillHome.aspx?mmi=40575a1742565b504e63
+[Transport Registration] -> ../Student/TransportSurvey.aspx?mmi=40515a1e42505b594e63
+[COE] -> ../COE/COEHome.aspx?mmi=40505d1642515c514e63
+[GYM Registration] -> ../Admin/GymEnrollmentAdmin.aspx?mmi=40535917425258504e63
+[Admin Control] -> ../Admin/AdminHome.aspx?mmi=42546d1f61444d494e63
+[Registration] -> ../Registration/RegistrationHome.aspx?mmi=40545a1642555b514e63
+[Result] -> ../GradeSheetAdmin/GradeSheetHome.aspx?mmi=415d552c795d4d494e63
+[Scheduler] -> ../Registration/RegistrationHome.aspx?mmi=415c5f2c78574d494e63
+[edusoft.uiu@gmail.com] -> mailto:edusoft.uiu@gmail.com
+[# Carefully consider the tentative routine of Mid & Final examination of Spring 2026 while choosing the courses.] -> http://ucam.uiu.ac.bd/Student/ExamRoutineViewer.aspx
+[Faculty] -> #Faculty
+[Others] -> #Others

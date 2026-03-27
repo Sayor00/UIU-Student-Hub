@@ -27,11 +27,12 @@ export interface Assessment {
     bestN?: boolean;
     group?: string;
     isCT?: boolean;
+    isAttendance?: boolean;
 }
 
 export const DEFAULT_ASSESSMENTS: Assessment[] = [
     // Standard UIU Distribution (approximate, varies by dept)
-    { id: "1", name: "Attendance", weight: 5, obtained: 0, total: 5 },
+    { id: "1", name: "Attendance", weight: 5, obtained: 0, total: 5, isAttendance: true },
     { id: "2", name: "Assignment", weight: 5, obtained: 0, total: 5 },
     // CTs: Usually Best 2 of 3, or Best 3 of 4. Total weight 15-20%
     { id: "3", name: "Class Test 1", weight: 20, obtained: 0, total: 20, isCT: true, bestN: true, group: "CT" },
@@ -138,14 +139,18 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
                         )}
                         placeholder="0"
                     />
-                    <span className="text-muted-foreground/40 text-lg font-light">/</span>
-                    <BufferedInput
-                        type="number"
-                        value={item.total || ''}
-                        onCommit={(val: string) => updateAssessment(item.id, 'total', parseFloat(val) || 0)}
-                        className="h-8 w-[50px] text-center bg-transparent border-none focus:ring-0 text-sm text-muted-foreground p-0 no-spinner"
-                        placeholder="0"
-                    />
+                    {!item.isAttendance && (
+                        <>
+                            <span className="text-muted-foreground/40 text-lg font-light">/</span>
+                            <BufferedInput
+                                type="number"
+                                value={item.total || ''}
+                                onCommit={(val: string) => updateAssessment(item.id, 'total', parseFloat(val) || 0)}
+                                className="h-8 w-[50px] text-center bg-transparent border-none focus:ring-0 text-sm text-muted-foreground p-0 no-spinner"
+                                placeholder="0"
+                            />
+                        </>
+                    )}
                 </div>
 
                 {/* 6. Percentage with Bar */}
@@ -163,9 +168,11 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
 
                 {/* 7. Delete */}
                 <div className="flex justify-center">
-                    <Button variant="ghost" size="icon" onClick={() => deleteAssessment(item.id)} className="h-8 w-8 text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10">
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {!item.isAttendance && (
+                        <Button variant="ghost" size="icon" onClick={() => deleteAssessment(item.id)} className="h-8 w-8 text-muted-foreground/30 hover:text-red-500 hover:bg-red-500/10">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -182,9 +189,11 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
                         />
                         {item.isCT && isBest && <Badge variant="secondary" className="mt-1 text-[10px] bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20">Best {ctCount}</Badge>}
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => deleteAssessment(item.id)} className="h-8 w-8 text-muted-foreground/50 hover:text-red-500">
-                        <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {!item.isAttendance && (
+                        <Button variant="ghost" size="icon" onClick={() => deleteAssessment(item.id)} className="h-8 w-8 text-muted-foreground/50 hover:text-red-500">
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -229,16 +238,19 @@ const AssessmentRow = memo(({ item, index, totalCount, ctCount, updateAssessment
                             className="h-10 flex-1 bg-background/50 border-black/5 dark:border-white/10 rounded px-3 text-2xl font-bold text-orange-600 dark:text-orange-400 no-spinner"
                             placeholder="0"
                         />
-                        <div className="text-2xl text-muted-foreground/30 font-light">/</div>
-                        <BufferedInput
-                            type="number"
-                            value={item.total || ''}
-                            onCommit={(val: string) => updateAssessment(item.id, 'total', parseFloat(val) || 0)}
-                            className="h-10 w-20 bg-background/50 border-black/5 dark:border-white/10 rounded px-3 text-lg font-medium text-center no-spinner"
-                            placeholder="Total"
-                        />
+                        {!item.isAttendance && (
+                            <>
+                                <div className="text-2xl text-muted-foreground/30 font-light">/</div>
+                                <BufferedInput
+                                    type="number"
+                                    value={item.total || ''}
+                                    onCommit={(val: string) => updateAssessment(item.id, 'total', parseFloat(val) || 0)}
+                                    className="h-10 w-20 bg-background/50 border-black/5 dark:border-white/10 rounded px-3 text-lg font-medium text-center no-spinner"
+                                    placeholder="Total"
+                                />
+                            </>
+                        )}
                     </div>
-                    {/* Progress Bar for Visual Feedback */}
                     <Progress value={(item.obtained / (item.total || 1)) * 100} className="h-1.5 mt-1 bg-black/10 dark:bg-white/10" indicatorClassName="bg-orange-500" />
                 </div>
             </div>
@@ -254,6 +266,7 @@ interface CourseGradePlannerProps {
     onMarksChange?: (marks: number, totalWeight: number) => void;
     assessments?: Assessment[];
     onAssessmentsChange?: (assessments: Assessment[]) => void;
+    initialCtCount?: number;
 }
 
 const CourseGradePlanner = memo(({
@@ -263,7 +276,8 @@ const CourseGradePlanner = memo(({
     standalone = false,
     onMarksChange,
     assessments: controlledAssessments,
-    onAssessmentsChange
+    onAssessmentsChange,
+    initialCtCount = 3
 }: CourseGradePlannerProps) => {
     const [open, setOpen] = useState(false);
     const [localAssessments, setLocalAssessments] = useState<Assessment[]>([]);
@@ -276,8 +290,13 @@ const CourseGradePlanner = memo(({
     };
 
     const [targetGPA, setTargetGPA] = useState("4.00");
-    const [ctCount, setCtCount] = useState(3);
+    const [ctCount, setCtCount] = useState(initialCtCount);
     const [loading, setLoading] = useState(true);
+
+    // Initialize ctCount if prop changes later asynchronously
+    useEffect(() => {
+        setCtCount(initialCtCount);
+    }, [initialCtCount]);
 
     // Initial Load Logic
     useEffect(() => {
@@ -367,12 +386,27 @@ const CourseGradePlanner = memo(({
 
     // Handlers
     const updateAssessment = (id: string, field: keyof Assessment, value: any) => {
-        setAssessments(assessments.map(a => a.id === id ? { ...a, [field]: value } : a));
+        setAssessments(assessments.map(a => {
+            if (a.id !== id) return a;
+            const updated = { ...a, [field]: value };
+            // Attendance: when weight changes, recalculate total AND obtained
+            // to preserve the presence ratio (obtained/total = presence_ratio)
+            if (updated.isAttendance && field === 'weight') {
+                const oldTotal = a.total || 1;
+                const presenceRatio = a.obtained / oldTotal; // preserve ratio
+                updated.total = value;
+                updated.obtained = Math.round(presenceRatio * value * 100) / 100;
+            }
+            return updated;
+        }));
     };
     const addAssessment = () => {
         setAssessments([...assessments, { id: Math.random().toString(36).substr(2, 9), name: "New Assessment", weight: 0, obtained: 0, total: 20 }]);
     };
     const deleteAssessment = (id: string) => {
+        // Cannot delete attendance assessments
+        const target = assessments.find(a => a.id === id);
+        if (target?.isAttendance) return;
         setAssessments(assessments.filter(a => a.id !== id));
     };
     const toggleCT = (id: string, isCT: boolean) => {

@@ -1,0 +1,77 @@
+Table length: 1
+Grid: [
+  [
+    'Total Class',
+    'Present',
+    'Class Tests(20.00)',
+    'Class Tests(20.00)',
+    'Class Tests(20.00)',
+    'Class Tests(20.00)',
+    'Assignment(5.00)',
+    'Mid-term  Exam(30.00)',
+    'Out of (55.00)'
+  ],
+  [
+    'Total Class',
+    'Present',
+    'Class Tests-1(20.00)',
+    'Class Tests-2(20.00)',
+    'Class Tests-3(20.00)',
+    'Best 2 (Two)',
+    'Assignment(5.00)',
+    'Mid-term  Exam(30.00)',
+    'Out of (55.00)'
+  ]
+]
+Data Row Length: 1
+Found TDs: 9
+Col 0: Header: 'Total Class', Val: '22', Obtained: 22
+Skipped Col 0 because no marksMatch
+Col 1: Header: 'Present', Val: '22', Obtained: 22
+Skipped Col 1 because no marksMatch
+Col 2: Header: 'Class Tests(20.00) | Class Tests-1(20.00)', Val: '20.00', Obtained: 20
+MATCHED Col 2: Total: 20, Name: Class Tests - Class Tests-1
++++ PUSHED TO ASSESSMENTS +++
+Col 3: Header: 'Class Tests(20.00) | Class Tests-2(20.00)', Val: '20.00', Obtained: 20
+MATCHED Col 3: Total: 20, Name: Class Tests - Class Tests-2
++++ PUSHED TO ASSESSMENTS +++
+Col 4: Header: 'Class Tests(20.00) | Class Tests-3(20.00)', Val: '20.00', Obtained: 20
+MATCHED Col 4: Total: 20, Name: Class Tests - Class Tests-3
++++ PUSHED TO ASSESSMENTS +++
+Col 5: Header: 'Class Tests(20.00) | Best 2 (Two)', Val: '20.00', Obtained: 20
+MATCHED Col 5: Total: 20, Name: Class Tests - Best 2 (Two)
++++ PUSHED TO ASSESSMENTS +++
+Col 6: Header: 'Assignment(5.00)', Val: '5.00', Obtained: 5
+MATCHED Col 6: Total: 5, Name: Assignment
++++ PUSHED TO ASSESSMENTS +++
+Col 7: Header: 'Mid-term  Exam(30.00)', Val: '24.00', Obtained: 24
+MATCHED Col 7: Total: 30, Name: Mid-term  Exam
++++ PUSHED TO ASSESSMENTS +++
+Col 8: Header: 'Out of (55.00)', Val: '49.00', Obtained: 49
+MATCHED Col 8: Total: 55, Name: Out of
+Skipped Col 8 because isNaN(total) or includes 'out of'
+
+FINAL ASSESSMENTS: [
+  {
+    name: 'Class Tests - Class Tests-1',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Class Tests-2',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Class Tests-3',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  {
+    name: 'Class Tests - Best 2 (Two)',
+    totalMarks: 20,
+    obtainedMarks: 20
+  },
+  { name: 'Assignment', totalMarks: 5, obtainedMarks: 5 },
+  { name: 'Mid-term  Exam', totalMarks: 30, obtainedMarks: 24 }
+]
