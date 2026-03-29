@@ -32,7 +32,7 @@ export async function POST(req: Request) {
             "execute-api.us-east-1.amazonaws.com",
         ];
         const parsed = new URL(url);
-        if (!allowed.some(d => parsed.hostname.includes(d))) {
+        if (!allowed.some(d => parsed.hostname === d || parsed.hostname.endsWith(`.${d}`))) {
             return NextResponse.json({ success: false, message: "Domain not allowed" }, { status: 403 });
         }
 
