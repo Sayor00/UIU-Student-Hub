@@ -30,7 +30,7 @@ export default async function DashboardLayout({
 
                 <div className="flex gap-4">
                     <Button asChild size="lg" className="text-lg font-bold px-8 h-14 shadow-lg shadow-primary/20">
-                        <Link href="/api/auth/signin?callbackUrl=/dashboard">
+                        <Link href="/auth/login">
                             <LogIn className="mr-2 h-5 w-5" />
                             Sign In to Continue
                         </Link>

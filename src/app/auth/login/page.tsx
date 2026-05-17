@@ -3,9 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, useSession } from "next-auth/react";
 import { motion } from "framer-motion";
-import { GraduationCap, Mail, Lock, Loader2 } from "lucide-react";
+import { GraduationCap, UserRound, Lock, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +21,26 @@ import {
 
 export default function LoginPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
   const [loading, setLoading] = React.useState(false);
-  const [email, setEmail] = React.useState("");
+  const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
+
+  // If user is already signed in, redirect them to dashboard
+  React.useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      router.replace("/dashboard");
+    }
+  }, [status, session, router]);
+
+  // Show nothing while checking session or redirecting
+  if (status === "loading" || (status === "authenticated" && session?.user)) {
+    return (
+      <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +48,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn("credentials", {
-        email,
+        identifier,
         password,
         redirect: false,
       });
@@ -44,17 +61,16 @@ export default function LoginPage() {
             await fetch("/api/auth/resend-verification", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email }),
+              body: JSON.stringify({ identifier }),
             });
           } catch {}
-          router.push(`/auth/verify?email=${encodeURIComponent(email)}&from=login`);
+          router.push(`/auth/verify?identifier=${encodeURIComponent(identifier)}&from=login`);
           return;
         }
         toast.error(result.error);
       } else {
         toast.success("Welcome back!");
-        router.push("/");
-        router.refresh();
+        router.push("/dashboard");
       }
     } catch (error) {
       toast.error("Something went wrong");
@@ -84,15 +100,15 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="identifier">Student ID or Email</Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <UserRound className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
-                    id="email"
-                    type="email"
-                    placeholder="your@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    id="identifier"
+                    type="text"
+                    placeholder="e.g. 011221234 or you@uiu.ac.bd"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
                     className="pl-9"
                     required
                   />

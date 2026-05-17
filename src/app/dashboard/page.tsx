@@ -12,7 +12,7 @@ export default async function DashboardPage() {
     const session = await getServerSession(authOptions);
 
     if (!session || !session.user) {
-        redirect("/api/auth/signin?callbackUrl=/dashboard");
+        redirect("/auth/login");
     }
 
     return <Dashboard userName={session.user.name || "Student"} />;

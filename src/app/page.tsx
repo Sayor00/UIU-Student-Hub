@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useSession } from "next-auth/react";
 import {
@@ -10,7 +11,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { redirect } from "next/navigation";
 
 /* ─── Tool definitions for landing page ─── */
 const tools = [
@@ -98,13 +98,21 @@ const item = {
 /* ─── Main Page Component ─── */
 export default function HomePage() {
   const { data: session, status } = useSession();
+  const router = useRouter();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted) {
+  // Redirect signed-in users to their dashboard (client-side, correct pattern)
+  React.useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      router.replace("/dashboard");
+    }
+  }, [status, session, router]);
+
+  if (!mounted || status === "loading") {
     return (
       <div className="animate-pulse">
         <section className="container mx-auto px-4 py-12 sm:py-20 lg:py-32">
@@ -126,9 +134,9 @@ export default function HomePage() {
     );
   }
 
-  // Redirect signed-in users to their dashboard
-  if (session?.user) {
-    redirect("/dashboard");
+  // While redirect is in-flight, render nothing to avoid flash
+  if (status === "authenticated" && session?.user) {
+    return null;
   }
 
   // Landing page for guests

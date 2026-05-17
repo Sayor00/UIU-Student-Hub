@@ -10,20 +10,27 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "credentials",
       credentials: {
-        email: { label: "Email", type: "email" },
+        identifier: { label: "Student ID or Email", type: "text" },
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.identifier || !credentials?.password) {
           throw new Error("Invalid credentials");
         }
 
         await dbConnect();
 
-        const user = await User.findOne({ email: credentials.email });
+        const isEmail = credentials.identifier.includes("@");
+        const user = isEmail
+          ? await User.findOne({ email: credentials.identifier.toLowerCase() })
+          : await User.findOne({ studentId: credentials.identifier });
 
         if (!user) {
-          throw new Error("No user found with this email");
+          throw new Error(
+            isEmail
+              ? "No user found with this email"
+              : "No user found with this Student ID"
+          );
         }
 
         if (!user.emailVerified) {

@@ -8,22 +8,27 @@ import {
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
+    const { email, studentId, identifier } = await req.json();
 
-    if (!email) {
+    // Resolve the lookup value — prefer the unified `identifier`, fall back to legacy fields
+    const lookup = identifier || email || studentId;
+    if (!lookup) {
       return NextResponse.json(
-        { error: "Email is required" },
+        { error: "Student ID or email is required" },
         { status: 400 }
       );
     }
 
     await dbConnect();
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    const isEmail = lookup.includes("@");
+    const user = isEmail
+      ? await User.findOne({ email: lookup.toLowerCase() })
+      : await User.findOne({ studentId: lookup });
 
     if (!user) {
       return NextResponse.json(
-        { error: "No user found with this email" },
+        { error: "No user found" },
         { status: 404 }
       );
     }
